@@ -284,28 +284,29 @@ tbody tr:hover{ background:var(--color-gold-soft); }
 const CONFIG = {
   DRIVE_API_KEY: "AIzaSyDuzUQCuC1ms_fuxezj2bHmYhYuHK5HE5s",
   OAUTH_CLIENT_ID: "1022381938242-bmqjhjdj1qrugse311nc56q22jit6ivp.apps.googleusercontent.com",
-  DB_FILE_ID: "",
-  UPLOADS_FOLDER_ID: "",
+  DB_FILE_ID: "169mDhan3fw2fIYf6vzipxQv0VYlh1Nuz",
+  UPLOADS_FOLDER_ID: "1fms34m9ENYtjnsMDgoqwgPBtxknyq9gQ",
 
   // Sign-in gate + full control over everything
-  ADMIN_EMAILS: ["Taqwainventoryportal@gmail.com"],
+  ADMIN_EMAILS: ["Taqwainventoryportal@gmail.com","ahharis1710@gmail.com","aiman12ali@gmail.com"],
 
   // Direct approve/reject on Low-cost notesheets (all departments)
-  ACCOUNTANT_EMAILS: [],
+  ACCOUNTANT_EMAILS: ["anhafatmi@gmail.com"],
 
   // First-stage reviewer on Medium & High notesheets.
   // Map each email to the department id(s) they can act on, or "*" for all departments.
   // Department ids are visible in Admin > Manage Departments once seeded.
   REVIEWER_EMAILS: {
-    // "teacher.incharge@taqwaislamicschools.com": ["dept_academic"],
+    "ahharis1710@gmail.com": "*",
   },
 
   // Second-stage approver on Medium & High notesheets. Same shape as REVIEWER_EMAILS.
+  // Empty for now -- fill in later, e.g. "someone@gmail.com": "*"
   APPROVER_EMAILS: {
-    // "vice.principal@taqwaislamicschools.com": "*",
   },
 
   // Third-stage, High-cost only, all departments (Principal / Chairman)
+  // Empty for now -- fill in later, e.g. ["principal@gmail.com"]
   FINAL_APPROVER_EMAILS: []
 };
 
