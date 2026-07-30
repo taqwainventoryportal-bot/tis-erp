@@ -703,23 +703,33 @@ function initAuth(){
 function setupTokenClient(){
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: CONFIG.OAUTH_CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/drive.file email profile openid',
+    scope: 'https://www.googleapis.com/auth/drive email profile openid',
     callback: async (resp)=>{
       if(resp.error){ toast('Sign-in failed', 'error'); return; }
       accessToken = resp.access_token;
-      try{
-        const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers:{ Authorization:'Bearer '+accessToken } });
-        const info = await infoRes.json();
-        currentUserEmail = info.email;
-        const allowed = allStaffEmails();
-        if(allowed.size && !allowed.has((currentUserEmail||'').toLowerCase())){
+      const tryVerify = async (attempt)=>{
+        try{
+          const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers:{ Authorization:'Bearer '+accessToken } });
+          if(!infoRes.ok) throw new Error('userinfo request failed ('+infoRes.status+')');
+          const info = await infoRes.json();
+          if(!info.email) throw new Error('no email in response');
+          currentUserEmail = info.email;
+          const allowed = allStaffEmails();
+          if(allowed.size && !allowed.has((currentUserEmail||'').toLowerCase())){
+            accessToken = null; currentUserEmail = null;
+            toast('This Google account is not authorised for staff access.', 'error');
+            renderTopbar(); return;
+          }
+          toast('Signed in as '+currentUserEmail, 'success');
+          renderTopbar(); renderRoute();
+        }catch(e){
+          if(attempt < 2){ setTimeout(()=>tryVerify(attempt+1), 500); return; }
           accessToken = null; currentUserEmail = null;
-          toast('This Google account is not authorised for staff access.', 'error');
-          renderTopbar(); return;
+          toast('Could not verify account — please try Staff Sign In again', 'error');
+          renderTopbar();
         }
-        toast('Signed in as '+currentUserEmail, 'success');
-        renderTopbar(); renderRoute();
-      }catch(e){ toast('Could not verify account', 'error'); }
+      };
+      tryVerify(0);
     }
   });
 }
