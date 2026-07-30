@@ -210,6 +210,15 @@ tbody tr:hover{ background:var(--color-gold-soft); }
 .badge-status{ background:var(--color-primary-light); color:var(--color-primary); }
 .badge-danger{ background:var(--color-danger-soft); color:var(--color-danger); }
 
+/* ---- Category procurement policy row ---- */
+.cat-policy-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; border:1px solid var(--color-border); border-radius:8px; padding:8px 10px; background:var(--color-surface-2); }
+.cat-policy-name{ font-size:12.5px; font-weight:600; color:var(--color-ink); flex:1; min-width:140px; }
+.cat-policy-controls{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.cat-policy-controls select{ font-size:11.5px; padding:5px 7px; border:1.5px solid var(--color-border); border-radius:6px; background:#fff; }
+.policy-toggle{ font-size:11px; font-weight:700; padding:5px 10px; border-radius:999px; border:1.5px solid transparent; cursor:pointer; white-space:nowrap; }
+.policy-toggle.on{ background:var(--color-high-soft); color:var(--color-high); }
+.policy-toggle.off{ background:var(--color-success-soft); color:var(--color-success); }
+
 /* ---- Forms ---- */
 .field{ margin-bottom:14px; }
 .field label{ display:block; font-size:12.5px; font-weight:700; color:var(--color-ink-soft); margin-bottom:5px; text-transform:uppercase; letter-spacing:.02em; }
@@ -245,6 +254,23 @@ tbody tr:hover{ background:var(--color-gold-soft); }
 .timeline .t-title{ font-weight:700; font-size:13.5px; color:var(--color-primary-dark); }
 .timeline .t-meta{ font-size:11.5px; color:var(--color-ink-faint); margin:2px 0 4px; }
 .timeline .t-remark{ font-size:13px; color:var(--color-ink-soft); background:var(--color-surface-2); border-radius:8px; padding:8px 10px; }
+
+/* ---- Procurement: approval cards ---- */
+.approval-card-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:14px; }
+.approval-card{ background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:16px; }
+.approval-card-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+.approval-card-meta{ font-size:12px; color:var(--color-ink-soft); margin-bottom:4px; }
+.approval-card-reason{ font-size:12.5px; color:var(--color-ink-faint); font-style:italic; margin:6px 0; }
+.approval-card-actions{ display:flex; gap:8px; margin-top:10px; }
+.chk-row{ display:flex; align-items:center; gap:7px; font-size:13.5px; }
+.chk-row input{ width:15px; height:15px; }
+
+/* ---- Procurement: new request line cards ---- */
+.req-line-card{ border:1px solid var(--color-border); border-radius:var(--radius); padding:14px; margin-bottom:12px; background:var(--color-surface-2); }
+.req-line-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+
+/* ---- Procurement: value class colors reuse tier badges above ---- */
+
 
 /* ---- Alerts ---- */
 .alert-stack{ display:flex; flex-direction:column; gap:8px; margin:16px 0; }
@@ -362,20 +388,55 @@ function seedDepartments(){
   ];
 }
 function seedCategories(){
+  // procurementPolicy: 'required' | 'not_required'
+  // valueClass: 'low' | 'medium' | 'high' | 'emergency' (drives approval routing when policy is 'required')
+  // itemTypeId: default Item Type for items raised under this category
   return [
-    { id:"cat_classroom", departmentId:"dept_academic", name:"Classroom Teaching Consumables" },
-    { id:"cat_stationery", departmentId:"dept_academic", name:"Stationery" },
-    { id:"cat_artcraft", departmentId:"dept_academic", name:"Art & Craft Consumables" },
-    { id:"cat_library", departmentId:"dept_academic", name:"Library Consumables" },
-    { id:"cat_admin_consumables", departmentId:"dept_administration", name:"Administrative Consumables" },
-    { id:"cat_office_consumables", departmentId:"dept_administration", name:"Office Consumables" },
-    { id:"cat_exam_consumables", departmentId:"dept_examination", name:"Examination Consumables" },
-    { id:"cat_computer_lab", departmentId:"dept_it", name:"Computer Lab Consumables" },
-    { id:"cat_sports_consumables", departmentId:"dept_sports", name:"Sports Consumables" },
-    { id:"cat_housekeeping", departmentId:"dept_maintenance", name:"Washroom & Housekeeping Consumables" },
-    { id:"cat_elec_plumb", departmentId:"dept_maintenance", name:"Electrical, Plumbing & Accidental Safety Consumables" },
-    { id:"cat_firstaid", departmentId:"dept_medical", name:"First Aid Supplies" },
-    { id:"cat_events_consumables", departmentId:"dept_events", name:"Events & Assembly Consumables" }
+    { id:"cat_classroom", departmentId:"dept_academic", name:"Classroom Teaching Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"cat_stationery", departmentId:"dept_academic", name:"Stationery", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"cat_artcraft", departmentId:"dept_academic", name:"Art & Craft Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"cat_library", departmentId:"dept_academic", name:"Library Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"cat_admin_consumables", departmentId:"dept_administration", name:"Administrative Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"cat_office_consumables", departmentId:"dept_administration", name:"Office Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"cat_exam_consumables", departmentId:"dept_examination", name:"Examination Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"cat_computer_lab", departmentId:"dept_it", name:"Computer Lab Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"medium" },
+    { id:"cat_sports_consumables", departmentId:"dept_sports", name:"Sports Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"cat_housekeeping", departmentId:"dept_maintenance", name:"Washroom & Housekeeping Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"cat_elec_plumb", departmentId:"dept_maintenance", name:"Electrical, Plumbing & Accidental Safety Consumables", itemTypeId:"type_repair", procurementPolicy:"required", valueClass:"medium" },
+    { id:"cat_firstaid", departmentId:"dept_medical", name:"First Aid Supplies", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"cat_events_consumables", departmentId:"dept_events", name:"Events & Assembly Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"cat_assets_general", departmentId:"dept_administration", name:"Furniture & Equipment (Assets)", itemTypeId:"type_asset", procurementPolicy:"required", valueClass:"high" },
+    { id:"cat_services_general", departmentId:"dept_maintenance", name:"Labour & Services", itemTypeId:"type_service", procurementPolicy:"required", valueClass:"medium" }
+  ];
+}
+function seedBuildings(){
+  return [
+    { id:"bldg_main", name:"Main Building", sortOrder:0 },
+    { id:"bldg_juniors", name:"Juniors", sortOrder:1 },
+    { id:"bldg_kidszone", name:"Kids Zone", sortOrder:2 }
+  ];
+}
+function seedRooms(){ return []; }
+function seedItemTypes(){
+  // pattern: 'asset' | 'consumable' | 'service' — determines the lifecycle state machine used.
+  // linkable: repair/spare items can be linked back to a parent Asset's history.
+  return [
+    { id:"type_asset", name:"Asset", pattern:"asset", linkable:false },
+    { id:"type_consumable", name:"Consumable", pattern:"consumable", linkable:false },
+    { id:"type_service", name:"Service", pattern:"service", linkable:false },
+    { id:"type_repair", name:"Repair Material", pattern:"asset", linkable:true },
+    { id:"type_spare", name:"Spare Part", pattern:"asset", linkable:true },
+    { id:"type_misc", name:"Miscellaneous", pattern:"asset", linkable:false }
+  ];
+}
+function seedStaff(){
+  // Named approver hierarchy. Emails filled where already known from earlier setup;
+  // Admin can complete/edit the rest from Manage Staff — no code editing needed.
+  return [
+    { id:"staff_chairman", name:"Zeya Us Shams", email:"", role:"chairman", active:true, createdAt:new Date().toISOString() },
+    { id:"staff_principal", name:"Asma Shams", email:"", role:"principal", active:true, createdAt:new Date().toISOString() },
+    { id:"staff_coordinator", name:"Ahmad Haris", email:"ahharis1710@gmail.com", role:"coordinator", active:true, createdAt:new Date().toISOString() },
+    { id:"staff_accountant", name:"Accountant", email:"anhafatmi@gmail.com", role:"accountant", active:true, createdAt:new Date().toISOString() }
   ];
 }
 function emptyDb(){
@@ -383,9 +444,14 @@ function emptyDb(){
     departments: seedDepartments(),
     categories: seedCategories(),
     inventoryItems: [],
-    notesheets: [],
     dismissedAlerts: [],
-    homepageBanner: null
+    homepageBanner: null,
+    buildings: seedBuildings(),
+    rooms: seedRooms(),
+    itemTypes: seedItemTypes(),
+    staff: seedStaff(),
+    requests: [],
+    requestItems: []
   };
 }
 
@@ -429,68 +495,93 @@ function iconClipboardCheck(size,color){
 function iconBarChart(size,color){
   return outlineIcon('<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>', size, color);
 }
-function costTier(amount){
-  amount = Number(amount)||0;
-  if(amount < COST_TIER_LOW_MAX) return 'low';
-  if(amount <= COST_TIER_MEDIUM_MAX) return 'medium';
-  return 'high';
-}
-function tierLabel(t){ return t==='low' ? 'Low Cost' : t==='medium' ? 'Medium Cost' : 'High Cost'; }
-function tierBadge(t){ return '<span class="badge badge-'+t+'">'+tierLabel(t)+'</span>'; }
 function statusBadge(status){
   const map = { pending:'badge-pending', approved:'badge-approved', rejected:'badge-rejected' };
   const label = status.charAt(0).toUpperCase()+status.slice(1);
   return '<span class="badge '+(map[status]||'badge-status')+'">'+label+'</span>';
 }
-function stageChain(tier){
-  if(tier==='low') return [{ role:'accountant', label:'Accountant Approval' }];
-  if(tier==='medium') return [{ role:'reviewer', label:'Reviewer' }, { role:'approver', label:'Final Approval' }];
-  return [{ role:'reviewer', label:'Reviewer' }, { role:'approver', label:'Approver' }, { role:'principal', label:'Principal / Chairman Final Approval' }];
+function valueClassLabel(v){ return { low:'Low Value', medium:'Medium Value', high:'High Value', emergency:'Emergency' }[v] || v; }
+function valueClassBadgeClass(v){ return { low:'badge-low', medium:'badge-medium', high:'badge-high', emergency:'badge-high' }[v] || 'badge-status'; }
+function valueClassBadge(v){ return '<span class="badge '+valueClassBadgeClass(v)+'">'+valueClassLabel(v)+'</span>'; }
+function priorityBadge(p){
+  const cls = { Low:'badge-low', Medium:'badge-medium', High:'badge-high', Urgent:'badge-high' }[p] || 'badge-status';
+  return '<span class="badge '+cls+'">'+escapeHtml(p)+'</span>';
 }
+function itemStatusLabel(status){
+  return {
+    pending_approval:'Pending Approval', rejected:'Rejected', purchase_pending:'Purchase Pending',
+    purchased:'Purchased', received:'Received', assigned:'Assigned', active:'Active',
+    completed:'Completed', archived:'Archived'
+  }[status] || status;
+}
+function itemStatusBadgeClass(status){
+  return {
+    pending_approval:'badge-pending', rejected:'badge-rejected', purchase_pending:'badge-medium',
+    purchased:'badge-medium', received:'badge-medium', assigned:'badge-status', active:'badge-approved',
+    completed:'badge-approved', archived:'badge-status'
+  }[status] || 'badge-status';
+}
+function itemStatusBadge(status){ return '<span class="badge '+itemStatusBadgeClass(status)+'">'+itemStatusLabel(status)+'</span>'; }
 function deptName(id){ const d = DB.departments.find(x=>x.id===id); return d ? d.name : '—'; }
 function catName(id){ const c = DB.categories.find(x=>x.id===id); return c ? c.name : '—'; }
 function itemName(id){ const i = DB.inventoryItems.find(x=>x.id===id); return i ? i.name : '—'; }
+function buildingName(id){ const b = DB.buildings.find(x=>x.id===id); return b ? b.name : '—'; }
+function roomName(id){ if(!id) return '—'; const r = DB.rooms.find(x=>x.id===id); return r ? r.name : '—'; }
+function itemTypeById(id){ return DB.itemTypes.find(x=>x.id===id) || DB.itemTypes[0]; }
+function itemTypeName(id){ const t = itemTypeById(id); return t ? t.name : '—'; }
 
 /* ============================================================
-   Role checks
+   Role checks — staff & approver hierarchy live in DB.staff
    ============================================================ */
 function emailLower(){ return (currentUserEmail||'').toLowerCase(); }
 function isSignedIn(){ return Boolean(accessToken); }
 function isAdmin(){ return isSignedIn() && CONFIG.ADMIN_EMAILS.map(e=>e.toLowerCase()).includes(emailLower()); }
-function isAccountant(){ return isSignedIn() && (isAdmin() || CONFIG.ACCOUNTANT_EMAILS.map(e=>e.toLowerCase()).includes(emailLower())); }
-function roleDeptScope(map){
-  const key = Object.keys(map||{}).find(k=>k.toLowerCase()===emailLower());
-  if(!key) return null;
-  const v = map[key];
-  return v === '*' ? '*' : (Array.isArray(v) ? v : [v]);
+function myStaffRecord(){
+  if(!isSignedIn() || !DB || !DB.staff) return null;
+  return DB.staff.find(s=> s.active!==false && s.email && s.email.toLowerCase()===emailLower() ) || null;
 }
-function isReviewerFor(deptId){
-  if(!isSignedIn()) return false;
+function staffById(id){ return DB.staff.find(s=>s.id===id) || null; }
+function staffLabel(s){ if(!s) return '—'; return s.name + (s.email?' ('+s.email+')':' (email not set)'); }
+function hasRole(roleKey){
   if(isAdmin()) return true;
-  const scope = roleDeptScope(CONFIG.REVIEWER_EMAILS);
-  if(!scope) return false;
-  return scope === '*' || scope.includes(deptId);
+  const s = myStaffRecord();
+  return Boolean(s && s.role===roleKey);
 }
-function isApproverFor(deptId){
-  if(!isSignedIn()) return false;
-  if(isAdmin()) return true;
-  const scope = roleDeptScope(CONFIG.APPROVER_EMAILS);
-  if(!scope) return false;
-  return scope === '*' || scope.includes(deptId);
+function isChairman(){ return hasRole('chairman'); }
+function isPrincipal(){ return hasRole('principal'); }
+function isCoordinator(){ return hasRole('coordinator'); }
+function isAccountant(){ return hasRole('accountant'); }
+function isApproverRole(){ return isChairman() || isPrincipal() || isCoordinator(); }
+function canManageStaff(){ return isAdmin() || isApproverRole(); }
+function canManageTopRoles(){ return isAdmin(); } // only Admin edits Chairman/Principal/Coordinator/Accountant themselves
+function roleKeyLabel(key){
+  return { chairman:'Chairman', principal:'Principal', coordinator:'Coordinator', accountant:'Accountant', staff:'Staff' }[key] || key;
 }
-function isFinalApprover(){ return isSignedIn() && (isAdmin() || CONFIG.FINAL_APPROVER_EMAILS.map(e=>e.toLowerCase()).includes(emailLower())); }
-function canActOnStage(ns){
-  const chain = stageChain(ns.costTier);
-  const stage = chain[ns.stageIndex];
-  if(!stage) return false;
-  if(stage.role==='accountant') return isAccountant();
-  if(stage.role==='reviewer') return isReviewerFor(ns.departmentId);
-  if(stage.role==='approver') return isApproverFor(ns.departmentId);
-  if(stage.role==='principal') return isFinalApprover();
-  return false;
+function requiredApprovalChain(reqItem){
+  if(reqItem.procurementPolicy === 'not_required') return ['accountant'];
+  switch(reqItem.valueClass){
+    case 'low': return ['coordinator'];
+    case 'medium': return ['coordinator','principal'];
+    case 'high': return ['coordinator','principal','chairman'];
+    case 'emergency': return ['chairman'];
+    default: return ['coordinator'];
+  }
+}
+function currentApprovalRole(reqItem){
+  const chain = reqItem.approvalChain || requiredApprovalChain(reqItem);
+  return chain[reqItem.approvalIndex] || null;
+}
+function canActOnApproval(reqItem){
+  if(reqItem.status !== 'pending_approval') return false;
+  const role = currentApprovalRole(reqItem);
+  if(!role) return false;
+  return hasRole(role);
+}
+function isMyPurchaseTask(reqItem){
+  return isSignedIn() && reqItem.assignedPurchaserEmail && reqItem.assignedPurchaserEmail.toLowerCase()===emailLower();
 }
 function currentUserAnyRole(){
-  return isAdmin() || isAccountant() || Boolean(roleDeptScope(CONFIG.REVIEWER_EMAILS)) || Boolean(roleDeptScope(CONFIG.APPROVER_EMAILS)) || isFinalApprover();
+  return isAdmin() || isApproverRole() || isAccountant();
 }
 
 /* ============================================================
@@ -564,7 +655,13 @@ async function loadDb(){
   const raw = await driveGetJson(CONFIG.DB_FILE_ID);
   const base = emptyDb();
   DB = Object.assign(base, raw);
-  ['departments','categories','inventoryItems','notesheets','dismissedAlerts'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
+  ['departments','categories','inventoryItems','dismissedAlerts','buildings','rooms','itemTypes','staff','requests','requestItems'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
+  // Backfill new category fields for DBs saved before this feature existed
+  DB.categories.forEach(c=>{
+    if(!c.itemTypeId) c.itemTypeId = 'type_consumable';
+    if(!c.procurementPolicy) c.procurementPolicy = 'required';
+    if(!c.valueClass) c.valueClass = 'low';
+  });
 }
 async function saveDb(){
   try{
@@ -581,10 +678,9 @@ async function saveDb(){
 function allStaffEmails(){
   const set = new Set();
   CONFIG.ADMIN_EMAILS.forEach(e=>set.add(e.toLowerCase()));
-  CONFIG.ACCOUNTANT_EMAILS.forEach(e=>set.add(e.toLowerCase()));
-  Object.keys(CONFIG.REVIEWER_EMAILS||{}).forEach(e=>set.add(e.toLowerCase()));
-  Object.keys(CONFIG.APPROVER_EMAILS||{}).forEach(e=>set.add(e.toLowerCase()));
-  CONFIG.FINAL_APPROVER_EMAILS.forEach(e=>set.add(e.toLowerCase()));
+  if(DB && Array.isArray(DB.staff)){
+    DB.staff.forEach(s=>{ if(s.active!==false && s.email) set.add(s.email.toLowerCase()); });
+  }
   return set;
 }
 function initAuth(){
@@ -634,13 +730,11 @@ function logout(){ accessToken = null; currentUserEmail = null; toast('Signed ou
    Topbar / footer / search
    ============================================================ */
 function myRoleLabel(){
-  if(isAdmin()) return 'Admin';
-  const roles = [];
-  if(isAccountant()) roles.push('Accountant');
-  if(roleDeptScope(CONFIG.REVIEWER_EMAILS)) roles.push('Reviewer');
-  if(roleDeptScope(CONFIG.APPROVER_EMAILS)) roles.push('Approver');
-  if(isFinalApprover()) roles.push('Principal/Chairman');
-  return roles.length ? roles.join(' · ') : 'Viewer';
+  const s = myStaffRecord();
+  if(isAdmin() && !s) return 'Admin';
+  if(isAdmin() && s) return 'Admin · '+roleKeyLabel(s.role);
+  if(s) return roleKeyLabel(s.role);
+  return 'Viewer';
 }
 function renderTopbar(){
   const slot = document.getElementById('topbar-slot');
@@ -661,7 +755,7 @@ function renderTopbar(){
     + '</div>'
     + '</div></div>'
     + '<div class="nav-ribbon"><div class="wrap nav-ribbon-inner">'
-    +   navItem('#/', 'Home') + navItem('#/inventory','Inventory') + navItem('#/notesheets','Notesheets')
+    +   navItem('#/', 'Home') + navItem('#/inventory','Inventory') + navItem('#/procurement','Procurement')
     + '</div></div>';
   const loginBtn = document.getElementById('login-btn'); if(loginBtn) loginBtn.addEventListener('click', login);
   const logoutBtn = document.getElementById('logout-btn'); if(logoutBtn) logoutBtn.addEventListener('click', logout);
@@ -676,11 +770,11 @@ function renderSearchResults(q){
   q = (q||'').trim().toLowerCase();
   if(q.length < 2 || !DB){ slot.innerHTML=''; return; }
   const items = DB.inventoryItems.filter(i=> (i.name||'').toLowerCase().includes(q) ).slice(0,6);
-  const sheets = DB.notesheets.filter(n=> (n.title||'').toLowerCase().includes(q) ).slice(0,6);
-  if(!items.length && !sheets.length){ slot.innerHTML = '<div class="search-results"><a>No matches found</a></div>'; return; }
+  const reqItems = DB.requestItems.filter(r=> (r.itemName||'').toLowerCase().includes(q) ).slice(0,6);
+  if(!items.length && !reqItems.length){ slot.innerHTML = '<div class="search-results"><a>No matches found</a></div>'; return; }
   let html = '<div class="search-results">';
   items.forEach(i=>{ html += '<a href="#/inventory/'+i.departmentId+'">'+escapeHtml(i.name)+'<small>Inventory · '+escapeHtml(deptName(i.departmentId))+' · '+escapeHtml(catName(i.categoryId))+'</small></a>'; });
-  sheets.forEach(n=>{ html += '<a href="#/notesheets/'+n.id+'">'+escapeHtml(n.title)+'<small>Notesheet · '+escapeHtml(deptName(n.departmentId))+' · '+tierLabel(n.costTier)+'</small></a>'; });
+  reqItems.forEach(r=>{ html += '<a href="#/procurement/item/'+r.id+'">'+escapeHtml(r.itemName)+'<small>Procurement · '+escapeHtml(r.requestNumber)+' · '+itemStatusLabel(r.status)+'</small></a>'; });
   html += '</div>';
   slot.innerHTML = html;
 }
@@ -718,8 +812,8 @@ function renderRoute(){
   if(!parts.length) return renderHomePage();
   if(parts[0]==='inventory' && !parts[1]) return renderInventoryPage();
   if(parts[0]==='inventory' && parts[1]) return renderDepartmentPage(parts[1]);
-  if(parts[0]==='notesheets' && !parts[1]) return renderNotesheetsPage();
-  if(parts[0]==='notesheets' && parts[1]) return openNotesheetDetail(parts[1]);
+  if(parts[0]==='procurement' && parts[1]==='item' && parts[2]) { renderProcurementPage(); openItemDetailModal(parts[2]); return; }
+  if(parts[0]==='procurement') return renderProcurementPage(parts[1]);
   return renderHomePage();
 }
 
@@ -762,17 +856,19 @@ function wireAlertDismissButtons(){
    ============================================================ */
 function pendingForMe(){
   if(!isSignedIn()) return [];
-  return DB.notesheets.filter(n=> n.status==='pending' && canActOnStage(n));
+  const out = [];
+  DB.requestItems.forEach(r=>{
+    if(r.status==='pending_approval' && canActOnApproval(r)) out.push(r);
+    else if(r.status==='purchase_pending' && isMyPurchaseTask(r)) out.push(r);
+    else if(r.status==='purchased' && isMyPurchaseTask(r)) out.push(r);
+    else if(r.status==='received' && (isMyPurchaseTask(r) || isApproverRole() || isAdmin())) out.push(r);
+    else if((r.status==='completed' || r.status==='archived') && !r.accountantClosed && isAccountant()) out.push(r);
+  });
+  return out;
 }
 /* ============================================================
-   Analytics — spend computations (based on notesheet amounts)
+   Analytics — spend computations (based on purchase records on request items)
    ============================================================ */
-function notesheetSpendDate(n){
-  if(n.status==='approved' && n.history && n.history.length){
-    return n.history[n.history.length-1].timestamp;
-  }
-  return n.createdAt;
-}
 function monthKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function monthLabel(d){ return d.toLocaleDateString('en-IN',{month:'short'}); }
 function last6MonthBuckets(){
@@ -784,53 +880,55 @@ function last6MonthBuckets(){
   }
   return buckets;
 }
+function purchasedItems(){ return DB.requestItems.filter(r=>r.purchase && r.purchase.totalAmount!=null); }
 function computeMonthlyExpenditure(){
   const buckets = last6MonthBuckets();
   const map = {}; buckets.forEach(b=>map[b.key]=b);
-  DB.notesheets.filter(n=>n.status==='approved').forEach(n=>{
-    const d = new Date(notesheetSpendDate(n));
+  purchasedItems().forEach(r=>{
+    const d = new Date(r.purchase.purchaseDate || r.purchase.recordedAt);
     if(isNaN(d.getTime())) return;
     const k = monthKey(d);
-    if(map[k]) map[k].value += Number(n.amount)||0;
+    if(map[k]) map[k].value += Number(r.purchase.totalAmount)||0;
   });
   return buckets;
 }
 function computeCategoryExpenditure(){
   const totals = {};
-  DB.notesheets.filter(n=>n.status==='approved').forEach(n=>{
-    let label = 'Uncategorized';
-    if(n.linkedItemId){
-      const item = DB.inventoryItems.find(x=>x.id===n.linkedItemId);
-      if(item) label = catName(item.categoryId);
-    }
-    totals[label] = (totals[label]||0) + (Number(n.amount)||0);
+  purchasedItems().forEach(r=>{
+    const label = catName(r.categoryId);
+    totals[label] = (totals[label]||0) + (Number(r.purchase.totalAmount)||0);
   });
   return Object.entries(totals).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value).slice(0,6);
 }
-function computeDepartmentExpenditure(){
+function computeBuildingExpenditure(){
   const totals = {};
-  DB.notesheets.filter(n=>n.status==='approved').forEach(n=>{
-    const label = deptName(n.departmentId);
-    totals[label] = (totals[label]||0) + (Number(n.amount)||0);
+  purchasedItems().forEach(r=>{
+    const label = buildingName(r.buildingId);
+    totals[label] = (totals[label]||0) + (Number(r.purchase.totalAmount)||0);
   });
   return Object.entries(totals).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
 }
-function computeApprovedVsPending(){
-  let approved=0, pending=0;
-  DB.notesheets.forEach(n=>{
-    if(n.status==='approved') approved += Number(n.amount)||0;
-    else if(n.status==='pending') pending += Number(n.amount)||0;
+function computeRequestsByStatus(){
+  const buckets = { 'Pending Approval':0, 'In Progress':0, 'Completed':0, 'Rejected':0 };
+  DB.requestItems.forEach(r=>{
+    if(r.status==='pending_approval') buckets['Pending Approval']++;
+    else if(r.status==='rejected') buckets['Rejected']++;
+    else if(r.status==='completed' || r.status==='archived') buckets['Completed']++;
+    else buckets['In Progress']++;
   });
-  return { approved, pending };
+  return Object.entries(buckets).map(([label,value])=>({label,value}));
 }
 function currentMonthExpenditure(){
   const now = new Date(); const k = monthKey(now);
   let total = 0;
-  DB.notesheets.filter(n=>n.status==='approved').forEach(n=>{
-    const d = new Date(notesheetSpendDate(n));
-    if(!isNaN(d.getTime()) && monthKey(d)===k) total += Number(n.amount)||0;
+  purchasedItems().forEach(r=>{
+    const d = new Date(r.purchase.purchaseDate || r.purchase.recordedAt);
+    if(!isNaN(d.getTime()) && monthKey(d)===k) total += Number(r.purchase.totalAmount)||0;
   });
   return total;
+}
+function totalExpenditureAllTime(){
+  return purchasedItems().reduce((s,r)=> s + (Number(r.purchase.totalAmount)||0), 0);
 }
 
 /* ============================================================
@@ -873,14 +971,15 @@ function svgDonutChart(data){
   });
   return '<svg viewBox="0 0 '+size+' '+size+'" width="170" height="170">'+paths+'</svg>';
 }
-function renderDonutWithLegend(data, emptyLabel){
+function renderDonutWithLegend(data, emptyLabel, formatter){
+  formatter = formatter || formatMoney;
   if(!data.length || data.every(d=>d.value<=0)){
     return '<div class="empty-state" style="padding:20px;"><div class="icon">📊</div><h3>'+escapeHtml(emptyLabel||'No data yet')+'</h3></div>';
   }
   const total = data.reduce((s,d)=>s+d.value,0);
   const legend = data.map((d,i)=>{
     const pct = total>0 ? Math.round((d.value/total)*100) : 0;
-    return '<div class="legend-row"><span class="legend-dot" style="background:'+CHART_COLORS[i%CHART_COLORS.length]+';"></span><span class="legend-label">'+escapeHtml(d.label)+'</span><span class="legend-value">'+formatMoney(d.value)+' <span class="legend-pct">('+pct+'%)</span></span></div>';
+    return '<div class="legend-row"><span class="legend-dot" style="background:'+CHART_COLORS[i%CHART_COLORS.length]+';"></span><span class="legend-label">'+escapeHtml(d.label)+'</span><span class="legend-value">'+formatter(d.value)+' <span class="legend-pct">('+pct+'%)</span></span></div>';
   }).join('');
   return '<div class="donut-row"><div>'+svgDonutChart(data)+'</div><div class="legend-list">'+legend+'</div></div>';
 }
@@ -900,15 +999,16 @@ function renderHomePage(){
   const app = document.getElementById('app');
   const totalItems = DB.inventoryItems.length;
   const lowStock = computeActiveAlerts().length;
-  const pendingAll = DB.notesheets.filter(n=>n.status==='pending').length;
+  const pendingAll = DB.requestItems.filter(r=>r.status==='pending_approval').length;
   const myPending = pendingForMe().length;
 
   const monthly = computeMonthlyExpenditure();
   const byCategory = computeCategoryExpenditure();
-  const byDept = computeDepartmentExpenditure();
-  const avp = computeApprovedVsPending();
+  const byBuilding = computeBuildingExpenditure();
+  const byStatus = computeRequestsByStatus();
   const curMonth = currentMonthExpenditure();
-  const hasAnyNotesheets = DB.notesheets.length > 0;
+  const allTime = totalExpenditureAllTime();
+  const hasAnyRequests = DB.requestItems.length > 0;
 
   app.innerHTML =
     '<div class="content wrap">'
@@ -918,25 +1018,25 @@ function renderHomePage(){
     + '<div class="stat-row">'
     +   '<div class="stat-card"><div class="stat-icon">'+iconPackage(17,'var(--color-primary-dark)')+'</div><div><div class="stat-num">'+totalItems+'</div><div class="stat-lbl">Inventory Items</div></div></div>'
     +   '<div class="stat-card"><div class="stat-icon" style="background:var(--color-high-soft);">'+iconAlertTriangle(17,'var(--color-high)')+'</div><div><div class="stat-num">'+lowStock+'</div><div class="stat-lbl">Low Stock Alerts</div></div></div>'
-    +   '<div class="stat-card"><div class="stat-icon" style="background:var(--color-medium-soft);">'+iconFileText(17,'var(--color-medium)')+'</div><div><div class="stat-num">'+pendingAll+'</div><div class="stat-lbl">Notesheets Pending</div></div></div>'
+    +   '<div class="stat-card"><div class="stat-icon" style="background:var(--color-medium-soft);">'+iconFileText(17,'var(--color-medium)')+'</div><div><div class="stat-num">'+pendingAll+'</div><div class="stat-lbl">Requests Pending</div></div></div>'
     +   (isSignedIn() ? '<div class="stat-card"><div class="stat-icon" style="background:var(--color-gold-soft);">'+iconClipboardCheck(17,'var(--color-gold-bright)')+'</div><div><div class="stat-num">'+myPending+'</div><div class="stat-lbl">Awaiting My Action</div></div></div>' : '')
     + '</div>'
     + '<div class="section-heading">Spending Overview</div>'
     + '<div class="kpi-row">'
     +   '<div class="kpi-card"><div class="kpi-lbl">This Month\'s Expenditure</div><div class="kpi-val">'+formatMoney(curMonth)+'</div></div>'
-    +   '<div class="kpi-card"><div class="kpi-lbl">Approved (All Time)</div><div class="kpi-val" style="color:var(--color-success);">'+formatMoney(avp.approved)+'</div></div>'
-    +   '<div class="kpi-card"><div class="kpi-lbl">Pending Approval</div><div class="kpi-val" style="color:var(--color-medium);">'+formatMoney(avp.pending)+'</div></div>'
+    +   '<div class="kpi-card"><div class="kpi-lbl">Total Expenditure (All Time)</div><div class="kpi-val" style="color:var(--color-success);">'+formatMoney(allTime)+'</div></div>'
+    +   '<div class="kpi-card"><div class="kpi-lbl">Requests Awaiting Approval</div><div class="kpi-val" style="color:var(--color-medium);">'+pendingAll+'</div></div>'
     + '</div>'
-    + (hasAnyNotesheets ?
+    + (hasAnyRequests ?
       ('<div class="analytics-grid">'
       +   '<div class="chart-card"><div class="chart-card-title">Monthly Expenditure &amp; Purchase Trend</div>'+svgBarChart(monthly)+'</div>'
       +   '<div class="chart-card"><div class="chart-card-title">Category-wise Expenditure</div>'+renderDonutWithLegend(byCategory)+'</div>'
-      +   '<div class="chart-card"><div class="chart-card-title">Department-wise Expenditure</div>'+renderHBarList(byDept)+'</div>'
-      +   '<div class="chart-card"><div class="chart-card-title">Approved vs Pending</div>'+renderDonutWithLegend([{label:'Approved',value:avp.approved},{label:'Pending',value:avp.pending}], 'No notesheets yet')+'</div>'
+      +   '<div class="chart-card"><div class="chart-card-title">Building-wise Expenditure</div>'+renderHBarList(byBuilding)+'</div>'
+      +   '<div class="chart-card"><div class="chart-card-title">Requests by Status</div>'+renderDonutWithLegend(byStatus, 'No requests yet', v=>String(v))+'</div>'
       + '</div>')
       : ('<div class="empty-analytics"><div class="empty-analytics-icon">'+iconBarChart(30,'var(--color-primary)')+'</div>'
         + '<h3>No expenditure has been recorded for this month</h3>'
-        + '<p>Once notesheets are raised and approved, spending insights and trends will appear here automatically.</p></div>')
+        + '<p>Once purchase requests are raised and processed, spending insights and trends will appear here automatically.</p></div>')
     )
     + '</div>';
   wireAlertDismissButtons();
@@ -977,6 +1077,8 @@ function openManageDeptsModal(){
 }
 function renderManageDeptsModalBody(){
   const depts = DB.departments.slice().sort((a,b)=>a.sortOrder-b.sortOrder);
+  const typeOptions = DB.itemTypes.map(t=>'<option value="'+t.id+'">'+escapeHtml(t.name)+'</option>').join('');
+  const valueClassOptions = ['low','medium','high','emergency'].map(v=>'<option value="'+v+'">'+valueClassLabel(v)+'</option>').join('');
   const rows = depts.map(d=>{
     const cats = DB.categories.filter(c=>c.departmentId===d.id);
     return '<div style="border:1px solid var(--color-border); border-radius:10px; padding:12px; margin-bottom:10px;">'
@@ -984,8 +1086,19 @@ function renderManageDeptsModalBody(){
       +   '<strong>'+escapeHtml(d.name)+'</strong>'
       +   '<span style="display:flex; gap:6px;"><button class="btn btn-outline btn-sm" data-rename-dept="'+d.id+'">Rename</button><button class="btn btn-danger btn-sm" data-del-dept="'+d.id+'">Delete</button></span>'
       + '</div>'
-      + '<div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">'
-      +   cats.map(c=>'<span class="badge badge-status">'+escapeHtml(c.name)+' <button data-del-cat="'+c.id+'" style="border:none;background:none;cursor:pointer;color:var(--color-danger);font-weight:700;margin-left:4px;">&times;</button></span>').join('')
+      + '<div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">'
+      +   cats.map(c=>
+          '<div class="cat-policy-row">'
+          + '<div class="cat-policy-name">'+escapeHtml(c.name)+' <button data-del-cat="'+c.id+'" title="Delete category" style="border:none;background:none;cursor:pointer;color:var(--color-danger);font-weight:700;">&times;</button></div>'
+          + '<div class="cat-policy-controls">'
+          +   '<select data-cat-itemtype="'+c.id+'" title="Item Type">'+typeOptions.replace('value="'+c.itemTypeId+'"','value="'+c.itemTypeId+'" selected')+'</select>'
+          +   '<select data-cat-valueclass="'+c.id+'" title="Value Classification">'+valueClassOptions.replace('value="'+c.valueClass+'"','value="'+c.valueClass+'" selected')+'</select>'
+          +   '<button class="policy-toggle '+(c.procurementPolicy==='required'?'on':'off')+'" data-cat-policy-toggle="'+c.id+'" title="Toggle whether this category requires approval">'
+          +     (c.procurementPolicy==='required' ? 'Requires Approval' : 'No Approval Required')
+          +   '</button>'
+          + '</div>'
+          + '</div>'
+        ).join('')
       + '</div>'
       + '<div style="margin-top:8px; display:flex; gap:6px;"><input type="text" placeholder="New category name" data-newcat-input="'+d.id+'" style="flex:1; padding:6px 9px; border:1.5px solid var(--color-border); border-radius:7px; font-size:12.5px;"><button class="btn btn-outline btn-sm" data-add-cat="'+d.id+'">+ Add</button></div>'
       + '</div>';
@@ -1011,8 +1124,26 @@ function renderManageDeptsModalBody(){
       const input = document.querySelector('[data-newcat-input="'+deptId+'"]');
       const name = input.value.trim();
       if(!name) return;
-      DB.categories.push({ id:nextId('cat'), departmentId:deptId, name });
+      DB.categories.push({ id:nextId('cat'), departmentId:deptId, name, itemTypeId:'type_consumable', procurementPolicy:'required', valueClass:'low' });
       await saveDb(); toast('Category added','success'); renderManageDeptsModalBody(); renderRoute();
+    });
+  });
+  document.querySelectorAll('[data-cat-itemtype]').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const c = DB.categories.find(x=>x.id===sel.getAttribute('data-cat-itemtype'));
+      if(c){ c.itemTypeId = sel.value; await saveDb(); toast('Item Type updated','success'); }
+    });
+  });
+  document.querySelectorAll('[data-cat-valueclass]').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const c = DB.categories.find(x=>x.id===sel.getAttribute('data-cat-valueclass'));
+      if(c){ c.valueClass = sel.value; await saveDb(); toast('Value Classification updated','success'); }
+    });
+  });
+  document.querySelectorAll('[data-cat-policy-toggle]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const c = DB.categories.find(x=>x.id===btn.getAttribute('data-cat-policy-toggle'));
+      if(c){ c.procurementPolicy = c.procurementPolicy==='required' ? 'not_required' : 'required'; await saveDb(); toast('Procurement Policy updated','success'); renderManageDeptsModalBody(); }
     });
   });
   document.querySelectorAll('[data-rename-dept]').forEach(btn=>{
@@ -1159,179 +1290,696 @@ function openItemModal(deptId, catId, item){
 }
 
 /* ============================================================
-   Notesheets — list
+   PROCUREMENT — Purchase Request lifecycle
    ============================================================ */
-let notesheetTab = 'mine';
-function renderNotesheetsPage(){
+let procTab = null;
+function requestNumberNext(){
+  const n = DB.requests.length + 1;
+  const y = new Date().getFullYear();
+  return 'PR-'+y+'-'+String(n).padStart(4,'0');
+}
+function itemPattern(reqItem){ const t = itemTypeById(reqItem.itemTypeId); return t ? t.pattern : 'consumable'; }
+function isTerminal(reqItem){
+  const pattern = itemPattern(reqItem);
+  if(pattern==='asset') return reqItem.status==='archived';
+  return reqItem.status==='completed';
+}
+function myApprovalQueue(){ return DB.requestItems.filter(r=> r.status==='pending_approval' && canActOnApproval(r)); }
+function myPurchaseQueue(){ return DB.requestItems.filter(r=> (r.status==='purchase_pending'||r.status==='purchased') && isMyPurchaseTask(r)); }
+function myAssignmentQueue(){ return DB.requestItems.filter(r=> r.status==='received' && (isMyPurchaseTask(r) || isApproverRole() || isAdmin())); }
+function myAccountantQueue(){ return DB.requestItems.filter(r=> isTerminal(r) && !r.accountantClosed && isAccountant()); }
+
+function renderProcurementPage(initialTab){
   const app = document.getElementById('app');
-  if(!notesheetTab) notesheetTab = 'mine';
-  const showPendingTab = isSignedIn() && currentUserAnyRole();
+  if(initialTab) procTab = initialTab;
+  if(!procTab) procTab = 'new';
+  const canApproveAny = isSignedIn() && isApproverRole();
+  const hasPurchaseTasks = isSignedIn() && myPurchaseQueue().length>0;
+  const canAssign = isSignedIn() && (isApproverRole() || isAdmin());
+  const canAccountant = isSignedIn() && isAccountant();
+
+  const tabs = [];
+  if(isSignedIn()) tabs.push(['new','New Request']);
+  if(canApproveAny) tabs.push(['approvals','Approvals'+(myApprovalQueue().length?' ('+myApprovalQueue().length+')':'')]);
+  if(isSignedIn()) tabs.push(['tasks','My Purchase Tasks'+(myPurchaseQueue().length?' ('+myPurchaseQueue().length+')':'')]);
+  if(canAssign) tabs.push(['assign','Receiving &amp; Assignment'+(myAssignmentQueue().length?' ('+myAssignmentQueue().length+')':'')]);
+  if(canAccountant) tabs.push(['accountant','Accountant Closure'+(myAccountantQueue().length?' ('+myAccountantQueue().length+')':'')]);
+  tabs.push(['all','All Requests']);
 
   app.innerHTML =
     '<div class="content wrap">'
-    + '<div class="page-title"><h2>Notesheet Approval</h2>'
-    + (isSignedIn() ? '<button class="btn btn-primary btn-sm" id="new-notesheet-btn">+ New Notesheet</button>' : '')
+    + '<div class="page-title"><h2>Procurement</h2>'
+    +   (canManageStaff() ? '<span style="display:flex; gap:8px;"><button class="btn btn-outline btn-sm" id="manage-staff-btn">Manage Staff</button><button class="btn btn-outline btn-sm" id="manage-buildings-btn">Manage Buildings</button></span>' : '')
     + '</div>'
-    + '<div class="page-subtitle">Purchase requests route automatically: below ₹500 → Accountant · ₹500–₹5,000 → Reviewer → Final Approval · above ₹5,000 → Reviewer → Approver → Principal/Chairman.</div>'
-    + '<div class="tab-strip">'
-    +   (isSignedIn() ? '<button class="tab-btn '+(notesheetTab==='mine'?'active':'')+'" data-ns-tab="mine">My Notesheets</button>' : '')
-    +   (showPendingTab ? '<button class="tab-btn '+(notesheetTab==='pending'?'active':'')+'" data-ns-tab="pending">Pending My Action</button>' : '')
-    +   '<button class="tab-btn '+(notesheetTab==='all'?'active':'')+'" data-ns-tab="all">All</button>'
-    + '</div>'
-    + '<div class="tab-panel" id="ns-panel"></div>'
+    + '<div class="page-subtitle-inline">Purchase requests, approvals, purchasing, receiving, assignment and closure — permanently tracked.</div>'
+    + '<div class="tab-strip">' + tabs.map(t=>'<button class="tab-btn '+(procTab===t[0]?'active':'')+'" data-proc-tab="'+t[0]+'">'+t[1]+'</button>').join('') + '</div>'
+    + '<div class="tab-panel" id="proc-panel"></div>'
     + '</div>';
 
-  document.querySelectorAll('[data-ns-tab]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ notesheetTab = btn.getAttribute('data-ns-tab'); renderNotesheetsPage(); });
+  document.querySelectorAll('[data-proc-tab]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ procTab = btn.getAttribute('data-proc-tab'); renderProcurementPage(); });
   });
-  const newBtn = document.getElementById('new-notesheet-btn');
-  if(newBtn) newBtn.addEventListener('click', openNewNotesheetModal);
+  const msBtn = document.getElementById('manage-staff-btn'); if(msBtn) msBtn.addEventListener('click', openManageStaffModal);
+  const mbBtn = document.getElementById('manage-buildings-btn'); if(mbBtn) mbBtn.addEventListener('click', openManageBuildingsModal);
 
-  let list;
-  if(notesheetTab==='mine' && isSignedIn()) list = DB.notesheets.filter(n=>n.requesterEmail===currentUserEmail);
-  else if(notesheetTab==='pending' && showPendingTab) list = pendingForMe();
-  else list = DB.notesheets.slice();
-  list = list.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
-  renderNotesheetsTable(list);
-}
-function renderNotesheetsTable(list){
-  const panel = document.getElementById('ns-panel');
-  if(!list.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🗒️</div><h3>No notesheets here</h3></div>'; return; }
-  panel.innerHTML = '<div class="table-wrap"><table><thead><tr>'
-    + '<th>Subject</th><th>Department</th><th>Amount</th><th>Tier</th><th>Stage</th><th>Status</th><th>Raised</th>'
-    + '</tr></thead><tbody>'
-    + list.map(n=>{
-        const chain = stageChain(n.costTier);
-        const stageLabel = n.status==='pending' ? (chain[n.stageIndex] ? chain[n.stageIndex].label : '—') : (n.status==='approved' ? 'Completed' : 'Rejected at '+(chain[n.stageIndex]?chain[n.stageIndex].label:'—'));
-        return '<tr class="row-clickable" data-open-ns="'+n.id+'">'
-          + '<td>'+escapeHtml(n.title)+'</td>'
-          + '<td>'+escapeHtml(deptName(n.departmentId))+'</td>'
-          + '<td>'+formatMoney(n.amount)+'</td>'
-          + '<td>'+tierBadge(n.costTier)+'</td>'
-          + '<td>'+escapeHtml(stageLabel)+'</td>'
-          + '<td>'+statusBadge(n.status)+'</td>'
-          + '<td>'+formatDate(n.createdAt)+'</td>'
-          + '</tr>';
-      }).join('')
-    + '</tbody></table></div>';
-  panel.querySelectorAll('[data-open-ns]').forEach(row=>{
-    row.addEventListener('click', ()=>{ location.hash = '#/notesheets/'+row.getAttribute('data-open-ns'); });
-  });
+  if(!isSignedIn() && procTab!=='all'){ procTab = 'all'; }
+  if(procTab==='new') renderNewRequestTab();
+  else if(procTab==='approvals') renderApprovalsTab();
+  else if(procTab==='tasks') renderTasksTab();
+  else if(procTab==='assign') renderAssignmentTab();
+  else if(procTab==='accountant') renderAccountantTab();
+  else renderAllRequestsTab();
 }
 
-function openNewNotesheetModal(){
-  const depts = DB.departments.slice().sort((a,b)=>a.sortOrder-b.sortOrder);
-  const items = DB.inventoryItems.slice().sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  const body =
-    '<div class="field"><label>Subject / Title</label><input type="text" id="ns-title"></div>'
-    + '<div class="field"><label>Requesting Department</label><select id="ns-dept">'+depts.map(d=>'<option value="'+d.id+'">'+escapeHtml(d.name)+'</option>').join('')+'</select></div>'
-    + '<div class="field"><label>Description / Justification</label><textarea id="ns-desc"></textarea></div>'
-    + '<div class="field"><label>Link to Inventory Item (optional)</label><select id="ns-item"><option value="">— None —</option>'+items.map(i=>'<option value="'+i.id+'">'+escapeHtml(i.name)+' ('+escapeHtml(deptName(i.departmentId))+')</option>').join('')+'</select><div class="field-hint">If approved, this item\'s stock quantity will be increased automatically.</div></div>'
-    + '<div class="field-row"><div class="field"><label>Quantity Requested</label><input type="number" id="ns-qty" value="1"></div>'
-    +   '<div class="field"><label>Amount (₹)</label><input type="number" id="ns-amount" value="0"></div></div>'
-    + '<div id="ns-tier-preview" class="field-hint"></div>';
+/* ---------------- New Request ---------------- */
+let newRequestLines = [];
+function renderNewRequestTab(){
+  const panel = document.getElementById('proc-panel');
+  if(!newRequestLines.length) newRequestLines = [{ localId: nextId('line') }];
+  const buildings = DB.buildings.slice().sort((a,b)=>a.sortOrder-b.sortOrder);
 
-  openModal('New Notesheet', body, '<button class="btn btn-outline" id="cancel-ns-btn">Cancel</button><button class="btn btn-primary" id="save-ns-btn">Raise Notesheet</button>');
-  document.getElementById('cancel-ns-btn').addEventListener('click', closeModal);
-  const amountInput = document.getElementById('ns-amount');
-  const preview = document.getElementById('ns-tier-preview');
-  function updatePreview(){
-    const tier = costTier(amountInput.value);
-    const chain = stageChain(tier);
-    preview.innerHTML = 'Routing: ' + tierBadge(tier) + ' → ' + chain.map(s=>s.label).join(' → ');
-  }
-  amountInput.addEventListener('input', updatePreview); updatePreview();
-
-  document.getElementById('save-ns-btn').addEventListener('click', async ()=>{
-    const title = document.getElementById('ns-title').value.trim();
-    if(!title){ toast('Subject is required','error'); return; }
-    const amount = Number(amountInput.value)||0;
-    const tier = costTier(amount);
-    const record = {
-      id: nextId('ns'),
-      title,
-      departmentId: document.getElementById('ns-dept').value,
-      description: document.getElementById('ns-desc').value.trim(),
-      linkedItemId: document.getElementById('ns-item').value || null,
-      quantityRequested: Number(document.getElementById('ns-qty').value)||0,
-      amount,
-      costTier: tier,
-      stageIndex: 0,
-      status: 'pending',
-      requesterEmail: currentUserEmail,
-      createdAt: new Date().toISOString(),
-      history: [{ stage:'Raised', actorEmail: currentUserEmail, action:'raised', remark:'', timestamp:new Date().toISOString() }]
-    };
-    DB.notesheets.push(record);
-    await saveDb(); closeModal(); toast('Notesheet raised','success'); location.hash = '#/notesheets/'+record.id;
-  });
-}
-
-function openNotesheetDetail(id){
-  const app = document.getElementById('app');
-  const n = DB.notesheets.find(x=>x.id===id);
-  if(!n){ app.innerHTML = '<div class="content wrap"><div class="empty-state"><h3>Notesheet not found</h3></div></div>'; return; }
-  const chain = stageChain(n.costTier);
-  const stageLabel = n.status==='pending' ? (chain[n.stageIndex] ? chain[n.stageIndex].label : '—') : (n.status==='approved' ? 'Completed' : 'Rejected');
-  const canAct = n.status==='pending' && canActOnStage(n);
-
-  app.innerHTML =
-    '<div class="content wrap">'
-    + '<div class="breadcrumb"><a href="#/notesheets">Notesheets</a> / '+escapeHtml(n.title)+'</div>'
-    + '<div class="page-title"><h2>'+escapeHtml(n.title)+'</h2>'+statusBadge(n.status)+'</div>'
-    + '<div class="card-badge-row" style="margin:8px 0 18px;">'+tierBadge(n.costTier)+'<span class="badge badge-status">'+escapeHtml(deptName(n.departmentId))+'</span>'+(n.status==='pending'?'<span class="badge badge-pending">Current stage: '+escapeHtml(stageLabel)+'</span>':'')+'</div>'
-    + '<div class="spec-grid" style="margin-bottom:22px;">'
-    +   '<div class="spec-item"><label>Requested By</label><div class="val">'+escapeHtml(n.requesterEmail)+'</div></div>'
-    +   '<div class="spec-item"><label>Amount</label><div class="val">'+formatMoney(n.amount)+'</div></div>'
-    +   '<div class="spec-item"><label>Quantity Requested</label><div class="val">'+escapeHtml(n.quantityRequested)+'</div></div>'
-    +   '<div class="spec-item"><label>Linked Inventory Item</label><div class="val">'+(n.linkedItemId?escapeHtml(itemName(n.linkedItemId)):'—')+'</div></div>'
-    +   '<div class="spec-item"><label>Raised On</label><div class="val">'+formatDate(n.createdAt)+'</div></div>'
+  panel.innerHTML =
+    '<div class="field-row">'
+    +   '<div class="field"><label>Request Date</label><input type="date" id="req-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+    +   '<div class="field"><label>Requested By</label><input type="text" value="'+escapeHtml(currentUserEmail||'')+'" disabled></div>'
     + '</div>'
-    + '<div class="field"><label>Description / Justification</label><div class="val" style="background:var(--color-surface-2); border-radius:8px; padding:10px 12px;">'+escapeHtml(n.description||'—')+'</div></div>'
+    + '<div class="field-row">'
+    +   '<div class="field"><label>Building</label><select id="req-building">'+buildings.map(b=>'<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('')+'</select></div>'
+    +   '<div class="field"><label>Room</label><select id="req-room"><option value="">— None —</option></select></div>'
+    + '</div>'
     + '<div class="star-divider">'+starSvg(14,'#a53692')+'</div>'
-    + '<h3 style="margin-bottom:10px;">Approval Timeline</h3>'
-    + '<ul class="timeline" id="ns-timeline"></ul>'
-    + (canAct ? '<div class="star-divider">'+starSvg(14,'#a53692')+'</div><div id="ns-action-box"></div>' : '')
+    + '<h3 style="margin-bottom:10px;">Items</h3>'
+    + '<div id="req-lines"></div>'
+    + '<button class="btn btn-outline btn-sm" id="add-line-btn" style="margin-top:8px;">+ Add Another Item</button>'
+    + '<div class="star-divider">'+starSvg(14,'#a53692')+'</div>'
+    + '<button class="btn btn-primary" id="submit-request-btn">Submit Purchase Request</button>';
+
+  const buildingSel = document.getElementById('req-building');
+  function refreshRooms(){
+    const roomSel = document.getElementById('req-room');
+    const rooms = DB.rooms.filter(r=>r.buildingId===buildingSel.value);
+    roomSel.innerHTML = '<option value="">— None —</option>' + rooms.map(r=>'<option value="'+r.id+'">'+escapeHtml(r.name)+'</option>').join('');
+  }
+  buildingSel.addEventListener('change', refreshRooms);
+  refreshRooms();
+
+  function renderLines(){
+    const wrap = document.getElementById('req-lines');
+    wrap.innerHTML = newRequestLines.map((line, idx)=>{
+      const catOptions = DB.categories.slice().map(c=>'<option value="'+c.id+'">'+escapeHtml(c.name)+' ('+escapeHtml(deptName(c.departmentId))+')</option>').join('');
+      return '<div class="req-line-card" data-line="'+line.localId+'">'
+        + '<div class="req-line-head"><strong>Item '+(idx+1)+'</strong>'+(newRequestLines.length>1?'<button class="btn btn-danger btn-sm" data-remove-line="'+line.localId+'">Remove</button>':'')+'</div>'
+        + '<div class="field-row">'
+        +   '<div class="field"><label>Category</label><select data-line-field="categoryId" data-line-id="'+line.localId+'">'+catOptions+'</select></div>'
+        +   '<div class="field"><label>Item Name</label><input type="text" data-line-field="itemName" data-line-id="'+line.localId+'" placeholder="e.g. Whiteboard Markers"></div>'
+        + '</div>'
+        + '<div class="field-row">'
+        +   '<div class="field"><label>Quantity Requested</label><input type="number" min="1" value="1" data-line-field="quantityRequested" data-line-id="'+line.localId+'"></div>'
+        +   '<div class="field"><label>Priority</label><select data-line-field="priority" data-line-id="'+line.localId+'"><option>Low</option><option selected>Medium</option><option>High</option><option>Urgent</option></select></div>'
+        + '</div>'
+        + '<div class="field"><label>Reason</label><input type="text" data-line-field="reason" data-line-id="'+line.localId+'" placeholder="Why is this needed?"></div>'
+        + '<div class="field"><label>Description (optional)</label><textarea data-line-field="description" data-line-id="'+line.localId+'"></textarea></div>'
+        + '</div>';
+    }).join('');
+    document.getElementById('add-line-btn').style.display = newRequestLines.length>=1 ? '' : 'none';
+    wrap.querySelectorAll('[data-remove-line]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        newRequestLines = newRequestLines.filter(l=>l.localId!==btn.getAttribute('data-remove-line'));
+        renderLines();
+      });
+    });
+  }
+  renderLines();
+
+  document.getElementById('add-line-btn').addEventListener('click', ()=>{
+    newRequestLines.push({ localId: nextId('line') });
+    renderLines();
+  });
+
+  document.getElementById('submit-request-btn').addEventListener('click', async ()=>{
+    const wrap = document.getElementById('req-lines');
+    const lineData = newRequestLines.map(line=>{
+      const get = (field)=>{ const el = wrap.querySelector('[data-line-id="'+line.localId+'"][data-line-field="'+field+'"]'); return el ? el.value.trim() : ''; };
+      return {
+        categoryId: get('categoryId'),
+        itemName: get('itemName'),
+        quantityRequested: Number(get('quantityRequested'))||0,
+        priority: get('priority'),
+        reason: get('reason'),
+        description: get('description')
+      };
+    });
+    if(lineData.some(l=>!l.itemName || !l.quantityRequested)){ toast('Every item needs a name and quantity','error'); return; }
+    const buildingId = buildingSel.value;
+    const roomId = document.getElementById('req-room').value || null;
+    const requestDate = document.getElementById('req-date').value;
+    const requestNumber = requestNumberNext();
+    const requestId = nextId('req');
+    const itemIds = [];
+    lineData.forEach(l=>{
+      const cat = DB.categories.find(c=>c.id===l.categoryId);
+      const itemTypeId = cat ? cat.itemTypeId : 'type_consumable';
+      const procurementPolicy = cat ? cat.procurementPolicy : 'required';
+      const valueClass = cat ? cat.valueClass : 'low';
+      const chain = requiredApprovalChain({ procurementPolicy, valueClass });
+      const id = nextId('ri');
+      itemIds.push(id);
+      DB.requestItems.push({
+        id, requestId, requestNumber, requestDate,
+        requestedByEmail: currentUserEmail, requestedByName: (myStaffRecord()||{}).name || currentUserEmail,
+        buildingId, roomId,
+        categoryId: l.categoryId, itemTypeId, itemName: l.itemName, quantityRequested: l.quantityRequested,
+        priority: l.priority, reason: l.reason, description: l.description,
+        valueClass, procurementPolicy,
+        linkedAssetId: null,
+        status: 'pending_approval',
+        approvalChain: chain, approvalIndex: 0,
+        assignedPurchaserEmail: null, assignedPurchaserName: null,
+        purchase: null, receipt: null, assignments: [], maintenanceEvents: [], disposal: null,
+        accountantClosed: false, accountantClosedByEmail: null, accountantClosedAt: null, accountantRemark: null,
+        history: [{ stage:'Requested', action:'created', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:'', timestamp:new Date().toISOString() }],
+        createdAt: new Date().toISOString()
+      });
+    });
+    DB.requests.push({ id: requestId, requestNumber, requestDate, requestedByEmail: currentUserEmail, buildingId, roomId, createdAt: new Date().toISOString(), itemIds });
+    await saveDb();
+    newRequestLines = [];
+    toast('Purchase request '+requestNumber+' submitted', 'success');
+    procTab = 'all';
+    renderProcurementPage();
+  });
+}
+
+/* ---------------- Approvals ---------------- */
+function renderApprovalsTab(){
+  const panel = document.getElementById('proc-panel');
+  const items = myApprovalQueue();
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">✅</div><h3>Nothing awaiting your approval</h3></div>'; return; }
+  panel.innerHTML =
+    '<div style="display:flex; gap:8px; margin-bottom:12px;">'
+    + '<button class="btn btn-outline btn-sm" id="bulk-approve-btn">Approve Selected</button>'
+    + '<button class="btn btn-danger btn-sm" id="bulk-reject-btn">Reject Selected</button>'
+    + '</div>'
+    + '<div class="approval-card-grid">' + items.map(r=>renderApprovalCard(r)).join('') + '</div>';
+
+  items.forEach(r=>{
+    const card = panel.querySelector('[data-approval-card="'+r.id+'"]');
+    card.querySelector('[data-approve-one]').addEventListener('click', ()=>actOnApproval(r, 'approve', card));
+    card.querySelector('[data-reject-one]').addEventListener('click', ()=>actOnApproval(r, 'reject', card));
+  });
+  document.getElementById('bulk-approve-btn').addEventListener('click', async ()=>{
+    const selected = items.filter(r=> panel.querySelector('[data-select="'+r.id+'"]').checked);
+    if(!selected.length){ toast('Select at least one item','error'); return; }
+    for(const r of selected){ await actOnApproval(r, 'approve', null, true); }
+    await saveDb(); toast(selected.length+' item(s) approved','success'); renderProcurementPage();
+  });
+  document.getElementById('bulk-reject-btn').addEventListener('click', async ()=>{
+    const selected = items.filter(r=> panel.querySelector('[data-select="'+r.id+'"]').checked);
+    if(!selected.length){ toast('Select at least one item','error'); return; }
+    for(const r of selected){ await actOnApproval(r, 'reject', null, true); }
+    await saveDb(); toast(selected.length+' item(s) rejected','success'); renderProcurementPage();
+  });
+}
+function renderApprovalCard(r){
+  const staffOptions = DB.staff.filter(s=>s.active!==false).map(s=>'<option value="'+s.email+'">'+escapeHtml(s.name)+'</option>').join('');
+  return '<div class="approval-card" data-approval-card="'+r.id+'">'
+    + '<div class="approval-card-top"><label class="chk-row"><input type="checkbox" data-select="'+r.id+'"> <strong>'+escapeHtml(r.itemName)+'</strong></label>'+valueClassBadge(r.valueClass)+'</div>'
+    + '<div class="approval-card-meta">'+escapeHtml(r.requestNumber)+' · '+escapeHtml(catName(r.categoryId))+' · Qty '+r.quantityRequested+' · '+priorityBadge(r.priority)+'</div>'
+    + '<div class="approval-card-meta">'+escapeHtml(buildingName(r.buildingId))+(r.roomId?' / '+escapeHtml(roomName(r.roomId)):'')+' · Requested by '+escapeHtml(r.requestedByName||r.requestedByEmail)+'</div>'
+    + (r.reason ? '<div class="approval-card-reason">"'+escapeHtml(r.reason)+'"</div>' : '')
+    + '<div class="field" style="margin-top:8px;"><label>Delegate Purchaser</label><select data-purchaser="'+r.id+'"><option value="">— Not yet decided —</option>'+staffOptions+'</select></div>'
+    + '<div class="field"><label>Remarks (optional)</label><input type="text" data-remark="'+r.id+'"></div>'
+    + '<div class="approval-card-actions"><button class="btn btn-primary btn-sm" data-approve-one="'+r.id+'">Approve</button><button class="btn btn-danger btn-sm" data-reject-one="'+r.id+'">Reject</button></div>'
     + '</div>';
+}
+async function actOnApproval(r, action, cardEl, skipSave){
+  const remarkEl = document.querySelector('[data-remark="'+r.id+'"]');
+  const purchaserEl = document.querySelector('[data-purchaser="'+r.id+'"]');
+  const remark = remarkEl ? remarkEl.value : '';
+  const role = currentApprovalRole(r);
+  const stageLabel = roleKeyLabel(role)+' Approval';
+  if(purchaserEl && purchaserEl.value){
+    const staffRec = DB.staff.find(s=>s.email===purchaserEl.value);
+    r.assignedPurchaserEmail = purchaserEl.value;
+    r.assignedPurchaserName = staffRec ? staffRec.name : purchaserEl.value;
+  }
+  r.history.push({ stage: stageLabel, action: action==='approve'?'approved':'rejected', actorEmail: currentUserEmail, actorName: (myStaffRecord()||{}).name || currentUserEmail, remark, timestamp: new Date().toISOString() });
+  if(action==='reject'){
+    r.status = 'rejected';
+  } else {
+    if(r.approvalIndex < r.approvalChain.length - 1){
+      r.approvalIndex += 1;
+    } else {
+      r.status = 'purchase_pending';
+      if(!r.assignedPurchaserEmail){ r.assignedPurchaserEmail = r.requestedByEmail; r.assignedPurchaserName = r.requestedByName; }
+    }
+  }
+  if(!skipSave){ await saveDb(); toast(action==='approve'?'Approved':'Rejected', action==='approve'?'success':'error'); renderProcurementPage(); }
+}
 
-  const tl = document.getElementById('ns-timeline');
-  tl.innerHTML = n.history.map(h=>
-    '<li><div class="t-title">'+escapeHtml(h.stage)+' — '+escapeHtml(h.action)+'</div>'
-    + '<div class="t-meta">'+escapeHtml(h.actorEmail||'—')+' · '+formatDateTime(h.timestamp)+'</div>'
-    + (h.remark ? '<div class="t-remark">'+escapeHtml(h.remark)+'</div>' : '')
-    + '</li>'
-  ).join('');
+/* ---------------- My Purchase Tasks ---------------- */
+function renderTasksTab(){
+  const panel = document.getElementById('proc-panel');
+  const items = myPurchaseQueue();
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🛒</div><h3>No purchase tasks assigned to you</h3></div>'; return; }
+  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Status</th><th>Qty Requested</th><th></th></tr></thead><tbody>'
+    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+itemStatusBadge(r.status)+'</td><td>'+r.quantityRequested+'</td><td><button class="btn btn-primary btn-sm" data-open-task="'+r.id+'">'+(r.status==='purchase_pending'?'Enter Purchase':'Confirm Receipt')+'</button></td></tr>').join('')
+    + '</tbody></table></div>';
+  panel.querySelectorAll('[data-open-task]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openItemDetailModal(btn.getAttribute('data-open-task')));
+  });
+}
 
-  if(canAct){
-    const box = document.getElementById('ns-action-box');
-    box.innerHTML =
-      '<div class="field"><label>Remark (optional)</label><textarea id="ns-action-remark"></textarea></div>'
-      + '<div style="display:flex; gap:10px;"><button class="btn btn-primary" id="ns-approve-btn">Approve</button><button class="btn btn-danger" id="ns-reject-btn">Reject</button></div>';
-    document.getElementById('ns-approve-btn').addEventListener('click', ()=>actOnNotesheet(n, 'approve'));
-    document.getElementById('ns-reject-btn').addEventListener('click', ()=>actOnNotesheet(n, 'reject'));
+/* ---------------- Receiving & Assignment ---------------- */
+function renderAssignmentTab(){
+  const panel = document.getElementById('proc-panel');
+  const items = myAssignmentQueue();
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📦</div><h3>Nothing waiting for assignment</h3></div>'; return; }
+  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Type</th><th>Qty</th><th></th></tr></thead><tbody>'
+    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+escapeHtml(itemTypeName(r.itemTypeId))+'</td><td>'+(r.purchase?r.purchase.quantityPurchased:r.quantityRequested)+'</td><td><button class="btn btn-primary btn-sm" data-open-task="'+r.id+'">Assign / Complete</button></td></tr>').join('')
+    + '</tbody></table></div>';
+  panel.querySelectorAll('[data-open-task]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openItemDetailModal(btn.getAttribute('data-open-task')));
+  });
+}
+
+/* ---------------- Accountant Closure ---------------- */
+function renderAccountantTab(){
+  const panel = document.getElementById('proc-panel');
+  const items = myAccountantQueue();
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🧾</div><h3>Nothing awaiting reconciliation</h3></div>'; return; }
+  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>'
+    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+(r.purchase?formatMoney(r.purchase.totalAmount):'—')+'</td><td>'+itemStatusBadge(r.status)+'</td><td><button class="btn btn-primary btn-sm" data-open-task="'+r.id+'">Reconcile</button></td></tr>').join('')
+    + '</tbody></table></div>';
+  panel.querySelectorAll('[data-open-task]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openItemDetailModal(btn.getAttribute('data-open-task')));
+  });
+}
+
+/* ---------------- All Requests ---------------- */
+function renderAllRequestsTab(){
+  const panel = document.getElementById('proc-panel');
+  const list = DB.requestItems.slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  if(!list.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🗒️</div><h3>No purchase requests yet</h3></div>'; return; }
+  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Building</th><th>Value</th><th>Status</th><th>Raised</th></tr></thead><tbody>'
+    + list.map(r=>'<tr class="row-clickable" data-open-task="'+r.id+'"><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+escapeHtml(buildingName(r.buildingId))+'</td><td>'+valueClassBadge(r.valueClass)+'</td><td>'+itemStatusBadge(r.status)+(r.accountantClosed?' <span class="badge badge-approved">Closed</span>':'')+'</td><td>'+formatDate(r.createdAt)+'</td></tr>').join('')
+    + '</tbody></table></div>';
+  panel.querySelectorAll('[data-open-task]').forEach(row=>{
+    row.addEventListener('click', ()=>openItemDetailModal(row.getAttribute('data-open-task')));
+  });
+}
+
+/* ============================================================
+   Item Detail Modal — spec + permanent timeline + contextual actions
+   ============================================================ */
+function openItemDetailModal(id){
+  const r = DB.requestItems.find(x=>x.id===id);
+  if(!r){ toast('Item not found','error'); return; }
+  renderItemDetailModalBody(r);
+}
+function renderItemDetailModalBody(r){
+  const pattern = itemPattern(r);
+  let body =
+    '<div class="card-badge-row" style="margin-bottom:10px;">'+itemStatusBadge(r.status)+valueClassBadge(r.valueClass)+priorityBadge(r.priority)+(r.accountantClosed?'<span class="badge badge-approved">Accountant Closed</span>':'')+'</div>'
+    + '<div class="spec-grid" style="margin-bottom:16px;">'
+    +   '<div class="spec-item"><label>Request Number</label><div class="val">'+escapeHtml(r.requestNumber)+'</div></div>'
+    +   '<div class="spec-item"><label>Category</label><div class="val">'+escapeHtml(catName(r.categoryId))+'</div></div>'
+    +   '<div class="spec-item"><label>Item Type</label><div class="val">'+escapeHtml(itemTypeName(r.itemTypeId))+'</div></div>'
+    +   '<div class="spec-item"><label>Building / Room</label><div class="val">'+escapeHtml(buildingName(r.buildingId))+(r.roomId?' / '+escapeHtml(roomName(r.roomId)):'')+'</div></div>'
+    +   '<div class="spec-item"><label>Requested By</label><div class="val">'+escapeHtml(r.requestedByName||r.requestedByEmail)+'</div></div>'
+    +   '<div class="spec-item"><label>Quantity Requested</label><div class="val">'+r.quantityRequested+'</div></div>'
+    +   '<div class="spec-item"><label>Procurement Policy</label><div class="val">'+(r.procurementPolicy==='required'?'Requires Approval':'No Approval Required')+'</div></div>'
+    +   '<div class="spec-item"><label>Assigned Purchaser</label><div class="val">'+(r.assignedPurchaserName||'—')+'</div></div>'
+    + '</div>'
+    + (r.reason ? '<div class="field"><label>Reason</label><div class="val">'+escapeHtml(r.reason)+'</div></div>' : '')
+    + (r.description ? '<div class="field"><label>Description</label><div class="val">'+escapeHtml(r.description)+'</div></div>' : '');
+
+  if(r.purchase){
+    body += '<div class="section-heading">Purchase Record</div><div class="spec-grid" style="margin-bottom:12px;">'
+      + '<div class="spec-item"><label>Supplier / Shop</label><div class="val">'+escapeHtml(r.purchase.supplier||'—')+'</div></div>'
+      + '<div class="spec-item"><label>Invoice No.</label><div class="val">'+escapeHtml(r.purchase.invoiceNumber||'—')+'</div></div>'
+      + '<div class="spec-item"><label>Purchase Date</label><div class="val">'+formatDate(r.purchase.purchaseDate)+'</div></div>'
+      + '<div class="spec-item"><label>Qty Purchased</label><div class="val">'+r.purchase.quantityPurchased+' (requested '+r.quantityRequested+')</div></div>'
+      + '<div class="spec-item"><label>Unit Price</label><div class="val">'+formatMoney(r.purchase.unitPrice)+'</div></div>'
+      + '<div class="spec-item"><label>Total Amount</label><div class="val">'+formatMoney(r.purchase.totalAmount)+'</div></div>'
+      + '</div>';
+  }
+  if(r.receipt){
+    body += '<div class="section-heading">Receipt</div><div class="spec-grid" style="margin-bottom:12px;">'
+      + '<div class="spec-item"><label>Received Date</label><div class="val">'+formatDate(r.receipt.receivedDate)+'</div></div>'
+      + '<div class="spec-item"><label>Received By</label><div class="val">'+escapeHtml(r.receipt.receivedByName||'—')+'</div></div>'
+      + '</div>';
+  }
+  if(r.assignments && r.assignments.length){
+    const cur = r.assignments[r.assignments.length-1];
+    body += '<div class="section-heading">Current Responsible Person</div><div class="spec-grid" style="margin-bottom:12px;">'
+      + '<div class="spec-item"><label>Responsible Person</label><div class="val">'+escapeHtml(cur.responsiblePersonName)+'</div></div>'
+      + '<div class="spec-item"><label>Location</label><div class="val">'+escapeHtml(buildingName(cur.buildingId))+(cur.roomId?' / '+escapeHtml(roomName(cur.roomId)):'')+'</div></div>'
+      + '</div>'
+      + (r.assignments.length>1 ? '<div class="field-hint" style="margin-bottom:12px;">'+r.assignments.length+' assignment(s) on record — full history below in timeline.</div>' : '');
+  }
+  if(r.maintenanceEvents && r.maintenanceEvents.length){
+    body += '<div class="section-heading">Maintenance / Repair Events</div><ul class="timeline" style="margin-bottom:12px;">'
+      + r.maintenanceEvents.map(m=>'<li><div class="t-title">'+formatDate(m.date)+'</div><div class="t-meta">'+escapeHtml(m.recordedByName||'')+'</div><div class="t-remark">'+escapeHtml(m.description)+'</div></li>').join('')
+      + '</ul>';
+  }
+  if(r.disposal){
+    body += '<div class="section-heading">Disposal Record</div><div class="spec-grid" style="margin-bottom:12px;">'
+      + '<div class="spec-item"><label>Type</label><div class="val">'+escapeHtml(r.disposal.type)+'</div></div>'
+      + '<div class="spec-item"><label>Date</label><div class="val">'+formatDate(r.disposal.date)+'</div></div>'
+      + '<div class="spec-item"><label>Approved By</label><div class="val">'+escapeHtml(r.disposal.approvedByName||'—')+'</div></div>'
+      + '<div class="spec-item"><label>Reason</label><div class="val">'+escapeHtml(r.disposal.reason||'—')+'</div></div>'
+      + '</div>';
+  }
+
+  body += '<div class="star-divider">'+starSvg(14,'#a53692')+'</div><h3 style="margin-bottom:10px;">Permanent Timeline</h3><ul class="timeline">'
+    + r.history.map(h=>'<li><div class="t-title">'+escapeHtml(h.stage)+' — '+escapeHtml(h.action)+'</div><div class="t-meta">'+escapeHtml(h.actorName||h.actorEmail||'—')+' · '+formatDateTime(h.timestamp)+'</div>'+(h.remark?'<div class="t-remark">'+escapeHtml(h.remark)+'</div>':'')+'</li>').join('')
+    + '</ul>';
+
+  body += '<div id="item-action-box"></div>';
+
+  openModal(escapeHtml(r.itemName), body, '<button class="btn btn-outline" id="modal-done-btn">Close</button>');
+  document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+  renderItemActionBox(r);
+}
+function renderItemActionBox(r){
+  const box = document.getElementById('item-action-box');
+  if(!box) return;
+  box.innerHTML = '';
+  const pattern = itemPattern(r);
+
+  if(r.status==='pending_approval' && canActOnApproval(r)){
+    const staffOptions = DB.staff.filter(s=>s.active!==false).map(s=>'<option value="'+s.email+'" '+(r.assignedPurchaserEmail===s.email?'selected':'')+'>'+escapeHtml(s.name)+'</option>').join('');
+    box.innerHTML = '<div class="star-divider">'+starSvg(14,'#a53692')+'</div>'
+      + '<h4>Approval — '+roleKeyLabel(currentApprovalRole(r))+'</h4>'
+      + '<div class="field"><label>Delegate Purchaser</label><select id="modal-purchaser"><option value="">— Not yet decided —</option>'+staffOptions+'</select></div>'
+      + '<div class="field"><label>Remarks</label><textarea id="modal-remark"></textarea></div>'
+      + '<div style="display:flex; gap:10px;"><button class="btn btn-primary" id="modal-approve-btn">Approve</button><button class="btn btn-danger" id="modal-reject-btn">Reject</button></div>';
+    document.getElementById('modal-approve-btn').addEventListener('click', async ()=>{
+      const sel = document.getElementById('modal-purchaser').value;
+      if(sel){ const s = DB.staff.find(x=>x.email===sel); r.assignedPurchaserEmail = sel; r.assignedPurchaserName = s?s.name:sel; }
+      await actOnApprovalModal(r, 'approve');
+    });
+    document.getElementById('modal-reject-btn').addEventListener('click', ()=>actOnApprovalModal(r, 'reject'));
+    return;
+  }
+
+  if(r.status==='purchase_pending' && isMyPurchaseTask(r)){
+    box.innerHTML = '<div class="star-divider">'+starSvg(14,'#a53692')+'</div><h4>Purchase Entry</h4>'
+      + '<div class="field"><label>Purchaser Name</label><input type="text" value="'+escapeHtml(r.assignedPurchaserName||currentUserEmail)+'" disabled></div>'
+      + '<div class="field-row"><div class="field"><label>Supplier / Shop</label><input type="text" id="pe-supplier"></div><div class="field"><label>Invoice Number (optional)</label><input type="text" id="pe-invoice"></div></div>'
+      + '<div class="field-row"><div class="field"><label>Invoice Date</label><input type="date" id="pe-invoice-date"></div><div class="field"><label>Purchase Date</label><input type="date" id="pe-purchase-date" value="'+new Date().toISOString().slice(0,10)+'"></div></div>'
+      + '<div class="field-row"><div class="field"><label>Quantity Purchased</label><input type="number" id="pe-qty" value="'+r.quantityRequested+'"></div><div class="field"><label>Unit Price (₹)</label><input type="number" id="pe-unit-price" value="0"></div></div>'
+      + '<div class="field"><label>Total Amount (₹, auto)</label><input type="number" id="pe-total" value="0" readonly></div>'
+      + '<div class="field"><label>Bill Reference (optional — link or note)</label><input type="text" id="pe-bill-ref" placeholder="e.g. bill photo filed physically, or a link"></div>'
+      + '<div class="field"><label>Remarks</label><textarea id="pe-remarks"></textarea></div>'
+      + '<button class="btn btn-primary" id="pe-submit-btn">Record Purchase</button>';
+    const qtyEl = document.getElementById('pe-qty'), priceEl = document.getElementById('pe-unit-price'), totalEl = document.getElementById('pe-total');
+    function recalc(){ totalEl.value = ((Number(qtyEl.value)||0)*(Number(priceEl.value)||0)).toFixed(2); }
+    qtyEl.addEventListener('input', recalc); priceEl.addEventListener('input', recalc);
+    document.getElementById('pe-submit-btn').addEventListener('click', async ()=>{
+      r.purchase = {
+        purchaserEmail: currentUserEmail, purchaserName: r.assignedPurchaserName||currentUserEmail,
+        supplier: document.getElementById('pe-supplier').value.trim(),
+        invoiceNumber: document.getElementById('pe-invoice').value.trim(),
+        invoiceDate: document.getElementById('pe-invoice-date').value,
+        purchaseDate: document.getElementById('pe-purchase-date').value,
+        quantityPurchased: Number(qtyEl.value)||0,
+        unitPrice: Number(priceEl.value)||0,
+        totalAmount: Number(totalEl.value)||0,
+        billRef: document.getElementById('pe-bill-ref').value.trim(),
+        remarks: document.getElementById('pe-remarks').value.trim(),
+        recordedAt: new Date().toISOString()
+      };
+      r.history.push({ stage:'Purchase Recorded', action:'recorded', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark: r.purchase.remarks, timestamp:new Date().toISOString() });
+      r.status = (pattern==='service') ? 'purchased' : 'purchased';
+      await saveDb(); toast('Purchase recorded','success'); openItemDetailModal(r.id);
+    });
+    return;
+  }
+
+  if(r.status==='purchased' && pattern==='service' && isMyPurchaseTask(r)){
+    box.innerHTML = '<div class="star-divider">'+starSvg(14,'#a53692')+'</div><h4>Mark Service as Rendered / Performed</h4>'
+      + '<div class="field"><label>Date</label><input type="date" id="svc-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+      + '<div class="field"><label>Remarks</label><textarea id="svc-remarks"></textarea></div>'
+      + '<button class="btn btn-primary" id="svc-submit-btn">Mark Completed</button>';
+    document.getElementById('svc-submit-btn').addEventListener('click', async ()=>{
+      const remark = document.getElementById('svc-remarks').value.trim();
+      r.history.push({ stage:'Rendered / Performed', action:'completed', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark, timestamp:new Date().toISOString() });
+      r.status = 'completed';
+      await saveDb(); toast('Service marked completed','success'); openItemDetailModal(r.id);
+    });
+    return;
+  }
+
+  if(r.status==='purchased' && pattern!=='service' && isMyPurchaseTask(r)){
+    box.innerHTML = '<div class="star-divider">'+starSvg(14,'#a53692')+'</div><h4>Confirm Item Received</h4>'
+      + '<div class="field"><label>Received Date</label><input type="date" id="rc-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+      + '<div class="field"><label>Received By</label><input type="text" value="'+escapeHtml(r.assignedPurchaserName||currentUserEmail)+'" disabled></div>'
+      + '<div class="field"><label>Remarks</label><textarea id="rc-remarks"></textarea></div>'
+      + '<button class="btn btn-primary" id="rc-submit-btn">Confirm Received</button>';
+    document.getElementById('rc-submit-btn').addEventListener('click', async ()=>{
+      const remark = document.getElementById('rc-remarks').value.trim();
+      r.receipt = { receivedDate: document.getElementById('rc-date').value, receivedByEmail: currentUserEmail, receivedByName: r.assignedPurchaserName||currentUserEmail, remarks: remark, recordedAt: new Date().toISOString() };
+      r.history.push({ stage:'Item Received', action:'received', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark, timestamp:new Date().toISOString() });
+      r.status = 'received';
+      await saveDb(); toast('Marked as received','success'); openItemDetailModal(r.id);
+    });
+    return;
+  }
+
+  if(r.status==='received' && (isMyPurchaseTask(r) || isApproverRole() || isAdmin())){
+    if(pattern==='consumable'){
+      box.innerHTML = '<div class="star-divider">'+starSvg(14,'#a53692')+'</div><h4>Mark as Consumed</h4>'
+        + '<div class="field"><label>Date</label><input type="date" id="cons-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+        + '<div class="field"><label>Remarks</label><textarea id="cons-remarks"></textarea></div>'
+        + '<button class="btn btn-primary" id="cons-submit-btn">Mark Consumed &amp; Complete</button>';
+      document.getElementById('cons-submit-btn').addEventListener('click', async ()=>{
+        const remark = document.getElementById('cons-remarks').value.trim();
+        r.history.push({ stage:'Consumed', action:'completed', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
+        r.status = 'completed';
+        if(r.categoryId){
+          const item = DB.inventoryItems.find(i=>i.name===r.itemName && i.categoryId===r.categoryId);
+          if(item){ item.quantity = (Number(item.quantity)||0); item.updatedAt = new Date().toISOString(); }
+        }
+        await saveDb(); toast('Marked consumed','success'); openItemDetailModal(r.id);
+      });
+    } else {
+      const staffOptions = DB.staff.filter(s=>s.active!==false).map(s=>'<option value="'+s.email+'">'+escapeHtml(s.name)+'</option>').join('');
+      const buildings = DB.buildings.slice().sort((a,b)=>a.sortOrder-b.sortOrder);
+      box.innerHTML = '<div class="star-divider">'+starSvg(14,'#a53692')+'</div><h4>Assign to Responsible Person</h4>'
+        + '<div class="field"><label>Responsible Person</label><select id="as-person"><option value="'+r.receipt.receivedByEmail+'">'+escapeHtml(r.receipt.receivedByName)+' (Receiver)</option>'+staffOptions+'</select></div>'
+        + '<div class="field-row"><div class="field"><label>Building</label><select id="as-building">'+buildings.map(b=>'<option value="'+b.id+'" '+(b.id===r.buildingId?'selected':'')+'>'+escapeHtml(b.name)+'</option>').join('')+'</select></div><div class="field"><label>Room (optional)</label><select id="as-room"><option value="">— None —</option></select></div></div>'
+        + '<div class="field"><label>Remarks</label><textarea id="as-remarks"></textarea></div>'
+        + '<button class="btn btn-primary" id="as-submit-btn">Assign &amp; Activate</button>';
+      const bSel = document.getElementById('as-building');
+      function refreshAsRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===bSel.value); document.getElementById('as-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
+      bSel.addEventListener('change', refreshAsRooms); refreshAsRooms();
+      document.getElementById('as-submit-btn').addEventListener('click', async ()=>{
+        const personEmail = document.getElementById('as-person').value;
+        const staffRec = DB.staff.find(s=>s.email===personEmail);
+        const personName = staffRec ? staffRec.name : (personEmail===r.receipt.receivedByEmail ? r.receipt.receivedByName : personEmail);
+        const buildingId = bSel.value, roomId = document.getElementById('as-room').value||null;
+        const remark = document.getElementById('as-remarks').value.trim();
+        r.assignments.push({ responsiblePersonEmail:personEmail, responsiblePersonName:personName, buildingId, roomId, categoryId:r.categoryId, remarks:remark, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
+        r.buildingId = buildingId; r.roomId = roomId;
+        r.history.push({ stage:'Assigned', action:'assigned to '+personName, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
+        r.history.push({ stage:'Active', action:'activated', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:'', timestamp:new Date().toISOString() });
+        r.status = 'active';
+        await saveDb(); toast('Assigned and activated','success'); openItemDetailModal(r.id);
+      });
+    }
+    return;
+  }
+
+  if(r.status==='active' && pattern==='asset'){
+    const isResponsible = r.assignments.length && r.assignments[r.assignments.length-1].responsiblePersonEmail===currentUserEmail;
+    if(isResponsible || isApproverRole() || isAdmin()){
+      box.innerHTML = '<div class="star-divider">'+starSvg(14,'#a53692')+'</div>'
+        + '<h4>Log Maintenance / Repair Event</h4>'
+        + '<div class="field"><label>Date</label><input type="date" id="mnt-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+        + '<div class="field"><label>Description</label><textarea id="mnt-desc"></textarea></div>'
+        + '<button class="btn btn-outline btn-sm" id="mnt-submit-btn">Add Event</button>';
+    }
+    if(isApproverRole() || isAdmin()){
+      box.innerHTML += '<div class="star-divider">'+starSvg(14,'#a53692')+'</div>'
+        + '<h4>Dispose</h4>'
+        + '<div class="field"><label>Disposal Type</label><select id="disp-type"><option>Disposed</option><option>Scrapped</option><option>Sold</option><option>Donated</option><option>Lost</option><option>Written Off</option><option>Future Transfer</option></select></div>'
+        + '<div class="field"><label>Date</label><input type="date" id="disp-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+        + '<div class="field"><label>Reason</label><textarea id="disp-reason"></textarea></div>'
+        + '<div class="field"><label>Document Note (optional)</label><input type="text" id="disp-doc"></div>'
+        + '<button class="btn btn-danger btn-sm" id="disp-submit-btn">Dispose &amp; Archive</button>';
+    }
+    const mntBtn = document.getElementById('mnt-submit-btn');
+    if(mntBtn) mntBtn.addEventListener('click', async ()=>{
+      const date = document.getElementById('mnt-date').value, desc = document.getElementById('mnt-desc').value.trim();
+      if(!desc){ toast('Description required','error'); return; }
+      r.maintenanceEvents.push({ date, description: desc, recordedByEmail: currentUserEmail, recordedByName:(myStaffRecord()||{}).name||currentUserEmail, recordedAt:new Date().toISOString() });
+      r.history.push({ stage:'Maintenance Event', action:'logged', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark: desc, timestamp:new Date().toISOString() });
+      await saveDb(); toast('Maintenance event logged','success'); openItemDetailModal(r.id);
+    });
+    const dispBtn = document.getElementById('disp-submit-btn');
+    if(dispBtn) dispBtn.addEventListener('click', async ()=>{
+      const type = document.getElementById('disp-type').value, date = document.getElementById('disp-date').value, reason = document.getElementById('disp-reason').value.trim(), doc = document.getElementById('disp-doc').value.trim();
+      r.disposal = { type, date, reason, approvedByEmail: currentUserEmail, approvedByName:(myStaffRecord()||{}).name||currentUserEmail, remarks:'', documentNote: doc, recordedAt:new Date().toISOString() };
+      r.history.push({ stage:'Disposed', action:type, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark: reason, timestamp:new Date().toISOString() });
+      r.status = 'archived';
+      await saveDb(); toast('Item disposed and archived','success'); openItemDetailModal(r.id);
+    });
+    return;
+  }
+
+  if(isTerminal(r) && !r.accountantClosed && isAccountant()){
+    box.innerHTML = '<div class="star-divider">'+starSvg(14,'#a53692')+'</div><h4>Accountant Reconciliation</h4>'
+      + '<div class="field"><label>Remarks</label><textarea id="acc-remarks"></textarea></div>'
+      + '<button class="btn btn-primary" id="acc-submit-btn">Mark Fully Closed</button>';
+    document.getElementById('acc-submit-btn').addEventListener('click', async ()=>{
+      const remark = document.getElementById('acc-remarks').value.trim();
+      r.accountantClosed = true; r.accountantClosedByEmail = currentUserEmail; r.accountantClosedAt = new Date().toISOString(); r.accountantRemark = remark;
+      r.history.push({ stage:'Accountant Reconciliation', action:'closed', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
+      await saveDb(); toast('Fully closed','success'); openItemDetailModal(r.id);
+    });
+    return;
   }
 }
-async function actOnNotesheet(n, action){
-  const remark = (document.getElementById('ns-action-remark')||{}).value || '';
-  const chain = stageChain(n.costTier);
-  const stage = chain[n.stageIndex];
-  n.history.push({ stage: stage.label, actorEmail: currentUserEmail, action: action==='approve'?'approved':'rejected', remark, timestamp: new Date().toISOString() });
+async function actOnApprovalModal(r, action){
+  const remark = document.getElementById('modal-remark').value.trim();
+  await actOnApprovalById(r, action, remark);
+}
+async function actOnApprovalById(r, action, remark){
+  const role = currentApprovalRole(r);
+  const stageLabel = roleKeyLabel(role)+' Approval';
+  r.history.push({ stage: stageLabel, action: action==='approve'?'approved':'rejected', actorEmail: currentUserEmail, actorName: (myStaffRecord()||{}).name || currentUserEmail, remark, timestamp: new Date().toISOString() });
   if(action==='reject'){
-    n.status = 'rejected';
+    r.status = 'rejected';
   } else {
-    if(n.stageIndex < chain.length - 1){
-      n.stageIndex += 1;
+    if(r.approvalIndex < r.approvalChain.length - 1){
+      r.approvalIndex += 1;
     } else {
-      n.status = 'approved';
-      if(n.linkedItemId){
-        const item = DB.inventoryItems.find(x=>x.id===n.linkedItemId);
-        if(item){ item.quantity = (Number(item.quantity)||0) + (Number(n.quantityRequested)||0); item.updatedAt = new Date().toISOString(); }
-      }
+      r.status = 'purchase_pending';
+      if(!r.assignedPurchaserEmail){ r.assignedPurchaserEmail = r.requestedByEmail; r.assignedPurchaserName = r.requestedByName; }
     }
   }
   await saveDb();
-  toast(action==='approve' ? 'Notesheet approved' : 'Notesheet rejected', action==='approve'?'success':'error');
-  openNotesheetDetail(n.id);
+  toast(action==='approve' ? 'Approved' : 'Rejected', action==='approve'?'success':'error');
+  openItemDetailModal(r.id);
+}
+
+/* ============================================================
+   Manage Staff (Admin, Chairman, Principal, Coordinator)
+   ============================================================ */
+function openManageStaffModal(){ renderManageStaffModalBody(); }
+function renderManageStaffModalBody(){
+  const topRoles = ['chairman','principal','coordinator','accountant'];
+  const rows = DB.staff.slice().sort((a,b)=>{
+    const order = { chairman:0, principal:1, coordinator:2, accountant:3, staff:4 };
+    return (order[a.role]-order[b.role]) || a.name.localeCompare(b.name);
+  }).map(s=>{
+    const isTop = topRoles.includes(s.role);
+    const canEdit = isTop ? canManageTopRoles() : canManageStaff();
+    return '<div class="cat-policy-row">'
+      + '<div class="cat-policy-name">'+escapeHtml(s.name)+' <span class="badge badge-status">'+roleKeyLabel(s.role)+'</span>'+(s.active===false?' <span class="badge badge-rejected">Inactive</span>':'')+'<br><small style="color:var(--color-ink-faint);">'+escapeHtml(s.email||'no email set')+'</small></div>'
+      + (canEdit ? ('<div class="cat-policy-controls">'
+          + '<button class="btn btn-outline btn-sm" data-edit-staff="'+s.id+'">Edit</button>'
+          + '<button class="btn btn-danger btn-sm" data-toggle-staff="'+s.id+'">'+(s.active===false?'Reactivate':'Deactivate')+'</button>'
+        + '</div>') : '')
+      + '</div>';
+  }).join('');
+
+  const roleOptions = canManageTopRoles()
+    ? '<option value="staff">Staff</option><option value="coordinator">Coordinator</option><option value="principal">Principal</option><option value="chairman">Chairman</option><option value="accountant">Accountant</option>'
+    : '<option value="staff">Staff</option>';
+
+  const body = rows
+    + '<div class="star-divider">'+starSvg(14,'#a53692')+'</div>'
+    + '<h4>Add Staff</h4>'
+    + '<div class="field"><label>Name</label><input type="text" id="new-staff-name"></div>'
+    + '<div class="field"><label>Gmail Address</label><input type="email" id="new-staff-email" placeholder="name@gmail.com"></div>'
+    + '<div class="field"><label>Role</label><select id="new-staff-role">'+roleOptions+'</select></div>'
+    + '<button class="btn btn-primary btn-sm" id="add-staff-btn">+ Add Staff</button>';
+
+  openModal('Manage Staff', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>');
+  document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+  document.getElementById('add-staff-btn').addEventListener('click', async ()=>{
+    const name = document.getElementById('new-staff-name').value.trim();
+    const email = document.getElementById('new-staff-email').value.trim();
+    const role = document.getElementById('new-staff-role').value;
+    if(!name || !email){ toast('Name and Gmail are required','error'); return; }
+    DB.staff.push({ id: nextId('staff'), name, email, role, active:true, createdAt:new Date().toISOString(), createdByEmail: currentUserEmail });
+    await saveDb(); toast('Staff added','success'); renderManageStaffModalBody(); renderTopbar();
+  });
+  document.querySelectorAll('[data-edit-staff]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const s = DB.staff.find(x=>x.id===btn.getAttribute('data-edit-staff'));
+      const name = prompt('Name:', s.name); if(name===null) return;
+      const email = prompt('Gmail address:', s.email||''); if(email===null) return;
+      s.name = name.trim() || s.name; s.email = email.trim();
+      await saveDb(); toast('Updated','success'); renderManageStaffModalBody(); renderTopbar();
+    });
+  });
+  document.querySelectorAll('[data-toggle-staff]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const s = DB.staff.find(x=>x.id===btn.getAttribute('data-toggle-staff'));
+      s.active = s.active===false ? true : false;
+      await saveDb(); toast('Updated','success'); renderManageStaffModalBody();
+    });
+  });
+}
+
+/* ============================================================
+   Manage Buildings & Rooms (Admin)
+   ============================================================ */
+function openManageBuildingsModal(){ renderManageBuildingsModalBody(); }
+function renderManageBuildingsModalBody(){
+  const buildings = DB.buildings.slice().sort((a,b)=>a.sortOrder-b.sortOrder);
+  const rows = buildings.map(b=>{
+    const rooms = DB.rooms.filter(r=>r.buildingId===b.id);
+    return '<div style="border:1px solid var(--color-border); border-radius:10px; padding:12px; margin-bottom:10px;">'
+      + '<div style="display:flex; justify-content:space-between; align-items:center;"><strong>'+escapeHtml(b.name)+'</strong>'
+      +   (isAdmin() ? '<button class="btn btn-danger btn-sm" data-del-bldg="'+b.id+'">Delete</button>' : '')
+      + '</div>'
+      + '<div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">'
+      +   rooms.map(rm=>'<span class="badge badge-status">'+escapeHtml(rm.name)+' <button data-del-room="'+rm.id+'" style="border:none;background:none;cursor:pointer;color:var(--color-danger);font-weight:700;margin-left:4px;">&times;</button></span>').join('')
+      + '</div>'
+      + '<div style="margin-top:8px; display:flex; gap:6px;"><input type="text" placeholder="New room name" data-newroom-input="'+b.id+'" style="flex:1; padding:6px 9px; border:1.5px solid var(--color-border); border-radius:7px; font-size:12.5px;"><button class="btn btn-outline btn-sm" data-add-room="'+b.id+'">+ Add Room</button></div>'
+      + '</div>';
+  }).join('');
+  const body = rows
+    + '<div class="star-divider">'+starSvg(14,'#a53692')+'</div>'
+    + '<div class="field"><label>New Building Name</label><input type="text" id="new-bldg-name"></div>'
+    + '<button class="btn btn-primary btn-sm" id="add-bldg-btn">+ Add Building</button>';
+  openModal('Manage Buildings &amp; Rooms', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>');
+  document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+  document.getElementById('add-bldg-btn').addEventListener('click', async ()=>{
+    const name = document.getElementById('new-bldg-name').value.trim();
+    if(!name) return;
+    DB.buildings.push({ id:nextId('bldg'), name, sortOrder: DB.buildings.length });
+    await saveDb(); toast('Building added','success'); renderManageBuildingsModalBody();
+  });
+  document.querySelectorAll('[data-add-room]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const buildingId = btn.getAttribute('data-add-room');
+      const input = document.querySelector('[data-newroom-input="'+buildingId+'"]');
+      const name = input.value.trim(); if(!name) return;
+      DB.rooms.push({ id:nextId('room'), buildingId, name });
+      await saveDb(); toast('Room added','success'); renderManageBuildingsModalBody();
+    });
+  });
+  document.querySelectorAll('[data-del-bldg]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.getAttribute('data-del-bldg');
+      if(!confirm('Delete this building and its rooms?')) return;
+      DB.buildings = DB.buildings.filter(x=>x.id!==id);
+      DB.rooms = DB.rooms.filter(x=>x.buildingId!==id);
+      await saveDb(); toast('Building deleted','success'); renderManageBuildingsModalBody();
+    });
+  });
+  document.querySelectorAll('[data-del-room]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      DB.rooms = DB.rooms.filter(x=>x.id!==btn.getAttribute('data-del-room'));
+      await saveDb(); toast('Room deleted','success'); renderManageBuildingsModalBody();
+    });
+  });
 }
 
 /* ============================================================
