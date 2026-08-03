@@ -1483,27 +1483,40 @@ function renderNewRequestTab(){
   buildingSel.addEventListener('change', refreshRooms);
   refreshRooms();
 
+  function captureLineValues(){
+    const wrap = document.getElementById('req-lines');
+    if(!wrap) return;
+    newRequestLines.forEach(line=>{
+      ['categoryId','itemName','quantityRequested','priority','reason','description'].forEach(field=>{
+        const el = wrap.querySelector('[data-line-id="'+line.localId+'"][data-line-field="'+field+'"]');
+        if(el) line[field] = el.value;
+      });
+    });
+  }
   function renderLines(){
     const wrap = document.getElementById('req-lines');
     wrap.innerHTML = newRequestLines.map((line, idx)=>{
-      const catOptions = DB.categories.filter(c=>!c.deleted).map(c=>'<option value="'+c.id+'">'+escapeHtml(c.name)+' ('+escapeHtml(deptName(c.departmentId))+')</option>').join('');
+      const catOptions = DB.categories.filter(c=>!c.deleted).map(c=>'<option value="'+c.id+'" '+(line.categoryId===c.id?'selected':'')+'>'+escapeHtml(c.name)+' ('+escapeHtml(deptName(c.departmentId))+')</option>').join('');
+      const priorities = ['Low','Medium','High','Urgent'];
+      const priorityOptions = priorities.map(p=>'<option '+((line.priority||'Medium')===p?'selected':'')+'>'+p+'</option>').join('');
       return '<div class="req-line-card" data-line="'+line.localId+'">'
         + '<div class="req-line-head"><strong>Item '+(idx+1)+'</strong>'+(newRequestLines.length>1?'<button class="btn btn-danger btn-sm" data-remove-line="'+line.localId+'">Remove</button>':'')+'</div>'
         + '<div class="field-row">'
         +   '<div class="field"><label>Category</label><select data-line-field="categoryId" data-line-id="'+line.localId+'">'+catOptions+'</select></div>'
-        +   '<div class="field"><label>Item Name</label><input type="text" data-line-field="itemName" data-line-id="'+line.localId+'" placeholder="e.g. Whiteboard Markers"></div>'
+        +   '<div class="field"><label>Item Name</label><input type="text" data-line-field="itemName" data-line-id="'+line.localId+'" placeholder="e.g. Whiteboard Markers" value="'+escapeHtml(line.itemName||'')+'"></div>'
         + '</div>'
         + '<div class="field-row">'
-        +   '<div class="field"><label>Quantity Requested</label><input type="number" min="1" value="1" data-line-field="quantityRequested" data-line-id="'+line.localId+'"></div>'
-        +   '<div class="field"><label>Priority</label><select data-line-field="priority" data-line-id="'+line.localId+'"><option>Low</option><option selected>Medium</option><option>High</option><option>Urgent</option></select></div>'
+        +   '<div class="field"><label>Quantity Requested</label><input type="number" min="1" value="'+escapeHtml(line.quantityRequested||'1')+'" data-line-field="quantityRequested" data-line-id="'+line.localId+'"></div>'
+        +   '<div class="field"><label>Priority</label><select data-line-field="priority" data-line-id="'+line.localId+'">'+priorityOptions+'</select></div>'
         + '</div>'
-        + '<div class="field"><label>Reason</label><input type="text" data-line-field="reason" data-line-id="'+line.localId+'" placeholder="Why is this needed?"></div>'
-        + '<div class="field"><label>Description (optional)</label><textarea data-line-field="description" data-line-id="'+line.localId+'"></textarea></div>'
+        + '<div class="field"><label>Reason</label><input type="text" data-line-field="reason" data-line-id="'+line.localId+'" placeholder="Why is this needed?" value="'+escapeHtml(line.reason||'')+'"></div>'
+        + '<div class="field"><label>Description (optional)</label><textarea data-line-field="description" data-line-id="'+line.localId+'">'+escapeHtml(line.description||'')+'</textarea></div>'
         + '</div>';
     }).join('');
     document.getElementById('add-line-btn').style.display = newRequestLines.length>=1 ? '' : 'none';
     wrap.querySelectorAll('[data-remove-line]').forEach(btn=>{
       btn.addEventListener('click', ()=>{
+        captureLineValues();
         newRequestLines = newRequestLines.filter(l=>l.localId!==btn.getAttribute('data-remove-line'));
         renderLines();
       });
@@ -1512,11 +1525,13 @@ function renderNewRequestTab(){
   renderLines();
 
   document.getElementById('add-line-btn').addEventListener('click', ()=>{
+    captureLineValues();
     newRequestLines.push({ localId: nextId('line') });
     renderLines();
   });
 
   document.getElementById('submit-request-btn').addEventListener('click', async ()=>{
+    captureLineValues();
     const wrap = document.getElementById('req-lines');
     const lineData = newRequestLines.map(line=>{
       const get = (field)=>{ const el = wrap.querySelector('[data-line-id="'+line.localId+'"][data-line-field="'+field+'"]'); return el ? el.value.trim() : ''; };
