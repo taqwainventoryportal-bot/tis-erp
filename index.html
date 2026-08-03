@@ -461,7 +461,8 @@ function emptyDb(){
     staff: seedStaff(),
     requests: [],
     requestItems: [],
-    archiveLog: []
+    archiveLog: [],
+    stockLedger: []
   };
 }
 
@@ -727,7 +728,12 @@ async function loadDb(){
   const raw = await driveGetJson(CONFIG.DB_FILE_ID);
   const base = emptyDb();
   DB = Object.assign(base, raw);
-  ['departments','categories','inventoryItems','dismissedAlerts','buildings','rooms','itemTypes','staff','requests','requestItems','archiveLog'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
+  ['departments','categories','inventoryItems','dismissedAlerts','buildings','rooms','itemTypes','staff','requests','requestItems','archiveLog','stockLedger'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
+  DB.inventoryItems.forEach(i=>{
+    if(!Array.isArray(i.history)) i.history = [];
+    if(i.minStock===undefined) i.minStock = 0;
+    if(i.preferredSupplier===undefined) i.preferredSupplier = '';
+  });
   // Backfill new category fields for DBs saved before this feature existed
   DB.categories.forEach(c=>{
     if(!c.itemTypeId) c.itemTypeId = 'type_consumable';
@@ -916,6 +922,7 @@ function renderRoute(){
   const hash = location.hash || '#/';
   const parts = hash.replace('#/','').split('/').filter(Boolean);
   if(!parts.length) return renderHomePage();
+  if(parts[0]==='inventory' && parts[1]==='item' && parts[2]) return renderInventoryItemDetailPage(parts[2]);
   if(parts[0]==='inventory' && !parts[1]) return renderInventoryPage();
   if(parts[0]==='inventory' && parts[1]) return renderDepartmentPage(parts[1]);
   if(parts[0]==='procurement' && parts[1]==='item' && parts[2]) { renderProcurementPage(); openItemDetailModal(parts[2]); return; }
@@ -1348,7 +1355,7 @@ function renderItemsTable(deptId, catId){
     + '</tr></thead><tbody>'
     + items.map(i=>{
         const low = Number(i.reorderThreshold)>0 && Number(i.quantity) <= Number(i.reorderThreshold);
-        return '<tr>'
+        return '<tr class="row-clickable" data-open-item="'+i.id+'">'
           + '<td>'+escapeHtml(i.name)+(low?' <span class="badge badge-high">low</span>':'')+'</td>'
           + '<td>'+escapeHtml(i.quantity)+'</td>'
           + '<td>'+escapeHtml(i.unit||'—')+'</td>'
@@ -1360,20 +1367,147 @@ function renderItemsTable(deptId, catId){
           + '</tr>';
       }).join('')
     + '</tbody></table></div>';
+  panel.querySelectorAll('[data-open-item]').forEach(row=>{
+    row.addEventListener('click', ()=>{ location.hash = '#/inventory/item/'+row.getAttribute('data-open-item'); });
+  });
   panel.querySelectorAll('[data-edit-item]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
+    btn.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
       const item = DB.inventoryItems.find(x=>x.id===btn.getAttribute('data-edit-item'));
       openItemModal(deptId, catId, item);
     });
   });
   panel.querySelectorAll('[data-del-item]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
+    btn.addEventListener('click', async (ev)=>{
+      ev.stopPropagation();
       const it = DB.inventoryItems.find(x=>x.id===btn.getAttribute('data-del-item'));
       if(!promptAndArchive('inventoryItem', it, it.name)) return;
       await saveDb(); toast('Item deleted (archived)','success'); renderDepartmentPage(deptId);
     });
   });
 }
+/* ============================================================
+   Item Details Page — the hub: ledger, history, requests, docs
+   ============================================================ */
+function pendingRequestsForItem(item){
+  return DB.requestItems.filter(r=> !r.deleted && r.categoryId===item.categoryId && (r.itemName||'').toLowerCase()===(item.name||'').toLowerCase() && !['completed','archived','rejected'].includes(r.status));
+}
+function renderInventoryItemDetailPage(itemId){
+  const app = document.getElementById('app');
+  const item = DB.inventoryItems.find(i=>i.id===itemId);
+  if(!item){ app.innerHTML = '<div class="content wrap"><div class="empty-state"><h3>Item not found</h3></div></div>'; return; }
+  const ledger = itemLedgerEntries(item.id);
+  const avgCost = itemAveragePurchaseCost(item.id) || item.cost || 0;
+  const lastPurchase = itemLastPurchaseDate(item.id) || item.purchaseDate;
+  const pending = pendingRequestsForItem(item);
+  const low = Number(item.reorderThreshold)>0 && Number(item.quantity) <= Number(item.reorderThreshold);
+  const linkedRequest = item.linkedRequestItemId ? DB.requestItems.find(r=>r.id===item.linkedRequestItemId) : null;
+
+  app.innerHTML =
+    '<div class="content wrap">'
+    + '<div class="breadcrumb"><a href="#/inventory">Inventory</a> / <a href="#/inventory/'+item.departmentId+'">'+escapeHtml(deptName(item.departmentId))+'</a> / '+escapeHtml(item.name)+'</div>'
+    + '<div class="page-title"><h2>'+escapeHtml(item.name)+'</h2>'+(item.deleted?'<span class="badge badge-rejected">Deleted (in Archive)</span>':(low?'<span class="badge badge-high">Low Stock</span>':''))+'</div>'
+    + '<div class="spec-grid" style="margin:16px 0;">'
+    +   '<div class="spec-item"><label>Category</label><div class="val">'+escapeHtml(catName(item.categoryId))+'</div></div>'
+    +   '<div class="spec-item"><label>Department</label><div class="val">'+escapeHtml(deptName(item.departmentId))+'</div></div>'
+    +   '<div class="spec-item"><label>Current Stock</label><div class="val">'+escapeHtml(item.quantity)+' '+escapeHtml(item.unit||'')+'</div></div>'
+    +   '<div class="spec-item"><label>Minimum Stock</label><div class="val">'+escapeHtml(item.minStock||0)+'</div></div>'
+    +   '<div class="spec-item"><label>Reorder Level</label><div class="val">'+escapeHtml(item.reorderThreshold||0)+'</div></div>'
+    +   '<div class="spec-item"><label>Average Purchase Cost</label><div class="val">'+formatMoney(avgCost)+'</div></div>'
+    +   '<div class="spec-item"><label>Last Purchase Date</label><div class="val">'+formatDate(lastPurchase)+'</div></div>'
+    +   '<div class="spec-item"><label>Preferred Supplier</label><div class="val">'+escapeHtml(item.preferredSupplier||'—')+'</div></div>'
+    +   '<div class="spec-item"><label>Status</label><div class="val">'+escapeHtml(item.status||'—')+'</div></div>'
+    + '</div>'
+    + (item.remarks ? '<div class="field"><label>Remarks</label><div class="val">'+escapeHtml(item.remarks)+'</div></div>' : '')
+
+    + '<div class="section-heading">Item Photo</div>'
+    + '<div id="item-photo-box" style="margin-bottom:8px;">'+renderItemPhotoHtml(item)+'</div>'
+    + (isAdmin() ? '<div class="field-row"><div class="field"><input type="file" id="item-photo-input" accept="image/*"></div><div class="field"><button class="btn btn-outline btn-sm" id="item-photo-upload-btn">Upload Photo</button></div></div>' : '')
+
+    + '<div class="section-heading">Stock Ledger</div>'
+    + renderLedgerTableHtml(ledger)
+    + (isAdmin() ? renderAdjustmentFormHtml() : '')
+
+    + '<div class="section-heading">Pending Purchase Requests</div>'
+    + (pending.length ? '<div class="table-wrap"><table><thead><tr><th>Request</th><th>Qty</th><th>Status</th></tr></thead><tbody>'
+        + pending.map(r=>'<tr class="row-clickable" data-open-req="'+r.id+'"><td>'+escapeHtml(r.requestNumber)+'</td><td>'+r.quantityRequested+'</td><td>'+itemStatusBadge(r.status)+'</td></tr>').join('')
+        + '</tbody></table></div>'
+      : '<div class="empty-state" style="padding:20px;"><div class="icon">✅</div><h3>No pending requests for this item</h3></div>')
+
+    + '<div class="section-heading">Attachments</div>'
+    + renderItemAttachmentsHtml(item, linkedRequest)
+
+    + '<div class="section-heading">Audit Log</div>'
+    + '<ul class="timeline">'
+    + (item.history||[]).slice().reverse().map(h=>'<li><div class="t-title">'+escapeHtml(h.action)+'</div><div class="t-meta">'+escapeHtml(h.actorName||h.actorEmail||'—')+' · '+formatDateTime(h.timestamp)+'</div>'+(h.remark?'<div class="t-remark">'+escapeHtml(h.remark)+'</div>':'')+'</li>').join('')
+    + '</ul>'
+    + '</div>';
+
+  document.querySelectorAll('[data-open-req]').forEach(row=>{
+    row.addEventListener('click', ()=>{ location.hash = '#/procurement/item/'+row.getAttribute('data-open-req'); });
+  });
+  wireAdjustmentForm(item);
+  const uploadBtn = document.getElementById('item-photo-upload-btn');
+  if(uploadBtn) uploadBtn.addEventListener('click', async ()=>{
+    const fileInput = document.getElementById('item-photo-input');
+    const file = fileInput.files && fileInput.files[0];
+    if(!file){ toast('Choose a photo first','error'); return; }
+    uploadBtn.disabled = true; uploadBtn.textContent = 'Uploading…';
+    try{
+      const fileId = await driveUploadBinary(file, CONFIG.UPLOADS_FOLDER_ID);
+      item.photoFileId = fileId; item.photoFileName = file.name;
+      itemHistoryPush(item, 'Photo updated', file.name);
+      await saveDb(); toast('Photo uploaded','success'); renderInventoryItemDetailPage(item.id);
+    }catch(e){ toast('Upload failed: '+e.message, 'error'); uploadBtn.disabled = false; uploadBtn.textContent = 'Upload Photo'; }
+  });
+}
+function renderItemPhotoHtml(item){
+  if(!item.photoFileId) return '<div class="field-hint">No photo uploaded yet.</div>';
+  return '<img src="'+driveDownloadUrl(item.photoFileId)+'" alt="'+escapeHtml(item.name)+'" style="max-width:220px; border-radius:8px; border:1px solid var(--color-border);">';
+}
+function renderLedgerTableHtml(ledger){
+  if(!ledger.length) return '<div class="empty-state" style="padding:20px;"><div class="icon">📒</div><h3>No stock movements recorded yet</h3></div>';
+  return '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>In</th><th>Out</th><th>Balance</th><th>By</th></tr></thead><tbody>'
+    + ledger.slice().reverse().map(e=>'<tr><td>'+formatDate(e.date)+'</td><td>'+escapeHtml(e.type)+'</td><td>'+escapeHtml(e.referenceNumber||'—')+'</td><td>'+(e.quantityIn>0?'+'+e.quantityIn:'—')+'</td><td>'+(e.quantityOut>0?'-'+e.quantityOut:'—')+'</td><td><strong>'+e.runningBalance+'</strong></td><td>'+escapeHtml(e.performedByName||'—')+'</td></tr>').join('')
+    + '</tbody></table></div>';
+}
+function renderAdjustmentFormHtml(){
+  return '<div style="margin-top:10px; border:1px solid var(--color-border); border-radius:10px; padding:12px; background:var(--color-surface-2);">'
+    + '<div class="field-row">'
+    +   '<div class="field"><label>Adjustment Type</label><select id="adj-type"><option>Adjustment</option><option>Return</option></select></div>'
+    +   '<div class="field"><label>Quantity (+/-)</label><input type="number" id="adj-qty" placeholder="e.g. 5 or -3"></div>'
+    + '</div>'
+    + '<div class="field"><label>Reason</label><input type="text" id="adj-reason" placeholder="Why is this adjustment needed?"></div>'
+    + '<button class="btn btn-outline btn-sm" id="adj-submit-btn">Record Adjustment</button>'
+    + '</div>';
+}
+function wireAdjustmentForm(item){
+  const btn = document.getElementById('adj-submit-btn');
+  if(!btn) return;
+  btn.addEventListener('click', async ()=>{
+    const type = document.getElementById('adj-type').value;
+    const delta = Number(document.getElementById('adj-qty').value)||0;
+    const reason = document.getElementById('adj-reason').value.trim();
+    if(!delta){ toast('Enter a non-zero quantity','error'); return; }
+    if(!reason){ toast('A reason is required for stock adjustments','error'); return; }
+    const qtyIn = delta>0 ? delta : 0, qtyOut = delta<0 ? Math.abs(delta) : 0;
+    const balance = pushLedgerEntry(item.id, type, '', qtyIn, qtyOut, reason);
+    item.quantity = balance; item.updatedAt = new Date().toISOString();
+    itemHistoryPush(item, type, (delta>0?'+':'')+delta+' — '+reason);
+    await saveDb(); toast('Adjustment recorded','success'); renderInventoryItemDetailPage(item.id);
+  });
+}
+function renderItemAttachmentsHtml(item, linkedRequest){
+  const rows = [];
+  if(item.photoFileId) rows.push({ name: item.photoFileName||'Item photo', fileId: item.photoFileId, kind:'Photo' });
+  if(linkedRequest && linkedRequest.purchase && linkedRequest.purchase.billFileId) rows.push({ name: linkedRequest.purchase.billFileName||'Bill', fileId: linkedRequest.purchase.billFileId, kind:'Bill / Invoice' });
+  if(linkedRequest && linkedRequest.disposal && linkedRequest.disposal.documentFileId) rows.push({ name: linkedRequest.disposal.documentFileName||'Disposal document', fileId: linkedRequest.disposal.documentFileId, kind:'Disposal Document' });
+  if(!rows.length) return '<div class="empty-state" style="padding:20px;"><div class="icon">📎</div><h3>No attachments yet</h3></div>';
+  return '<div class="table-wrap"><table><thead><tr><th>Type</th><th>File</th></tr></thead><tbody>'
+    + rows.map(r=>'<tr><td>'+escapeHtml(r.kind)+'</td><td><a href="'+driveDownloadUrl(r.fileId)+'" target="_blank" rel="noopener">'+escapeHtml(r.name)+'</a></td></tr>').join('')
+    + '</tbody></table></div>';
+}
+
 function openItemModal(deptId, catId, item){
   const cats = DB.categories.filter(c=>c.departmentId===deptId && !c.deleted);
   const body =
@@ -1407,7 +1541,14 @@ function openItemModal(deptId, catId, item){
       remarks: document.getElementById('it-remarks').value.trim(),
       updatedAt: new Date().toISOString()
     };
-    if(item){ Object.assign(item, record); } else { DB.inventoryItems.push(record); }
+    if(item){
+      Object.assign(item, record);
+      itemHistoryPush(item, 'Edited', 'Updated via Manage Inventory');
+    } else {
+      record.history = []; record.minStock = 0; record.preferredSupplier = '';
+      DB.inventoryItems.push(record);
+      itemHistoryPush(record, 'Created', 'Manually added');
+    }
     await saveDb(); closeModal(); toast('Item saved','success'); renderDepartmentPage(deptId);
   });
 }
@@ -1428,36 +1569,84 @@ function isTerminal(reqItem){
   return reqItem.status==='completed';
 }
 /* ---- Stock Overview sync: completed purchases feed Inventory Management ---- */
+/* ============================================================
+   Stock Ledger — chronological, append-only, one row per movement
+   ============================================================ */
+function itemLedgerEntries(itemId){
+  return DB.stockLedger.filter(e=>e.inventoryItemId===itemId).sort((a,b)=>(a.timestamp||'').localeCompare(b.timestamp||''));
+}
+function pushLedgerEntry(itemId, type, referenceNumber, qtyIn, qtyOut, remark, txnDate){
+  const entries = itemLedgerEntries(itemId);
+  const prevBalance = entries.length ? entries[entries.length-1].runningBalance : 0;
+  const runningBalance = prevBalance + (Number(qtyIn)||0) - (Number(qtyOut)||0);
+  DB.stockLedger.push({
+    id: nextId('ledg'), inventoryItemId: itemId, date: txnDate || new Date().toISOString().slice(0,10),
+    type, referenceNumber: referenceNumber||'', quantityIn: Number(qtyIn)||0, quantityOut: Number(qtyOut)||0,
+    runningBalance, performedByEmail: currentUserEmail, performedByName: (myStaffRecord()||{}).name || currentUserEmail,
+    remark: remark||'', timestamp: new Date().toISOString()
+  });
+  return runningBalance;
+}
+function itemAveragePurchaseCost(itemId){
+  const purchases = itemLedgerEntries(itemId).filter(e=>e.quantityIn>0 && (e.type==='Purchase'||e.type==='Goods Receipt'));
+  if(!purchases.length) return 0;
+  let totalQty=0, totalCost=0;
+  purchases.forEach(e=>{ totalQty += e.quantityIn; totalCost += e.quantityIn * (Number(e.unitCostAtEntry)||0); });
+  return totalQty>0 ? totalCost/totalQty : 0;
+}
+function itemLastPurchaseDate(itemId){
+  const purchases = itemLedgerEntries(itemId).filter(e=>e.quantityIn>0 && (e.type==='Purchase'||e.type==='Goods Receipt'));
+  return purchases.length ? purchases[purchases.length-1].date : null;
+}
+function itemHistoryPush(item, action, remark){
+  if(!Array.isArray(item.history)) item.history = [];
+  item.history.push({ action, actorEmail: currentUserEmail, actorName: (myStaffRecord()||{}).name || currentUserEmail, remark: remark||'', timestamp: new Date().toISOString() });
+}
+
 function syncConsumableStock(r){
   const qty = (r.purchase && r.purchase.quantityPurchased) || r.quantityRequested || 0;
+  const unitCost = r.purchase ? (Number(r.purchase.unitPrice)||0) : 0;
   const cat = DB.categories.find(c=>c.id===r.categoryId);
   let item = DB.inventoryItems.find(i=> !i.deleted && i.categoryId===r.categoryId && (i.name||'').toLowerCase()===(r.itemName||'').toLowerCase());
   if(item){
     item.quantity = (Number(item.quantity)||0) + qty;
-    item.cost = r.purchase ? r.purchase.unitPrice : item.cost;
-    item.purchaseDate = r.purchase ? r.purchase.purchaseDate : item.purchaseDate;
     item.updatedAt = new Date().toISOString();
+    itemHistoryPush(item, 'Stock received', qty+' received via '+r.requestNumber);
   } else {
-    DB.inventoryItems.push({
+    item = {
       id: nextId('item'), name: r.itemName, departmentId: cat ? cat.departmentId : DB.departments[0].id, categoryId: r.categoryId,
-      quantity: qty, unit: '', cost: r.purchase ? r.purchase.unitPrice : 0, reorderThreshold: 0,
+      quantity: qty, unit: '', cost: unitCost, reorderThreshold: 0, minStock: 0, preferredSupplier: r.purchase ? (r.purchase.supplier||'') : '',
       purchaseDate: r.purchase ? r.purchase.purchaseDate : '', status:'Good',
       remarks: 'Auto-added from Procurement · '+r.requestNumber, linkedRequestItemId: r.id,
-      updatedAt: new Date().toISOString()
-    });
+      history: [], updatedAt: new Date().toISOString()
+    };
+    DB.inventoryItems.push(item);
+    itemHistoryPush(item, 'Created', 'Auto-created via '+r.requestNumber);
   }
+  const balance = pushLedgerEntry(item.id, 'Goods Receipt', r.requestNumber, qty, 0, 'Received from '+(r.purchase?r.purchase.supplier:'')+' · '+r.itemName, r.purchase?r.purchase.purchaseDate:null);
+  DB.stockLedger[DB.stockLedger.length-1].unitCostAtEntry = unitCost;
+  item.quantity = balance;
+  item.cost = itemAveragePurchaseCost(item.id);
+  item.purchaseDate = itemLastPurchaseDate(item.id);
+  if(r.purchase && r.purchase.supplier) item.preferredSupplier = r.purchase.supplier;
 }
 function syncAssetToInventory(r, personEmail, personName, buildingId, roomId){
   const cat = DB.categories.find(c=>c.id===r.categoryId);
   const qty = (r.purchase && r.purchase.quantityPurchased) || 1;
-  DB.inventoryItems.push({
+  const item = {
     id: nextId('item'), name: r.itemName, departmentId: cat ? cat.departmentId : DB.departments[0].id, categoryId: r.categoryId,
-    quantity: qty, unit:'unit', cost: r.purchase ? r.purchase.totalAmount : 0, reorderThreshold: 0,
+    quantity: qty, unit:'unit', cost: r.purchase ? r.purchase.totalAmount : 0, reorderThreshold: 0, minStock: 0,
+    preferredSupplier: r.purchase ? (r.purchase.supplier||'') : '',
     purchaseDate: r.purchase ? r.purchase.purchaseDate : '', status:'Good',
     remarks: 'Responsible: '+personName+' ('+buildingName(buildingId)+(roomId?' / '+roomName(roomId):'')+') · Auto-added from Procurement · '+r.requestNumber,
-    linkedRequestItemId: r.id, updatedAt: new Date().toISOString()
-  });
+    linkedRequestItemId: r.id, history: [], updatedAt: new Date().toISOString()
+  };
+  DB.inventoryItems.push(item);
+  itemHistoryPush(item, 'Created', 'Auto-created via '+r.requestNumber+', assigned to '+personName);
+  const bal = pushLedgerEntry(item.id, 'Goods Receipt', r.requestNumber, qty, 0, 'Asset received, assigned to '+personName, r.purchase?r.purchase.purchaseDate:null);
+  DB.stockLedger[DB.stockLedger.length-1].unitCostAtEntry = qty>0 ? (item.cost/qty) : item.cost;
 }
+
 function myApprovalQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='pending_approval' && canActOnApproval(r)); }
 function myPurchaseQueue(){ return DB.requestItems.filter(r=> !r.deleted && (r.status==='purchase_pending'||r.status==='purchased') && isMyPurchaseTask(r)); }
 function myAssignmentQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='received' && (isMyPurchaseTask(r) || isApproverRole() || isAdmin())); }
@@ -1944,14 +2133,26 @@ function renderItemActionBox(r){
 
   if(r.status==='received' && (isMyPurchaseTask(r) || isApproverRole() || isAdmin())){
     if(pattern==='consumable'){
+      const linkedItem = DB.inventoryItems.find(i=>i.linkedRequestItemId===r.id) || DB.inventoryItems.find(i=>!i.deleted && i.categoryId===r.categoryId && (i.name||'').toLowerCase()===(r.itemName||'').toLowerCase());
+      const currentStock = linkedItem ? (Number(linkedItem.quantity)||0) : 0;
       box.innerHTML = '<div class="plain-divider"></div><h4>Mark as Consumed</h4>'
+        + '<div class="field-hint" style="margin-bottom:10px;">Current stock: '+currentStock+' '+(linkedItem?escapeHtml(linkedItem.unit||''):'')+'</div>'
+        + '<div class="field"><label>Quantity Consumed</label><input type="number" id="cons-qty" value="'+(r.purchase?r.purchase.quantityPurchased:r.quantityRequested)+'" min="0" max="'+currentStock+'"></div>'
         + '<div class="field"><label>Date</label><input type="date" id="cons-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
         + '<div class="field"><label>Remarks</label><textarea id="cons-remarks"></textarea></div>'
         + '<button class="btn btn-primary" id="cons-submit-btn">Mark Consumed &amp; Complete</button>';
       document.getElementById('cons-submit-btn').addEventListener('click', async ()=>{
         const remark = document.getElementById('cons-remarks').value.trim();
-        r.history.push({ stage:'Consumed', action:'completed', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
+        const qtyConsumed = Number(document.getElementById('cons-qty').value)||0;
+        r.history.push({ stage:'Consumed', action:'completed', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:remark+(qtyConsumed?' ('+qtyConsumed+' consumed)':''), timestamp:new Date().toISOString() });
         r.status = 'completed';
+        if(linkedItem && qtyConsumed>0){
+          const consDate = document.getElementById('cons-date').value;
+          const balance = pushLedgerEntry(linkedItem.id, 'Issue', r.requestNumber, 0, qtyConsumed, remark || 'Consumed via '+r.requestNumber, consDate);
+          linkedItem.quantity = balance;
+          linkedItem.updatedAt = new Date().toISOString();
+          itemHistoryPush(linkedItem, 'Issued', qtyConsumed+' consumed via '+r.requestNumber);
+        }
         await saveDb(); toast('Marked consumed','success'); openItemDetailModal(r.id);
       });
     } else {
