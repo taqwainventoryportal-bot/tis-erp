@@ -18,34 +18,59 @@
    Inter for UI/body text.
    ============================================================ */
 :root{
-  --color-bg: #f6f7f9;
-  --color-surface: #ffffff;
-  --color-surface-2: #eef1f3;
-  --color-ink: #28323c;
-  --color-ink-soft: #5c6a76;
-  --color-ink-faint: #93a1ab;
-  --color-border: #e3e7eb;
-  --color-primary: #4a7d97;
-  --color-primary-dark: #33586b;
-  --color-primary-light: #eaf2f5;
-  --color-gold: #5f9186;
-  --color-gold-bright: #6fa598;
-  --color-gold-soft: #eaf3f0;
-  --color-danger: #b1594e;
-  --color-danger-soft: #f7ece9;
-  --color-success: #6f9169;
-  --color-success-soft: #eef3ea;
-  --color-medium: #bd8a45;
-  --color-medium-soft: #f8efdf;
-  --color-high: #a8674f;
-  --color-high-soft: #f5e9e3;
+  /* Neutral base */
+  --color-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F1F5F9;
+  --color-ink: #1E293B;
+  --color-ink-soft: #64748B;
+  --color-ink-faint: #94A3B8;
+  --color-border: #E2E8F0;
+
+  /* Primary (Dashboard / global default) */
+  --color-primary: #2563EB;
+  --color-primary-dark: #1D4ED8;
+  --color-primary-light: #DBEAFE;
+
+  /* Secondary accent (dividers, misc — kept muted/neutral per "avoid decorative color") */
+  --color-gold: #64748B;
+  --color-gold-bright: #475569;
+  --color-gold-soft: #F1F5F9;
+
+  /* Module accents */
+  --accent-inventory: #10B981;
+  --accent-inventory-dark: #047857;
+  --accent-inventory-soft: #D1FAE5;
+  --accent-procurement: #F59E0B;
+  --accent-procurement-dark: #B45309;
+  --accent-procurement-soft: #FEF3C7;
+  --accent-reports: #8B5CF6;
+  --accent-reports-dark: #6D28D9;
+  --accent-reports-soft: #EDE9FE;
+  --accent-admin: #64748B;
+  --accent-admin-dark: #475569;
+  --accent-admin-soft: #F1F5F9;
+
+  /* Status — muted pastels only */
+  --color-danger: #B91C1C;
+  --color-danger-soft: #FEE2E2;
+  --color-success: #166534;
+  --color-success-soft: #DCFCE7;
+  --color-medium: #92400E;
+  --color-medium-soft: #FEF3C7;
+  --color-high: #B91C1C;
+  --color-high-soft: #FEE2E2;
+  --color-info: #1D4ED8;
+  --color-info-soft: #DBEAFE;
+
   --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 14px;
-  --shadow-sm: 0 1px 2px rgba(20,40,55,0.05);
-  --shadow: 0 1px 2px rgba(20,40,55,0.04), 0 8px 20px -12px rgba(20,40,55,0.14);
-  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 2px rgba(15,23,42,0.04);
+  --shadow: 0 1px 2px rgba(15,23,42,0.04), 0 4px 10px -6px rgba(15,23,42,0.10);
+  --font-display: 'Inter', 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'Inter', 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+  --motion: 150ms ease;
 }
 *{ box-sizing: border-box; }
 html{ scroll-behavior: smooth; }
@@ -79,23 +104,28 @@ button{ font-family:inherit; cursor:pointer; }
 .nav-ribbon-inner{ display:flex; align-items:center; gap:2px; padding:7px 0; }
 .nav-ribbon a{
   position:relative; text-decoration:none; color:var(--color-ink-soft); font-size:13.5px; font-weight:600;
-  padding:9px 16px; display:inline-block; border-radius:8px;
-  transition:color .18s ease, background-color .18s ease;
+  padding:9px 16px; display:inline-block; border-radius:6px;
+  transition:color 150ms ease, background-color 150ms ease;
 }
 .nav-ribbon a::after{
   content:''; position:absolute; left:14px; right:14px; bottom:2px; height:2px;
   background:var(--color-primary); border-radius:2px;
-  transform:scaleX(0); transform-origin:left; transition:transform .22s cubic-bezier(.4,0,.2,1);
+  transform:scaleX(0); transform-origin:left; transition:transform 200ms ease;
 }
 .nav-ribbon a:hover{ color:var(--color-primary-dark); background:var(--color-surface-2); }
 .nav-ribbon a:hover::after{ transform:scaleX(1); }
 .nav-ribbon a.active{ color:var(--color-primary-dark); font-weight:700; }
 .nav-ribbon a.active::after{ transform:scaleX(1); }
+/* Module-specific accents: each section of the app keeps a consistent identity */
+.nav-ribbon a[data-module="inventory"]:hover, .nav-ribbon a[data-module="inventory"].active{ color:var(--accent-inventory-dark); }
+.nav-ribbon a[data-module="inventory"]::after{ background:var(--accent-inventory); }
+.nav-ribbon a[data-module="procurement"]:hover, .nav-ribbon a[data-module="procurement"].active{ color:var(--accent-procurement-dark); }
+.nav-ribbon a[data-module="procurement"]::after{ background:var(--accent-procurement); }
 
 .auth-box{ display:flex; align-items:center; gap:10px; padding-left:16px; border-left:1px solid var(--color-border); }
 .role-chip{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; background:var(--color-primary-light); color:var(--color-primary-dark); border:1px solid var(--color-border); padding:5px 11px 5px 8px; border-radius:999px; }
 .role-chip::before{ content:''; width:6px; height:6px; border-radius:50%; background:var(--color-gold); flex:none; }
-.btn{ font-weight:600; font-size:13.5px; padding:8px 14px; border-radius:8px; border:1.5px solid transparent; transition:.15s; white-space:nowrap; }
+.btn{ font-weight:600; font-size:13.5px; padding:8px 14px; border-radius:var(--radius-sm); border:1.5px solid transparent; transition:background-color 150ms ease, border-color 150ms ease, color 150ms ease; white-space:nowrap; }
 .btn-primary{ background:var(--color-primary); color:#fff; }
 .btn-primary:hover{ background:var(--color-primary-dark); }
 .btn-gold{ background:var(--color-primary); color:#fff; }
@@ -167,6 +197,12 @@ button{ font-family:inherit; cursor:pointer; }
 
 /* ---- Content ---- */
 .content{ padding:26px 0 60px; }
+/* Module scoping: overriding --color-primary locally lets every existing
+   button, tab, icon, and focus ring automatically pick up the right module
+   accent without touching each component individually. */
+.module-inventory{ --color-primary: var(--accent-inventory); --color-primary-dark: var(--accent-inventory-dark); --color-primary-light: var(--accent-inventory-soft); }
+.module-procurement{ --color-primary: var(--accent-procurement); --color-primary-dark: var(--accent-procurement-dark); --color-primary-light: var(--accent-procurement-soft); }
+.module-admin{ --color-primary: var(--accent-admin); --color-primary-dark: var(--accent-admin-dark); --color-primary-light: var(--accent-admin-soft); }
 .page-title{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
 .page-title h2{ font-size:23px; position:relative; display:inline-block; }
 .page-title h2::after{ content:''; position:absolute; left:0; bottom:-6px; width:46px; height:3px; background:var(--color-gold); border-radius:2px; }
@@ -198,13 +234,13 @@ button{ font-family:inherit; cursor:pointer; }
 .tab-panel{ padding-top:18px; }
 
 /* ---- Tables ---- */
-.table-wrap{ overflow-x:auto; background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); }
+.table-wrap{ overflow-x:auto; background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); max-height:70vh; overflow-y:auto; }
 table{ width:100%; border-collapse:collapse; font-size:13.5px; }
-thead th{ text-align:left; background:var(--color-primary-light); color:var(--color-primary-dark); font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; padding:10px 14px; border-bottom:1px solid var(--color-border); white-space:nowrap; }
-tbody td{ padding:10px 14px; border-bottom:1px solid var(--color-border); vertical-align:middle; }
+thead th{ position:sticky; top:0; z-index:1; text-align:left; background:#F1F5F9; color:var(--color-ink-soft); font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; padding:12px 14px; border-bottom:1px solid var(--color-border); white-space:nowrap; }
+tbody td{ padding:12px 14px; border-bottom:1px solid var(--color-border); vertical-align:middle; }
 tbody tr:last-child td{ border-bottom:none; }
-tbody tr:nth-child(even){ background:var(--color-surface-2); }
-tbody tr:hover{ background:var(--color-gold-soft); }
+tbody tr{ transition:background-color 150ms ease; }
+tbody tr:hover{ background:#F8FAFC; }
 .row-clickable{ cursor:pointer; }
 
 /* ---- Badges / tags ---- */
@@ -228,15 +264,18 @@ tbody tr:hover{ background:var(--color-gold-soft); }
 .policy-toggle.off{ background:var(--color-success-soft); color:var(--color-success); }
 
 /* ---- Forms ---- */
-.field{ margin-bottom:14px; }
-.field label{ display:block; font-size:12.5px; font-weight:700; color:var(--color-ink-soft); margin-bottom:5px; text-transform:uppercase; letter-spacing:.02em; }
+.field{ margin-bottom:16px; }
+.field label{ display:block; font-size:12px; font-weight:600; color:var(--color-ink-soft); margin-bottom:6px; text-transform:uppercase; letter-spacing:.02em; }
 .field input, .field select, .field textarea{
-  width:100%; padding:9px 11px; border:1.5px solid var(--color-border); border-radius:8px; font-family:inherit; font-size:14px; background:#fff; color:var(--color-ink);
+  width:100%; padding:9px 11px; border:1.5px solid var(--color-border); border-radius:var(--radius-sm); font-family:inherit; font-size:14px; background:#fff; color:var(--color-ink);
+  transition:border-color 150ms ease, box-shadow 150ms ease;
 }
-.field input:focus, .field select:focus, .field textarea:focus{ border-color:var(--color-primary); }
+.field input:focus, .field select:focus, .field textarea:focus{
+  outline:none; border-color:var(--color-primary); box-shadow:0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
 .field textarea{ resize:vertical; min-height:70px; }
 .field-hint{ font-size:11.5px; color:var(--color-ink-faint); margin-top:4px; }
-.field-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.field-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 @media (max-width:560px){ .field-row{ grid-template-columns:1fr; } }
 .form-error{ background:var(--color-danger-soft); color:var(--color-danger); padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:12px; }
 
@@ -316,9 +355,8 @@ tbody tr:hover{ background:var(--color-gold-soft); }
 @keyframes toastIn{ from{ opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
 
 /* ---- Footer ---- */
-.footer{ border-top:1px solid var(--color-border); padding:24px 0; text-align:center; font-size:12px; color:var(--color-ink-faint); }
-.footer-org{ margin-bottom:8px; }
-.footer-contact{ display:flex; justify-content:center; gap:18px; flex-wrap:wrap; font-size:11.5px; }
+.footer{ border-top:1px solid var(--color-border); padding:16px 0; text-align:center; font-size:11.5px; color:var(--color-ink-faint); display:flex; justify-content:center; gap:6px; flex-wrap:wrap; }
+.footer-sep{ color:var(--color-border); }
 
 /* ---- Search ---- */
 .search-box{ position:relative; }
@@ -898,7 +936,7 @@ function myRoleLabel(){
 function renderTopbar(){
   const slot = document.getElementById('topbar-slot');
   const route = location.hash || '#/';
-  const navItem = (href, label)=>'<a href="'+href+'" class="'+(route.startsWith(href) && href!=='#/' || route===href ? 'active':'')+'">'+label+'</a>';
+  const navItem = (href, label, module)=>'<a href="'+href+'" data-module="'+(module||'')+'" class="'+(route.startsWith(href) && href!=='#/' || route===href ? 'active':'')+'">'+label+'</a>';
   slot.innerHTML =
     '<div class="brand-band"><div class="wrap brand-band-inner">'
     + '<a href="#/" class="brand">'+'<img class="brand-logo-img" src="'+LOGO_DATA_URI+'" alt="Taqwa Group of Schools">'
@@ -912,7 +950,7 @@ function renderTopbar(){
     + '</div>'
     + '</div></div>'
     + '<div class="nav-ribbon"><div class="wrap nav-ribbon-inner">'
-    +   navItem('#/', 'Home') + navItem('#/inventory','Inventory') + navItem('#/procurement','Procurement')
+    +   navItem('#/', 'Home', 'dashboard') + navItem('#/inventory','Inventory','inventory') + navItem('#/procurement','Procurement','procurement')
     + '</div></div>';
   const loginBtn = document.getElementById('login-btn'); if(loginBtn) loginBtn.addEventListener('click', login);
   const logoutBtn = document.getElementById('logout-btn'); if(logoutBtn) logoutBtn.addEventListener('click', logout);
@@ -937,17 +975,19 @@ function renderSearchResults(q){
 }
 function renderFooter(){
   const slot = document.getElementById('footer-slot');
+  const year = new Date().getFullYear();
   slot.innerHTML = '<div class="footer">'
-    + '<div class="footer-org">Taqwa Islamic School · Prayagraj (Allahabad) — Inventory &amp; Notesheet Approval Portal</div>'
-    + '<div class="footer-contact"><span>&#128222; +91 93351 45818, 63881 05929</span><span>&#9993; taqwa.allahabad@gmail.com</span><span>A-506, GTB Nagar, Kareli, Prayagraj (Allahabad)</span></div>'
+    + '<span>Taqwa Islamic School</span><span class="footer-sep">·</span><span>v1.0</span><span class="footer-sep">·</span><span>taqwa.allahabad@gmail.com</span><span class="footer-sep">·</span><span>&copy; '+year+'</span>'
     + '</div>';
 }
 
 /* ============================================================
    Modal
    ============================================================ */
-function openModal(title, bodyHtml, footerHtml){
-  document.getElementById('modal-box').innerHTML =
+function openModal(title, bodyHtml, footerHtml, moduleClass){
+  const box = document.getElementById('modal-box');
+  box.className = 'modal' + (moduleClass ? ' '+moduleClass : '');
+  box.innerHTML =
     '<div class="modal-header"><h3>'+title+'</h3><button class="modal-close" id="modal-close-btn">&times;</button></div>'
     + '<div class="modal-body">'+bodyHtml+'</div>'
     + (footerHtml ? '<div class="modal-footer">'+footerHtml+'</div>' : '');
@@ -1093,7 +1133,7 @@ function totalExpenditureAllTime(){
 /* ============================================================
    Analytics — lightweight inline SVG chart builders
    ============================================================ */
-const CHART_COLORS = ['#0a7bab','#2f8a7c','#b8791c','#a4432f','#5a6a78','#8fa0ab'];
+const CHART_COLORS = ['#2563EB','#14B8A6','#F59E0B','#8B5CF6','#EF4444','#64748B'];
 function svgBarChart(data, opts){
   opts = opts || {};
   const w = 520, h = 200, padL = 34, padB = 26, padT = 14, padR = 10;
@@ -1239,7 +1279,7 @@ function renderInventoryPage(){
   }).join('');
 
   app.innerHTML =
-    '<div class="content wrap">'
+    '<div class="content wrap module-inventory">'
     + '<div class="page-title"><h2>Inventory Management</h2>'
     + (isAdmin() ? '<button class="btn btn-primary btn-sm" id="manage-depts-btn">Manage Departments &amp; Categories</button>' : '')
     + '</div>'
@@ -1286,7 +1326,7 @@ function renderManageDeptsModalBody(){
     + '<div class="field"><label>New Department Name</label><input type="text" id="new-dept-name"></div>'
     + '<button class="btn btn-primary btn-sm" id="add-dept-btn">+ Add Department</button>';
 
-  openModal('Manage Departments &amp; Categories', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>');
+  openModal('Manage Departments &amp; Categories', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-inventory');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   document.getElementById('add-dept-btn').addEventListener('click', async ()=>{
     const input = document.getElementById('new-dept-name');
@@ -1364,7 +1404,7 @@ function renderDepartmentPage(deptId){
   if(!currentDeptTab || !cats.find(c=>c.id===currentDeptTab)) currentDeptTab = cats[0] ? cats[0].id : null;
 
   app.innerHTML =
-    '<div class="content wrap">'
+    '<div class="content wrap module-inventory">'
     + '<div class="breadcrumb"><a href="#/inventory">Inventory</a> / '+escapeHtml(dept.name)+'</div>'
     + '<div class="page-title"><h2>'+escapeHtml(dept.name)+'</h2>'
     + (isAdmin() ? '<button class="btn btn-primary btn-sm" id="add-item-btn">+ Add Item</button>' : '')
@@ -1448,7 +1488,7 @@ function renderInventoryItemDetailPage(itemId){
   const linkedRequest = item.linkedRequestItemId ? DB.requestItems.find(r=>r.id===item.linkedRequestItemId) : null;
 
   app.innerHTML =
-    '<div class="content wrap">'
+    '<div class="content wrap module-inventory">'
     + '<div class="breadcrumb"><a href="#/inventory">Inventory</a> / <a href="#/inventory/'+item.departmentId+'">'+escapeHtml(deptName(item.departmentId))+'</a> / '+escapeHtml(item.name)+'</div>'
     + '<div class="page-title"><h2>'+escapeHtml(item.name)+'</h2>'+(item.deleted?'<span class="badge badge-rejected">Deleted (in Archive)</span>':(low?'<span class="badge badge-high">Low Stock</span>':''))+'</div>'
     + '<div class="spec-grid" style="margin:16px 0;">'
@@ -1566,7 +1606,7 @@ function openItemModal(deptId, catId, item){
     + '<div class="field"><label>Remarks</label><textarea id="it-remarks">'+escapeHtml(item?item.remarks:'')+'</textarea></div>';
 
   openModal(item?'Edit Item':'Add Item', body,
-    '<button class="btn btn-outline" id="cancel-item-btn">Cancel</button><button class="btn btn-primary" id="save-item-btn">Save</button>');
+    '<button class="btn btn-outline" id="cancel-item-btn">Cancel</button><button class="btn btn-primary" id="save-item-btn">Save</button>', 'module-inventory');
   document.getElementById('cancel-item-btn').addEventListener('click', closeModal);
   document.getElementById('save-item-btn').addEventListener('click', async ()=>{
     const name = document.getElementById('it-name').value.trim();
@@ -1747,7 +1787,7 @@ function renderProcurementPage(initialTab){
   tabs.push(['all','All Requests']);
 
   app.innerHTML =
-    '<div class="content wrap">'
+    '<div class="content wrap module-procurement">'
     + '<div class="page-title"><h2>Procurement</h2>'
     +   (canManageStaff() ? '<span style="display:flex; gap:8px;"><button class="btn btn-outline btn-sm" id="manage-staff-btn">Manage Staff</button><button class="btn btn-outline btn-sm" id="manage-buildings-btn">Manage Buildings</button>'+(isAdmin()?'<button class="btn btn-outline btn-sm" id="manage-catalog-btn">Item Catalog</button><button class="btn btn-outline btn-sm" id="view-archive-btn">Archive</button>':'')+'</span>' : '')
     + '</div>'
@@ -2082,7 +2122,8 @@ async function openPurchaseOrderReportModal(po){
   if(!po){ toast('Purchase order not found','error'); return; }
   openModal('Purchase Order — '+po.poNumber,
     '<div id="pdf-report-status" class="field-hint">Generating…</div><div id="pdf-report-preview" style="margin-top:10px;"></div>',
-    '<button class="btn btn-outline" id="pdf-report-close-btn">Close</button><button class="btn btn-primary" id="pdf-report-download-btn" disabled>Download</button>'
+    '<button class="btn btn-outline" id="pdf-report-close-btn">Close</button><button class="btn btn-primary" id="pdf-report-download-btn" disabled>Download</button>',
+    'module-procurement'
   );
   const modalEl = document.querySelector('#modal-overlay .modal');
   if(modalEl) modalEl.style.maxWidth = '820px';
@@ -2240,7 +2281,7 @@ function renderItemDetailModalBody(r){
     + '<button class="btn btn-outline" id="modal-print-btn">Print / Export Report</button>'
     + (linkedPo ? '<button class="btn btn-outline" id="modal-print-po-btn">Print PO ('+escapeHtml(linkedPo.poNumber)+')</button>' : '')
     + (isAdmin() && !r.deleted ? '<button class="btn btn-danger" id="modal-delete-item-btn">Delete Request</button>' : '');
-  openModal(escapeHtml(r.itemName), body, footerBtns);
+  openModal(escapeHtml(r.itemName), body, footerBtns, 'module-procurement');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   document.getElementById('modal-print-btn').addEventListener('click', ()=>openRequestItemReportModal(r));
   const poBtn = document.getElementById('modal-print-po-btn');
@@ -2529,7 +2570,7 @@ function renderManageStaffModalBody(){
     + '<div class="field"><label>Role</label><select id="new-staff-role">'+roleOptions+'</select></div>'
     + '<button class="btn btn-primary btn-sm" id="add-staff-btn">+ Add Staff</button>';
 
-  openModal('Manage Staff', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>');
+  openModal('Manage Staff', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-admin');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   document.getElementById('add-staff-btn').addEventListener('click', async ()=>{
     const name = document.getElementById('new-staff-name').value.trim();
@@ -2607,7 +2648,7 @@ function renderManageItemCatalogModalBody(){
       + '</div>';
   }).join('');
 
-  openModal('Manage Item Catalog', rows || '<div class="empty-state"><h3>No categories yet</h3></div>', '<button class="btn btn-outline" id="modal-done-btn">Done</button>');
+  openModal('Manage Item Catalog', rows || '<div class="empty-state"><h3>No categories yet</h3></div>', '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-admin');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   document.querySelectorAll('[data-add-catalog]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
@@ -2780,7 +2821,8 @@ async function openRequestItemReportModal(r){
     '<div id="pdf-report-status" class="field-hint">Generating report…</div><div id="pdf-report-preview" style="margin-top:10px;"></div>',
     '<button class="btn btn-outline" id="pdf-report-close-btn">Close</button>'
     + '<button class="btn btn-outline" id="pdf-report-regenerate-btn">Regenerate</button>'
-    + '<button class="btn btn-primary" id="pdf-report-download-btn" disabled>Download</button>'
+    + '<button class="btn btn-primary" id="pdf-report-download-btn" disabled>Download</button>',
+    'module-procurement'
   );
   const modalEl = document.querySelector('#modal-overlay .modal');
   if(modalEl) modalEl.style.maxWidth = '820px';
@@ -2818,7 +2860,7 @@ function openArchiveModal(){ renderArchiveModalBody(); }
 function renderArchiveModalBody(){
   const entries = DB.archiveLog.slice().filter(e=>!e.restored).sort((a,b)=>(b.deletedAt||'').localeCompare(a.deletedAt||''));
   if(!entries.length){
-    openModal('Archive', '<div class="empty-state"><div class="icon">🗄️</div><h3>Nothing deleted yet</h3></div>', '<button class="btn btn-outline" id="modal-done-btn">Close</button>');
+    openModal('Archive', '<div class="empty-state"><div class="icon">🗄️</div><h3>Nothing deleted yet</h3></div>', '<button class="btn btn-outline" id="modal-done-btn">Close</button>', 'module-admin');
     document.getElementById('modal-done-btn').addEventListener('click', closeModal);
     return;
   }
@@ -2828,7 +2870,7 @@ function renderArchiveModalBody(){
       + '<br><small style="color:var(--color-ink-faint);">Deleted by '+escapeHtml(e.deletedByName||e.deletedByEmail||'—')+' · '+formatDateTime(e.deletedAt)+(e.reason?' · "'+escapeHtml(e.reason)+'"':'')+'</small>'
       + '</div><div class="cat-policy-controls"><button class="btn btn-outline btn-sm" data-restore="'+e.id+'">Restore</button></div></div>'
   ).join('');
-  openModal('Archive', body, '<button class="btn btn-outline" id="modal-done-btn">Close</button>');
+  openModal('Archive', body, '<button class="btn btn-outline" id="modal-done-btn">Close</button>', 'module-admin');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   document.querySelectorAll('[data-restore]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
@@ -2859,7 +2901,7 @@ function renderManageBuildingsModalBody(){
     + '<div class="plain-divider"></div>'
     + '<div class="field"><label>New Building Name</label><input type="text" id="new-bldg-name"></div>'
     + '<button class="btn btn-primary btn-sm" id="add-bldg-btn">+ Add Building</button>';
-  openModal('Manage Buildings &amp; Rooms', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>');
+  openModal('Manage Buildings &amp; Rooms', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-admin');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   document.getElementById('add-bldg-btn').addEventListener('click', async ()=>{
     const name = document.getElementById('new-bldg-name').value.trim();
