@@ -1000,7 +1000,10 @@ document.getElementById('modal-overlay').addEventListener('click', (e)=>{ if(e.t
 /* ============================================================
    Router
    ============================================================ */
-window.addEventListener('hashchange', renderRoute);
+window.addEventListener('hashchange', async ()=>{
+  try{ await loadDb(); }catch(e){ /* fall back to whatever is already in memory */ }
+  renderRoute();
+});
 function renderRoute(){
   renderTopbar();
   const hash = location.hash || '#/';
@@ -2999,9 +3002,39 @@ async function boot(){
     }
     renderTopbar();
     renderRoute();
+    startAutoRefresh();
   }catch(e){
     document.getElementById('app').innerHTML = '<div class="content wrap"><div class="empty-state"><h3>Could not load portal data</h3><p>'+escapeHtml(e.message)+'</p></div></div>';
   }
+}
+/* ============================================================
+   Background auto-refresh — keeps everyone's screen current
+   without a manual reload, while never disturbing someone
+   actively filling a form or with a modal open.
+   ============================================================ */
+const AUTO_REFRESH_MS = 30000;
+let autoRefreshTimer = null;
+function isSafeToAutoRefresh(){
+  const overlay = document.getElementById('modal-overlay');
+  if(overlay && overlay.style.display === 'flex') return false; // a modal (often mid-form) is open
+  const hash = location.hash || '#/';
+  if(hash.startsWith('#/procurement') && typeof procTab !== 'undefined' && procTab === 'new') return false; // composing a new request
+  const active = document.activeElement;
+  if(active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName)) return false; // actively typing somewhere
+  return true;
+}
+async function autoRefreshTick(){
+  if(!isSafeToAutoRefresh()) return;
+  try{
+    const before = JSON.stringify(DB);
+    await loadDb();
+    const after = JSON.stringify(DB);
+    if(before !== after){ renderTopbar(); renderRoute(); }
+  }catch(e){ /* silent — keep showing existing data, try again next tick */ }
+}
+function startAutoRefresh(){
+  if(autoRefreshTimer) return;
+  autoRefreshTimer = setInterval(autoRefreshTick, AUTO_REFRESH_MS);
 }
 boot();
 </script>
