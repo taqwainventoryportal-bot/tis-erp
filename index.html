@@ -255,6 +255,23 @@ tbody tr:hover{ background:var(--color-gold-soft); }
 .modal-footer{ padding:16px 22px; border-top:1px solid var(--color-border); display:flex; justify-content:flex-end; gap:10px; }
 
 /* ---- Timeline ---- */
+/* ---- Procurement visual stepper ---- */
+.proc-stepper{ display:flex; align-items:center; flex-wrap:wrap; gap:0; margin-bottom:16px; }
+.proc-step{ display:flex; flex-direction:column; align-items:center; gap:4px; min-width:78px; text-align:center; }
+.proc-step-icon{ width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; border:2px solid var(--color-border); color:var(--color-ink-faint); background:var(--color-surface); }
+.proc-step.done .proc-step-icon{ background:var(--color-success); border-color:var(--color-success); color:#fff; }
+.proc-step.current .proc-step-icon{ background:var(--color-primary); border-color:var(--color-primary); color:#fff; }
+.proc-step-label{ font-size:10.5px; color:var(--color-ink-soft); max-width:88px; line-height:1.25; }
+.proc-step.current .proc-step-label{ font-weight:700; color:var(--color-primary-dark); }
+.proc-step-connector{ flex:1; height:2px; background:var(--color-border); min-width:14px; margin-top:-18px; }
+
+/* ---- Notesheet comment thread ---- */
+.notesheet-thread{ display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
+.notesheet-note{ background:var(--color-surface-2); border-radius:10px; padding:10px 12px; }
+.notesheet-note-head{ display:flex; justify-content:space-between; font-size:12px; font-weight:700; color:var(--color-primary-dark); margin-bottom:3px; }
+.notesheet-note-meta{ font-size:11px; color:var(--color-ink-faint); font-weight:400; }
+.notesheet-note-body{ font-size:13px; color:var(--color-ink); }
+
 .timeline{ list-style:none; margin:0; padding:0; }
 .timeline li{ position:relative; padding:0 0 18px 24px; border-left:2px solid var(--color-border); }
 .timeline li:last-child{ border-color:transparent; padding-bottom:0; }
@@ -426,6 +443,28 @@ function seedBuildings(){
   ];
 }
 function seedRooms(){ return []; }
+function seedItemCatalog(){
+  // Master, admin-managed list of procurable items — locks terminology so
+  // "Pen", "pen", "Ball Pen" never become three different stock lines.
+  return [
+    { id:"ic_1", categoryId:"cat_stationery", code:"STA-001", name:"Ball Pen", description:"Standard blue ball pen" },
+    { id:"ic_2", categoryId:"cat_stationery", code:"STA-002", name:"Pencil", description:"HB graphite pencil" },
+    { id:"ic_3", categoryId:"cat_stationery", code:"STA-003", name:"A4 Paper Ream", description:"500 sheets, 75 GSM" },
+    { id:"ic_4", categoryId:"cat_stationery", code:"STA-004", name:"Stapler", description:"Standard office stapler" },
+    { id:"ic_5", categoryId:"cat_classroom", code:"CLS-001", name:"Whiteboard Marker", description:"Black/blue whiteboard marker" },
+    { id:"ic_6", categoryId:"cat_classroom", code:"CLS-002", name:"Duster", description:"Whiteboard duster" },
+    { id:"ic_7", categoryId:"cat_artcraft", code:"ART-001", name:"Fevicol", description:"White adhesive, 100g" },
+    { id:"ic_8", categoryId:"cat_artcraft", code:"ART-002", name:"Colour Paper", description:"Assorted colour craft paper" },
+    { id:"ic_9", categoryId:"cat_office_consumables", code:"OFC-001", name:"Ball Pen", description:"Standard blue ball pen, office use" },
+    { id:"ic_10", categoryId:"cat_office_consumables", code:"OFC-002", name:"Printer Paper Ream", description:"A4, 75 GSM" },
+    { id:"ic_11", categoryId:"cat_office_consumables", code:"OFC-003", name:"Stapler Pins", description:"Box of stapler pins" },
+    { id:"ic_12", categoryId:"cat_housekeeping", code:"HSK-001", name:"Phenyl", description:"Floor cleaning phenyl, 1L" },
+    { id:"ic_13", categoryId:"cat_housekeeping", code:"HSK-002", name:"Dustbin", description:"Plastic dustbin, medium" },
+    { id:"ic_14", categoryId:"cat_firstaid", code:"MED-001", name:"First Aid Kit Refill", description:"Bandages, antiseptic, cotton" },
+    { id:"ic_15", categoryId:"cat_assets_general", code:"AST-001", name:"Ceiling Fan", description:"Standard ceiling fan" },
+    { id:"ic_16", categoryId:"cat_assets_general", code:"AST-002", name:"Office Chair", description:"Standard office chair" }
+  ];
+}
 function seedItemTypes(){
   // pattern: 'asset' | 'consumable' | 'service' — determines the lifecycle state machine used.
   // linkable: repair/spare items can be linked back to a parent Asset's history.
@@ -462,7 +501,9 @@ function emptyDb(){
     requests: [],
     requestItems: [],
     archiveLog: [],
-    stockLedger: []
+    stockLedger: [],
+    itemCatalog: seedItemCatalog(),
+    purchaseOrders: []
   };
 }
 
@@ -728,11 +769,14 @@ async function loadDb(){
   const raw = await driveGetJson(CONFIG.DB_FILE_ID);
   const base = emptyDb();
   DB = Object.assign(base, raw);
-  ['departments','categories','inventoryItems','dismissedAlerts','buildings','rooms','itemTypes','staff','requests','requestItems','archiveLog','stockLedger'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
+  ['departments','categories','inventoryItems','dismissedAlerts','buildings','rooms','itemTypes','staff','requests','requestItems','archiveLog','stockLedger','itemCatalog','purchaseOrders'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
   DB.inventoryItems.forEach(i=>{
     if(!Array.isArray(i.history)) i.history = [];
     if(i.minStock===undefined) i.minStock = 0;
     if(i.preferredSupplier===undefined) i.preferredSupplier = '';
+  });
+  DB.requestItems.forEach(r=>{
+    if(!Array.isArray(r.notes)) r.notes = [];
   });
   // Backfill new category fields for DBs saved before this feature existed
   DB.categories.forEach(c=>{
@@ -1568,6 +1612,38 @@ function isTerminal(reqItem){
   if(pattern==='asset') return reqItem.status==='archived';
   return reqItem.status==='completed';
 }
+/* ============================================================
+   Purchase Orders — auto-generated when an item clears approval
+   ============================================================ */
+function nextPoNumber(){
+  const y = new Date().getFullYear();
+  const n = DB.purchaseOrders.filter(p=>p.poNumber && p.poNumber.includes(String(y))).length + 1;
+  return 'PO-'+y+'-'+String(n).padStart(4,'0');
+}
+function generatePurchaseOrder(r){
+  const po = {
+    id: nextId('po'), poNumber: nextPoNumber(), requestItemId: r.id, requestNumber: r.requestNumber,
+    itemName: r.itemName, itemCode: r.itemCode||'', quantity: r.quantityRequested,
+    supplier: '', unitRate: 0, totalAmount: 0, taxAmount: 0,
+    purchaseOfficerEmail: r.assignedPurchaserEmail, purchaseOfficerName: r.assignedPurchaserName,
+    dateGenerated: new Date().toISOString().slice(0,10), status: 'draft', createdAt: new Date().toISOString()
+  };
+  DB.purchaseOrders.push(po);
+  r.poNumber = po.poNumber;
+  r.history.push({ stage:'Purchase Order', action:'generated '+po.poNumber, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:'', timestamp:new Date().toISOString() });
+  return po;
+}
+function updatePurchaseOrderFromPurchase(r){
+  const po = DB.purchaseOrders.find(p=>p.requestItemId===r.id);
+  if(!po || !r.purchase) return;
+  po.supplier = r.purchase.supplier||'';
+  po.unitRate = Number(r.purchase.unitPrice)||0;
+  po.taxAmount = Number(r.purchase.taxAmount)||0;
+  po.totalAmount = Number(r.purchase.totalAmount)||0;
+  po.quantity = Number(r.purchase.quantityPurchased)||po.quantity;
+  po.status = 'issued';
+}
+function poForRequestItem(itemId){ return DB.purchaseOrders.find(p=>p.requestItemId===itemId) || null; }
 /* ---- Stock Overview sync: completed purchases feed Inventory Management ---- */
 /* ============================================================
    Stock Ledger — chronological, append-only, one row per movement
@@ -1667,12 +1743,13 @@ function renderProcurementPage(initialTab){
   if(isSignedIn()) tabs.push(['tasks','My Purchase Tasks'+(myPurchaseQueue().length?' ('+myPurchaseQueue().length+')':'')]);
   if(canAssign) tabs.push(['assign','Receiving &amp; Assignment'+(myAssignmentQueue().length?' ('+myAssignmentQueue().length+')':'')]);
   if(canAccountant) tabs.push(['accountant','Accountant Closure'+(myAccountantQueue().length?' ('+myAccountantQueue().length+')':'')]);
+  tabs.push(['pos','Purchase Orders']);
   tabs.push(['all','All Requests']);
 
   app.innerHTML =
     '<div class="content wrap">'
     + '<div class="page-title"><h2>Procurement</h2>'
-    +   (canManageStaff() ? '<span style="display:flex; gap:8px;"><button class="btn btn-outline btn-sm" id="manage-staff-btn">Manage Staff</button><button class="btn btn-outline btn-sm" id="manage-buildings-btn">Manage Buildings</button>'+(isAdmin()?'<button class="btn btn-outline btn-sm" id="view-archive-btn">Archive</button>':'')+'</span>' : '')
+    +   (canManageStaff() ? '<span style="display:flex; gap:8px;"><button class="btn btn-outline btn-sm" id="manage-staff-btn">Manage Staff</button><button class="btn btn-outline btn-sm" id="manage-buildings-btn">Manage Buildings</button>'+(isAdmin()?'<button class="btn btn-outline btn-sm" id="manage-catalog-btn">Item Catalog</button><button class="btn btn-outline btn-sm" id="view-archive-btn">Archive</button>':'')+'</span>' : '')
     + '</div>'
     + '<div class="page-subtitle-inline">Purchase requests, approvals, purchasing, receiving, assignment and closure — permanently tracked.</div>'
     + '<div class="tab-strip">' + tabs.map(t=>'<button class="tab-btn '+(procTab===t[0]?'active':'')+'" data-proc-tab="'+t[0]+'">'+t[1]+'</button>').join('') + '</div>'
@@ -1683,6 +1760,7 @@ function renderProcurementPage(initialTab){
     btn.addEventListener('click', ()=>{ procTab = btn.getAttribute('data-proc-tab'); renderProcurementPage(); });
   });
   const msBtn = document.getElementById('manage-staff-btn'); if(msBtn) msBtn.addEventListener('click', openManageStaffModal);
+  const mcBtn = document.getElementById('manage-catalog-btn'); if(mcBtn) mcBtn.addEventListener('click', openManageItemCatalogModal);
   const mbBtn = document.getElementById('manage-buildings-btn'); if(mbBtn) mbBtn.addEventListener('click', openManageBuildingsModal);
   const arBtn = document.getElementById('view-archive-btn'); if(arBtn) arBtn.addEventListener('click', openArchiveModal);
 
@@ -1692,6 +1770,7 @@ function renderProcurementPage(initialTab){
   else if(procTab==='tasks') renderTasksTab();
   else if(procTab==='assign') renderAssignmentTab();
   else if(procTab==='accountant') renderAccountantTab();
+  else if(procTab==='pos') renderPurchaseOrdersTab();
   else renderAllRequestsTab();
 }
 
@@ -1731,11 +1810,16 @@ function renderNewRequestTab(){
     const wrap = document.getElementById('req-lines');
     if(!wrap) return;
     newRequestLines.forEach(line=>{
-      ['categoryId','itemName','quantityRequested','priority','reason','description'].forEach(field=>{
+      ['categoryId','catalogItemId','quantityRequested','priority','reason','description'].forEach(field=>{
         const el = wrap.querySelector('[data-line-id="'+line.localId+'"][data-line-field="'+field+'"]');
         if(el) line[field] = el.value;
       });
     });
+  }
+  function itemOptionsForCategory(categoryId, selectedId){
+    const items = DB.itemCatalog.filter(i=>!i.deleted && i.categoryId===categoryId).sort((a,b)=>a.code.localeCompare(b.code));
+    if(!items.length) return '<option value="">— No items in catalog for this category, ask Admin to add one —</option>';
+    return '<option value="">— Select an item —</option>' + items.map(i=>'<option value="'+i.id+'" '+(selectedId===i.id?'selected':'')+'>'+escapeHtml(i.code)+' — '+escapeHtml(i.name)+'</option>').join('');
   }
   function renderLines(){
     const wrap = document.getElementById('req-lines');
@@ -1746,8 +1830,8 @@ function renderNewRequestTab(){
       return '<div class="req-line-card" data-line="'+line.localId+'">'
         + '<div class="req-line-head"><strong>Item '+(idx+1)+'</strong>'+(newRequestLines.length>1?'<button class="btn btn-danger btn-sm" data-remove-line="'+line.localId+'">Remove</button>':'')+'</div>'
         + '<div class="field-row">'
-        +   '<div class="field"><label>Category</label><select data-line-field="categoryId" data-line-id="'+line.localId+'">'+catOptions+'</select></div>'
-        +   '<div class="field"><label>Item Name</label><input type="text" data-line-field="itemName" data-line-id="'+line.localId+'" placeholder="e.g. Whiteboard Markers" value="'+escapeHtml(line.itemName||'')+'"></div>'
+        +   '<div class="field"><label>Category</label><select data-line-field="categoryId" data-line-id="'+line.localId+'" data-cat-select="'+line.localId+'">'+catOptions+'</select></div>'
+        +   '<div class="field"><label>Item</label><select data-line-field="catalogItemId" data-line-id="'+line.localId+'" data-item-select="'+line.localId+'">'+itemOptionsForCategory(line.categoryId||(DB.categories.find(c=>!c.deleted)||{}).id, line.catalogItemId)+'</select></div>'
         + '</div>'
         + '<div class="field-row">'
         +   '<div class="field"><label>Quantity Requested</label><input type="number" min="1" value="'+escapeHtml(line.quantityRequested||'1')+'" data-line-field="quantityRequested" data-line-id="'+line.localId+'"></div>'
@@ -1758,6 +1842,15 @@ function renderNewRequestTab(){
         + '</div>';
     }).join('');
     document.getElementById('add-line-btn').style.display = newRequestLines.length>=1 ? '' : 'none';
+    wrap.querySelectorAll('[data-cat-select]').forEach(sel=>{
+      sel.addEventListener('change', ()=>{
+        const lineId = sel.getAttribute('data-cat-select');
+        const line = newRequestLines.find(l=>l.localId===lineId);
+        if(line){ line.categoryId = sel.value; line.catalogItemId = ''; }
+        const itemSel = wrap.querySelector('[data-item-select="'+lineId+'"]');
+        if(itemSel) itemSel.innerHTML = itemOptionsForCategory(sel.value, '');
+      });
+    });
     wrap.querySelectorAll('[data-remove-line]').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         captureLineValues();
@@ -1779,16 +1872,20 @@ function renderNewRequestTab(){
     const wrap = document.getElementById('req-lines');
     const lineData = newRequestLines.map(line=>{
       const get = (field)=>{ const el = wrap.querySelector('[data-line-id="'+line.localId+'"][data-line-field="'+field+'"]'); return el ? el.value.trim() : ''; };
+      const catalogItemId = get('catalogItemId');
+      const catalogItem = DB.itemCatalog.find(i=>i.id===catalogItemId);
       return {
         categoryId: get('categoryId'),
-        itemName: get('itemName'),
+        catalogItemId,
+        itemName: catalogItem ? catalogItem.name : '',
+        itemCode: catalogItem ? catalogItem.code : '',
         quantityRequested: Number(get('quantityRequested'))||0,
         priority: get('priority'),
         reason: get('reason'),
         description: get('description')
       };
     });
-    if(lineData.some(l=>!l.itemName || !l.quantityRequested)){ toast('Every item needs a name and quantity','error'); return; }
+    if(lineData.some(l=>!l.itemName || !l.quantityRequested)){ toast('Every item needs a selected catalog item and quantity','error'); return; }
     const buildingId = buildingSel.value;
     const roomId = document.getElementById('req-room').value || null;
     const requestDate = document.getElementById('req-date').value;
@@ -1807,7 +1904,7 @@ function renderNewRequestTab(){
         id, requestId, requestNumber, requestDate,
         requestedByEmail: currentUserEmail, requestedByName: (myStaffRecord()||{}).name || currentUserEmail,
         buildingId, roomId,
-        categoryId: l.categoryId, itemTypeId, itemName: l.itemName, quantityRequested: l.quantityRequested,
+        categoryId: l.categoryId, itemTypeId, itemName: l.itemName, itemCode: l.itemCode, catalogItemId: l.catalogItemId, quantityRequested: l.quantityRequested,
         priority: l.priority, reason: l.reason, description: l.description,
         valueClass, procurementPolicy,
         linkedAssetId: null,
@@ -1816,6 +1913,7 @@ function renderNewRequestTab(){
         assignedPurchaserEmail: null, assignedPurchaserName: null,
         purchase: null, receipt: null, assignments: [], maintenanceEvents: [], disposal: null,
         accountantClosed: false, accountantClosedByEmail: null, accountantClosedAt: null, accountantRemark: null,
+        notes: [],
         history: [{ stage:'Requested', action:'created', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:'', timestamp:new Date().toISOString() }],
         createdAt: new Date().toISOString()
       });
@@ -1891,6 +1989,7 @@ async function actOnApproval(r, action, cardEl, skipSave){
     } else {
       r.status = 'purchase_pending';
       if(!r.assignedPurchaserEmail){ r.assignedPurchaserEmail = r.requestedByEmail; r.assignedPurchaserName = r.requestedByName; }
+      generatePurchaseOrder(r);
     }
   }
   if(!skipSave){ await saveDb(); toast(action==='approve'?'Approved':'Rejected', action==='approve'?'success':'error'); renderProcurementPage(); }
@@ -1936,6 +2035,69 @@ function renderAccountantTab(){
 }
 
 /* ---------------- All Requests ---------------- */
+function renderPurchaseOrdersTab(){
+  const panel = document.getElementById('proc-panel');
+  const pos = DB.purchaseOrders.slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  if(!pos.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🧾</div><h3>No purchase orders yet</h3><p>A PO is generated automatically once a request clears approval.</p></div>'; return; }
+  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>PO Number</th><th>Item</th><th>Supplier</th><th>Total</th><th>Status</th><th>Date</th><th></th></tr></thead><tbody>'
+    + pos.map(po=>'<tr><td>'+escapeHtml(po.poNumber)+'</td><td>'+escapeHtml(po.itemName)+'</td><td>'+escapeHtml(po.supplier||'—')+'</td><td>'+formatMoney(po.totalAmount)+'</td><td><span class="badge '+(po.status==='issued'?'badge-approved':'badge-pending')+'">'+escapeHtml(po.status)+'</span></td><td>'+formatDate(po.dateGenerated)+'</td><td><button class="btn btn-outline btn-sm" data-print-po="'+po.id+'">Print</button> <button class="btn btn-outline btn-sm" data-open-po-req="'+po.requestItemId+'">Open Request</button></td></tr>').join('')
+    + '</tbody></table></div>';
+  panel.querySelectorAll('[data-print-po]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openPurchaseOrderReportModal(DB.purchaseOrders.find(p=>p.id===btn.getAttribute('data-print-po'))));
+  });
+  panel.querySelectorAll('[data-open-po-req]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openItemDetailModal(btn.getAttribute('data-open-po-req')));
+  });
+}
+async function buildPurchaseOrderPdf(po){
+  await ensureJsPDFLoaded();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'pt', format:'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 40;
+  let y = margin;
+  try { doc.addImage(LOGO_DATA_URI, 'PNG', margin, y, 90, 45); } catch(e){}
+  doc.setFont('helvetica','bold'); doc.setFontSize(15);
+  doc.text('Taqwa Islamic School', margin+100, y+18);
+  doc.setFont('helvetica','normal'); doc.setFontSize(11);
+  doc.text('Purchase Order — '+po.poNumber, margin+100, y+36);
+  y += 62;
+  doc.setDrawColor(74,125,151); doc.setLineWidth(1.5);
+  doc.line(margin, y, pageW-margin, y);
+  y += 20;
+  const section = (label, value)=>{ y = pdfField(doc, margin, y, pageW-margin*2, label, value); };
+  section('PO Number:', po.poNumber);
+  section('Date:', formatDateDMY(po.dateGenerated));
+  section('Supplier:', po.supplier || '(to be filled at purchase)');
+  section('Item:', po.itemName + (po.itemCode?' ('+po.itemCode+')':''));
+  section('Quantity:', String(po.quantity));
+  section('Unit Rate:', formatMoney(po.unitRate));
+  section('Tax:', formatMoney(po.taxAmount));
+  section('Total Amount:', formatMoney(po.totalAmount));
+  section('Purchase Officer:', po.purchaseOfficerName || '—');
+  section('Status:', po.status==='issued' ? 'Issued (purchase completed)' : 'Draft (awaiting purchase)');
+  return doc;
+}
+async function openPurchaseOrderReportModal(po){
+  if(!po){ toast('Purchase order not found','error'); return; }
+  openModal('Purchase Order — '+po.poNumber,
+    '<div id="pdf-report-status" class="field-hint">Generating…</div><div id="pdf-report-preview" style="margin-top:10px;"></div>',
+    '<button class="btn btn-outline" id="pdf-report-close-btn">Close</button><button class="btn btn-primary" id="pdf-report-download-btn" disabled>Download</button>'
+  );
+  const modalEl = document.querySelector('#modal-overlay .modal');
+  if(modalEl) modalEl.style.maxWidth = '820px';
+  document.getElementById('pdf-report-close-btn').addEventListener('click', closeModal);
+  try{
+    const doc = await buildPurchaseOrderPdf(po);
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    document.getElementById('pdf-report-status').textContent = po.poNumber;
+    document.getElementById('pdf-report-preview').innerHTML = '<iframe src="'+url+'" style="width:100%; height:60vh; border:1px solid var(--color-border); border-radius:6px;"></iframe>';
+    const dl = document.getElementById('pdf-report-download-btn');
+    dl.disabled = false;
+    dl.onclick = ()=>{ const a=document.createElement('a'); a.href=url; a.download=po.poNumber+'.pdf'; document.body.appendChild(a); a.click(); a.remove(); };
+  }catch(e){ document.getElementById('pdf-report-status').textContent = 'Could not generate: '+e.message; }
+}
 function renderAllRequestsTab(){
   const panel = document.getElementById('proc-panel');
   const list = DB.requestItems.filter(r=>!r.deleted).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
@@ -1956,10 +2118,53 @@ function openItemDetailModal(id){
   if(!r){ toast('Item not found','error'); return; }
   renderItemDetailModalBody(r);
 }
+/* ============================================================
+   Visual Procurement Timeline stepper — badges stay as secondary info
+   ============================================================ */
+function procurementSteps(r){
+  const pattern = itemPattern(r);
+  const steps = [{ key:'created', label:'Request Created' }];
+  const chain = r.approvalChain || requiredApprovalChain(r);
+  chain.forEach(role=> steps.push({ key:'approve_'+role, label: roleKeyLabel(role)+' Approval' }));
+  steps.push({ key:'purchase', label:'Purchase' });
+  if(pattern!=='service'){ steps.push({ key:'receive', label:'Receiving' }); }
+  if(pattern==='asset'){ steps.push({ key:'assign', label:'Assignment' }); }
+  steps.push({ key:'closed', label:'Closed' });
+  return steps;
+}
+function currentStepIndex(r, steps){
+  if(r.status==='rejected') return steps.findIndex(s=>s.key.startsWith('approve_'))>=0 ? 0 : 0;
+  if(r.status==='pending_approval'){
+    const role = currentApprovalRole(r);
+    const idx = steps.findIndex(s=>s.key==='approve_'+role);
+    return idx>=0 ? idx : 1;
+  }
+  if(r.status==='purchase_pending') return steps.findIndex(s=>s.key==='purchase');
+  if(r.status==='purchased') return steps.findIndex(s=>s.key==='purchase')+1;
+  if(r.status==='received') return steps.findIndex(s=>s.key==='receive')+1;
+  if(r.status==='assigned' || r.status==='active') return steps.length-1;
+  if(r.status==='completed' || r.status==='archived'){
+    return r.accountantClosed ? steps.length-1 : steps.length-2;
+  }
+  return 0;
+}
+function renderProcurementStepper(r){
+  if(r.status==='rejected'){
+    return '<div class="field-hint" style="margin-bottom:14px; color:var(--color-danger);">⊘ This request was rejected and the workflow stopped.</div>';
+  }
+  const steps = procurementSteps(r);
+  const curIdx = currentStepIndex(r, steps);
+  return '<div class="proc-stepper">' + steps.map((s,i)=>{
+    const state = i<curIdx ? 'done' : (i===curIdx ? 'current' : 'todo');
+    const icon = state==='done' ? '✓' : (state==='current' ? '●' : '○');
+    return '<div class="proc-step '+state+'"><span class="proc-step-icon">'+icon+'</span><span class="proc-step-label">'+escapeHtml(s.label)+'</span></div>';
+  }).join('<div class="proc-step-connector"></div>') + '</div>';
+}
 function renderItemDetailModalBody(r){
   const pattern = itemPattern(r);
   let body =
-    '<div class="card-badge-row" style="margin-bottom:10px;">'+itemStatusBadge(r.status)+valueClassBadge(r.valueClass)+priorityBadge(r.priority)+(r.accountantClosed?'<span class="badge badge-approved">Accountant Closed</span>':'')+'</div>'
+    renderProcurementStepper(r)
+    + '<div class="card-badge-row" style="margin-bottom:10px;">'+itemStatusBadge(r.status)+valueClassBadge(r.valueClass)+priorityBadge(r.priority)+(r.accountantClosed?'<span class="badge badge-approved">Accountant Closed</span>':'')+'</div>'
     + '<div class="spec-grid" style="margin-bottom:16px;">'
     +   '<div class="spec-item"><label>Request Number</label><div class="val">'+escapeHtml(r.requestNumber)+'</div></div>'
     +   '<div class="spec-item"><label>Category</label><div class="val">'+escapeHtml(catName(r.categoryId))+'</div></div>'
@@ -2013,6 +2218,14 @@ function renderItemDetailModalBody(r){
       + (r.disposal.documentFileId ? '<div class="field-hint" style="margin-bottom:12px;">📎 <a href="'+driveDownloadUrl(r.disposal.documentFileId)+'" target="_blank" rel="noopener">'+escapeHtml(r.disposal.documentFileName||'View document')+'</a></div>' : '');
   }
 
+  body += '<div class="plain-divider"></div><h3 style="margin-bottom:10px;">Notesheet</h3>'
+    + '<div class="notesheet-thread">'
+    + ((r.notes && r.notes.length) ? r.notes.map(n=>
+        '<div class="notesheet-note"><div class="notesheet-note-head"><span>'+escapeHtml(n.authorName)+' <span class="notesheet-note-meta">('+escapeHtml(n.designation)+')</span></span><span class="notesheet-note-meta">'+formatDateTime(n.timestamp)+'</span></div><div class="notesheet-note-body">'+escapeHtml(n.comment)+'</div></div>'
+      ).join('') : '<div class="field-hint">No notes yet — add the first comment below.</div>')
+    + '</div>'
+    + (isSignedIn() && !r.deleted ? ('<div class="field"><label>Add Comment</label><textarea id="notesheet-new-comment" placeholder="Type a note for others to see…"></textarea></div><button class="btn btn-outline btn-sm" id="notesheet-add-btn">Add Comment</button>') : '');
+
   body += '<div class="plain-divider"></div><h3 style="margin-bottom:10px;">Permanent Timeline</h3><ul class="timeline">'
     + r.history.map(h=>'<li><div class="t-title">'+escapeHtml(h.stage)+' — '+escapeHtml(h.action)+'</div><div class="t-meta">'+escapeHtml(h.actorName||h.actorEmail||'—')+' · '+formatDateTime(h.timestamp)+'</div>'+(h.remark?'<div class="t-remark">'+escapeHtml(h.remark)+'</div>':'')+'</li>').join('')
     + '</ul>';
@@ -2022,12 +2235,25 @@ function renderItemDetailModalBody(r){
   }
   body += '<div id="item-action-box"></div>';
 
+  const linkedPo = poForRequestItem(r.id);
   const footerBtns = '<button class="btn btn-outline" id="modal-done-btn">Close</button>'
     + '<button class="btn btn-outline" id="modal-print-btn">Print / Export Report</button>'
+    + (linkedPo ? '<button class="btn btn-outline" id="modal-print-po-btn">Print PO ('+escapeHtml(linkedPo.poNumber)+')</button>' : '')
     + (isAdmin() && !r.deleted ? '<button class="btn btn-danger" id="modal-delete-item-btn">Delete Request</button>' : '');
   openModal(escapeHtml(r.itemName), body, footerBtns);
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   document.getElementById('modal-print-btn').addEventListener('click', ()=>openRequestItemReportModal(r));
+  const poBtn = document.getElementById('modal-print-po-btn');
+  if(poBtn) poBtn.addEventListener('click', ()=>openPurchaseOrderReportModal(linkedPo));
+  const noteBtn = document.getElementById('notesheet-add-btn');
+  if(noteBtn) noteBtn.addEventListener('click', async ()=>{
+    const textEl = document.getElementById('notesheet-new-comment');
+    const comment = textEl.value.trim();
+    if(!comment){ toast('Write a comment first','error'); return; }
+    if(!Array.isArray(r.notes)) r.notes = [];
+    r.notes.push({ id: nextId('note'), authorEmail: currentUserEmail, authorName: (myStaffRecord()||{}).name||currentUserEmail, designation: myRoleLabel(), comment, timestamp: new Date().toISOString() });
+    await saveDb(); toast('Comment added','success'); openItemDetailModal(r.id);
+  });
   const delBtn = document.getElementById('modal-delete-item-btn');
   if(delBtn) delBtn.addEventListener('click', async ()=>{
     if(!promptAndArchive('requestItem', r, r.itemName+' ('+r.requestNumber+')')) return;
@@ -2063,13 +2289,13 @@ function renderItemActionBox(r){
       + '<div class="field-row"><div class="field"><label>Supplier / Shop</label><input type="text" id="pe-supplier"></div><div class="field"><label>Invoice Number (optional)</label><input type="text" id="pe-invoice"></div></div>'
       + '<div class="field-row"><div class="field"><label>Invoice Date</label><input type="date" id="pe-invoice-date"></div><div class="field"><label>Purchase Date</label><input type="date" id="pe-purchase-date" value="'+new Date().toISOString().slice(0,10)+'"></div></div>'
       + '<div class="field-row"><div class="field"><label>Quantity Purchased</label><input type="number" id="pe-qty" value="'+r.quantityRequested+'"></div><div class="field"><label>Unit Price (₹)</label><input type="number" id="pe-unit-price" value="0"></div></div>'
-      + '<div class="field"><label>Total Amount (₹, auto)</label><input type="number" id="pe-total" value="0" readonly></div>'
+      + '<div class="field-row"><div class="field"><label>Tax Amount (₹, optional)</label><input type="number" id="pe-tax" value="0"></div><div class="field"><label>Total Amount (₹, auto)</label><input type="number" id="pe-total" value="0" readonly></div></div>'
       + '<div class="field"><label>Bill / Receipt Photo or PDF (optional)</label><input type="file" id="pe-bill-file" accept="image/*,.pdf"></div>'
       + '<div class="field"><label>Remarks</label><textarea id="pe-remarks"></textarea></div>'
       + '<button class="btn btn-primary" id="pe-submit-btn">Record Purchase</button>';
-    const qtyEl = document.getElementById('pe-qty'), priceEl = document.getElementById('pe-unit-price'), totalEl = document.getElementById('pe-total');
-    function recalc(){ totalEl.value = ((Number(qtyEl.value)||0)*(Number(priceEl.value)||0)).toFixed(2); }
-    qtyEl.addEventListener('input', recalc); priceEl.addEventListener('input', recalc);
+    const qtyEl = document.getElementById('pe-qty'), priceEl = document.getElementById('pe-unit-price'), totalEl = document.getElementById('pe-total'), taxEl = document.getElementById('pe-tax');
+    function recalc(){ totalEl.value = ((Number(qtyEl.value)||0)*(Number(priceEl.value)||0)+(Number(taxEl.value)||0)).toFixed(2); }
+    qtyEl.addEventListener('input', recalc); priceEl.addEventListener('input', recalc); taxEl.addEventListener('input', recalc);
     document.getElementById('pe-submit-btn').addEventListener('click', async ()=>{
       const submitBtn = document.getElementById('pe-submit-btn');
       const fileInput = document.getElementById('pe-bill-file');
@@ -2088,6 +2314,7 @@ function renderItemActionBox(r){
         purchaseDate: document.getElementById('pe-purchase-date').value,
         quantityPurchased: Number(qtyEl.value)||0,
         unitPrice: Number(priceEl.value)||0,
+        taxAmount: Number(taxEl.value)||0,
         totalAmount: Number(totalEl.value)||0,
         billFileId, billFileName,
         remarks: document.getElementById('pe-remarks').value.trim(),
@@ -2095,6 +2322,7 @@ function renderItemActionBox(r){
       };
       r.history.push({ stage:'Purchase Recorded', action:'recorded', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark: r.purchase.remarks, timestamp:new Date().toISOString() });
       r.status = (pattern==='service') ? 'purchased' : 'purchased';
+      updatePurchaseOrderFromPurchase(r);
       await saveDb(); toast('Purchase recorded','success'); openItemDetailModal(r.id);
     });
     return;
@@ -2260,6 +2488,7 @@ async function actOnApprovalById(r, action, remark){
     } else {
       r.status = 'purchase_pending';
       if(!r.assignedPurchaserEmail){ r.assignedPurchaserEmail = r.requestedByEmail; r.assignedPurchaserName = r.requestedByName; }
+      generatePurchaseOrder(r);
     }
   }
   await saveDb();
@@ -2334,18 +2563,95 @@ function renderManageStaffModalBody(){
 function openManageBuildingsModal(){ renderManageBuildingsModalBody(); }
 
 /* ============================================================
+   Manage Item Catalog (Admin only) — locks item terminology
+   ============================================================ */
+function categoryCodePrefix(cat){
+  const stop = ['and','of','the','for','&'];
+  const words = (cat.name||'').replace(/[^a-zA-Z\s]/g,'').split(/\s+/).filter(w=>w && !stop.includes(w.toLowerCase()));
+  let letters = words.map(w=>w[0]).join('').toUpperCase();
+  if(letters.length < 3) letters = (words[0]||'ITM').slice(0,3).toUpperCase();
+  return letters.slice(0,3);
+}
+function nextItemCode(categoryId){
+  const cat = DB.categories.find(c=>c.id===categoryId);
+  const prefix = cat ? categoryCodePrefix(cat) : 'ITM';
+  const existing = DB.itemCatalog.filter(i=>i.categoryId===categoryId && i.code && i.code.startsWith(prefix+'-'));
+  let maxNum = 0;
+  existing.forEach(i=>{ const n = parseInt((i.code.split('-')[1]||'0'),10); if(n>maxNum) maxNum = n; });
+  return prefix+'-'+String(maxNum+1).padStart(3,'0');
+}
+function openManageItemCatalogModal(){ renderManageItemCatalogModalBody(); }
+function renderManageItemCatalogModalBody(){
+  const depts = DB.departments.filter(d=>!d.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
+  const rows = depts.map(d=>{
+    const cats = DB.categories.filter(c=>c.departmentId===d.id && !c.deleted);
+    if(!cats.length) return '';
+    return '<div style="margin-bottom:14px;"><strong>'+escapeHtml(d.name)+'</strong>'
+      + cats.map(c=>{
+          const items = DB.itemCatalog.filter(i=>i.categoryId===c.id && !i.deleted).sort((a,b)=>a.code.localeCompare(b.code));
+          return '<div style="border:1px solid var(--color-border); border-radius:10px; padding:10px 12px; margin-top:8px;">'
+            + '<div style="font-size:12.5px; font-weight:700; color:var(--color-ink-soft); margin-bottom:6px;">'+escapeHtml(c.name)+'</div>'
+            + (items.length ? items.map(i=>
+                '<div class="cat-policy-row" style="margin-bottom:6px;">'
+                + '<div class="cat-policy-name"><span class="badge badge-status">'+escapeHtml(i.code)+'</span> '+escapeHtml(i.name)+(i.description?'<br><small style="color:var(--color-ink-faint);">'+escapeHtml(i.description)+'</small>':'')+'</div>'
+                + '<div class="cat-policy-controls"><button class="btn btn-outline btn-sm" data-edit-catalog="'+i.id+'">Edit</button><button class="btn btn-danger btn-sm" data-del-catalog="'+i.id+'">Delete</button></div>'
+                + '</div>'
+              ).join('') : '<div class="field-hint">No items yet in this category.</div>')
+            + '<div style="display:flex; gap:6px; margin-top:6px;">'
+            +   '<input type="text" placeholder="Item name" data-newitem-name="'+c.id+'" style="flex:1; padding:6px 9px; border:1.5px solid var(--color-border); border-radius:7px; font-size:12.5px;">'
+            +   '<input type="text" placeholder="Description (optional)" data-newitem-desc="'+c.id+'" style="flex:1; padding:6px 9px; border:1.5px solid var(--color-border); border-radius:7px; font-size:12.5px;">'
+            +   '<button class="btn btn-outline btn-sm" data-add-catalog="'+c.id+'">+ Add</button>'
+            + '</div>'
+            + '</div>';
+        }).join('')
+      + '</div>';
+  }).join('');
+
+  openModal('Manage Item Catalog', rows || '<div class="empty-state"><h3>No categories yet</h3></div>', '<button class="btn btn-outline" id="modal-done-btn">Done</button>');
+  document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+  document.querySelectorAll('[data-add-catalog]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const categoryId = btn.getAttribute('data-add-catalog');
+      const nameInput = document.querySelector('[data-newitem-name="'+categoryId+'"]');
+      const descInput = document.querySelector('[data-newitem-desc="'+categoryId+'"]');
+      const name = nameInput.value.trim();
+      if(!name){ toast('Item name required','error'); return; }
+      DB.itemCatalog.push({ id: nextId('ic'), categoryId, code: nextItemCode(categoryId), name, description: descInput.value.trim() });
+      await saveDb(); toast('Item added to catalog','success'); renderManageItemCatalogModalBody();
+    });
+  });
+  document.querySelectorAll('[data-edit-catalog]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const ic = DB.itemCatalog.find(x=>x.id===btn.getAttribute('data-edit-catalog'));
+      const name = prompt('Item name:', ic.name); if(name===null) return;
+      const desc = prompt('Description:', ic.description||''); if(desc===null) return;
+      ic.name = name.trim()||ic.name; ic.description = desc.trim();
+      await saveDb(); toast('Updated','success'); renderManageItemCatalogModalBody();
+    });
+  });
+  document.querySelectorAll('[data-del-catalog]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const ic = DB.itemCatalog.find(x=>x.id===btn.getAttribute('data-del-catalog'));
+      if(!promptAndArchive('itemCatalog', ic, ic.code+' '+ic.name)) return;
+      await saveDb(); toast('Deleted (archived)','success'); renderManageItemCatalogModalBody();
+    });
+  });
+}
+
+
+/* ============================================================
    Archive — Admin only. Everything ever soft-deleted, restorable.
    ============================================================ */
 function findEntityRecord(entityType, id){
   const map = {
     department: DB.departments, category: DB.categories, inventoryItem: DB.inventoryItems,
-    building: DB.buildings, room: DB.rooms, requestItem: DB.requestItems
+    building: DB.buildings, room: DB.rooms, requestItem: DB.requestItems, itemCatalog: DB.itemCatalog
   };
   const arr = map[entityType];
   return arr ? arr.find(x=>x.id===id) : null;
 }
 function entityTypeLabel(t){
-  return { department:'Department', category:'Category', inventoryItem:'Inventory Item', building:'Building', room:'Room', requestItem:'Purchase Request' }[t] || t;
+  return { department:'Department', category:'Category', inventoryItem:'Inventory Item', building:'Building', room:'Room', requestItem:'Purchase Request', itemCatalog:'Catalog Item' }[t] || t;
 }
 /* ============================================================
    Printable PDF documents — Taqwa letterhead, preview before download
