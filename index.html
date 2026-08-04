@@ -144,14 +144,60 @@ button{ font-family:inherit; cursor:pointer; }
 .page-subtitle-inline{ font-size:13px; color:var(--color-ink-faint); margin-bottom:16px; }
 
 /* ---- Signed-out banner landing page ---- */
-.landing-banner{ position:relative; width:100%; min-height:440px; background-size:cover; background-position:center; }
-.landing-banner-overlay{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; }
-.landing-signin-card{ background:rgba(255,255,255,0.95); backdrop-filter:blur(4px); border-radius:var(--radius-lg); box-shadow:var(--shadow); padding:26px 34px; text-align:center; max-width:400px; }
-.landing-signin-card h1{ font-size:19px; margin-bottom:6px; }
-.landing-signin-card p{ font-size:12.5px; color:var(--color-ink-soft); margin:0 0 16px; line-height:1.5; }
-.landing-signin-btn{ display:inline-flex; align-items:center; gap:10px; background:#fff; border:1.5px solid var(--color-border); border-radius:8px; padding:10px 20px; font-size:14px; font-weight:600; color:var(--color-ink); cursor:pointer; transition:.15s; }
+.landing-banner{ position:relative; width:100%; min-height:520px; background-size:cover; background-position:center; display:flex; align-items:center; }
+.landing-white-overlay{ position:absolute; inset:0; background:rgba(255,255,255,0.8); }
+.landing-hero-split{ position:relative; z-index:1; display:grid; grid-template-columns:1.3fr 1fr; gap:40px; align-items:center; padding:48px 22px; }
+.landing-hero-left h1{ font-size:34px; color:var(--color-ink); margin-bottom:6px; line-height:1.2; }
+.landing-hero-left h2{ font-size:19px; color:var(--color-primary-dark); font-weight:600; margin-bottom:14px; font-family:var(--font-body); }
+.landing-hero-left p{ font-size:14.5px; color:var(--color-ink-soft); max-width:480px; margin-bottom:22px; line-height:1.6; }
+.landing-feature-row{ display:flex; flex-wrap:wrap; gap:10px; }
+.landing-feature-badge{ display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.85); border:1px solid var(--color-border); border-radius:10px; padding:9px 13px; font-size:12px; font-weight:600; color:var(--color-ink); box-shadow:var(--shadow-sm); }
+.landing-feature-icon{ font-size:16px; }
+.landing-hero-right{ display:flex; justify-content:center; }
+.landing-signin-card{ background:rgba(255,255,255,0.97); border-radius:var(--radius-lg); box-shadow:var(--shadow); padding:30px 32px; text-align:center; max-width:360px; width:100%; }
+.landing-signin-card h3{ font-size:20px; margin-bottom:6px; }
+.landing-signin-sub{ font-size:12.5px; color:var(--color-ink-soft); margin:0 0 18px; line-height:1.5; }
+.landing-signin-btn{ width:100%; display:inline-flex; align-items:center; justify-content:center; gap:10px; background:#fff; border:1.5px solid var(--color-border); border-radius:8px; padding:11px 20px; font-size:14px; font-weight:600; color:var(--color-ink); cursor:pointer; transition:border-color 150ms ease, box-shadow 150ms ease; }
 .landing-signin-btn:hover{ border-color:var(--color-primary); box-shadow:0 2px 8px rgba(0,0,0,0.08); }
-@media (max-width:640px){ .landing-banner{ min-height:340px; } .landing-signin-card{ padding:20px 22px; max-width:88%; } }
+.landing-trust-list{ list-style:none; margin:18px 0 0; padding:14px 0 0; border-top:1px solid var(--color-border); text-align:left; display:flex; flex-direction:column; gap:9px; }
+.landing-trust-list li{ font-size:12px; color:var(--color-ink-soft); }
+@media (max-width:900px){ .landing-hero-split{ grid-template-columns:1fr; } .landing-hero-right{ justify-content:flex-start; } }
+@media (max-width:640px){ .landing-banner{ min-height:auto; } .landing-hero-left h1{ font-size:26px; } }
+
+/* ---- Workflow diagram ---- */
+.landing-workflow-section{ background:var(--color-surface); border-bottom:1px solid var(--color-border); padding:34px 0 30px; }
+.landing-section-heading{ text-align:center; font-size:19px; font-weight:700; color:var(--color-ink); position:relative; margin-bottom:26px; }
+.landing-section-heading::after{ content:''; display:block; width:44px; height:3px; background:var(--color-primary); margin:8px auto 0; border-radius:2px; }
+.workflow-row{ display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:4px; }
+.workflow-step{ display:flex; flex-direction:column; align-items:center; gap:8px; width:88px; text-align:center; }
+.workflow-step-icon{ width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:20px; }
+.workflow-step-label{ font-size:11px; font-weight:600; color:var(--color-ink-soft); line-height:1.3; }
+.workflow-arrow{ color:var(--color-ink-faint); font-size:16px; padding:0 2px; }
+.accent-dashboard{ background:var(--color-primary-light); }
+.accent-inventory{ background:var(--accent-inventory-soft); }
+.accent-procurement{ background:var(--accent-procurement-soft); }
+.accent-reports{ background:var(--accent-reports-soft); }
+.accent-admin{ background:var(--accent-admin-soft); }
+@media (max-width:820px){ .workflow-arrow{ display:none; } .workflow-row{ gap:16px; } }
+
+/* ---- Landing stats ---- */
+.landing-stats-section{ padding:30px 22px 46px; }
+.landing-stats-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:14px; }
+.landing-stat-card{ background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:16px 18px; display:flex; align-items:center; gap:14px; transition:box-shadow 150ms ease, transform 150ms ease; }
+.landing-stat-card:hover{ box-shadow:var(--shadow); transform:translateY(-1px); }
+.landing-stat-icon{ width:42px; height:42px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:19px; flex:none; }
+.landing-stat-num{ font-size:24px; font-weight:700; color:var(--color-ink); letter-spacing:-.01em; }
+.landing-stat-lbl{ font-size:11.5px; color:var(--color-ink-faint); margin-top:1px; }
+
+/* ---- Footer columns ---- */
+.footer-cols{ display:grid; grid-template-columns:repeat(4,1fr); gap:18px; padding:18px 22px; font-size:12px; color:var(--color-ink-faint); line-height:1.6; }
+.footer-col strong{ color:var(--color-ink-soft); }
+@media (max-width:820px){ .footer-cols{ grid-template-columns:repeat(2,1fr); } }
+@media (max-width:520px){ .footer-cols{ grid-template-columns:1fr; text-align:center; } }
+
+/* ---- Static info pages (About/Help/Contact) ---- */
+.static-page-body{ max-width:680px; }
+.static-page-body p{ font-size:14px; color:var(--color-ink-soft); line-height:1.7; margin-bottom:14px; }
 
 
 /* ---- Compact dashboard stat cards ---- */
@@ -1015,20 +1061,23 @@ function renderTopbar(){
   const slot = document.getElementById('topbar-slot');
   const route = location.hash || '#/';
   const navItem = (href, label, module)=>'<a href="'+href+'" data-module="'+(module||'')+'" class="'+(route.startsWith(href) && href!=='#/' || route===href ? 'active':'')+'">'+label+'</a>';
+  const navLinks = isSignedIn()
+    ? navItem('#/', 'Home', 'dashboard') + navItem('#/inventory','Inventory','inventory') + navItem('#/procurement','Procurement','procurement')
+    : navItem('#/', 'Home', 'dashboard') + navItem('#/about','About Portal','') + navItem('#/help','Help','') + navItem('#/contact','Contact','');
   slot.innerHTML =
     '<div class="brand-band"><div class="wrap brand-band-inner">'
     + '<a href="#/" class="brand">'+'<img class="brand-logo-img" src="'+LOGO_DATA_URI+'" alt="Taqwa Group of Schools">'
     +   '<span class="brand-divider"></span><span class="brand-sub">Inventory &amp; Notesheet Portal</span></a>'
     + '<div class="header-right">'
-    +   '<div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
-    +     '<input id="global-search" placeholder="Search…" autocomplete="off"><div id="search-results-slot"></div></div>'
+    +   (isSignedIn() ? ('<div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
+    +     '<input id="global-search" placeholder="Search…" autocomplete="off"><div id="search-results-slot"></div></div>') : '')
     +   (isSignedIn()
           ? '<div class="auth-box"><span class="role-chip">'+escapeHtml(myRoleLabel())+'</span><button class="btn btn-ghost-dark btn-sm" id="logout-btn">Sign out</button></div>'
           : '')
     + '</div>'
     + '</div></div>'
     + '<div class="nav-ribbon"><div class="wrap nav-ribbon-inner">'
-    +   navItem('#/', 'Home', 'dashboard') + navItem('#/inventory','Inventory','inventory') + navItem('#/procurement','Procurement','procurement')
+    +   navLinks
     + '</div></div>';
   const loginBtn = document.getElementById('login-btn'); if(loginBtn) loginBtn.addEventListener('click', login);
   const logoutBtn = document.getElementById('logout-btn'); if(logoutBtn) logoutBtn.addEventListener('click', logout);
@@ -1054,10 +1103,37 @@ function renderSearchResults(q){
 function renderFooter(){
   const slot = document.getElementById('footer-slot');
   const year = new Date().getFullYear();
-  slot.innerHTML = '<div class="footer">'
-    + '<span>Taqwa Islamic School</span><span class="footer-sep">·</span><span>v1.0</span><span class="footer-sep">·</span><span>taqwa.allahabad@gmail.com</span><span class="footer-sep">·</span><span>&copy; '+year+'</span>'
+  slot.innerHTML = '<div class="footer-cols wrap">'
+    + '<div class="footer-col"><strong>&copy; '+year+' Taqwa Islamic School</strong><br>All rights reserved.</div>'
+    + '<div class="footer-col">+91 93351 45818, 63881 05929</div>'
+    + '<div class="footer-col">taqwa.allahabad@gmail.com<br>A-506, GTB Nagar, Kareli, Prayagraj (Allahabad)</div>'
+    + '<div class="footer-col">Version 1.0.0<br>Inventory &amp; Notesheet Portal</div>'
     + '</div>';
 }
+function renderStaticInfoPage(title, bodyHtml){
+  const app = document.getElementById('app');
+  app.innerHTML = '<div class="content wrap"><div class="page-title"><h2>'+title+'</h2></div><div class="static-page-body">'+bodyHtml+'</div></div>';
+}
+function renderAboutPage(){
+  renderStaticInfoPage('About the Portal',
+    '<p>The Taqwa Islamic School Inventory &amp; Notesheet Portal brings inventory management, procurement, notesheet approvals and reporting into one place for school staff.</p>'
+    + '<p>Purchase requests move through a proper approval circulation — Accountant, Coordinator, Principal and Chairman — with a full, permanent record of every decision. Once approved, purchases are tracked from Purchase Order through Receiving, and stock updates automatically.</p>'
+    + '<p>Access is limited to authorised school staff, signing in with their Google account.</p>');
+}
+function renderHelpPage(){
+  renderStaticInfoPage('Help',
+    '<p><strong>Signing in:</strong> use the "Sign in with Google" button on the homepage with your authorised school Gmail account. If you can\'t sign in, contact the Admin to be added as staff.</p>'
+    + '<p><strong>Raising a purchase request:</strong> once signed in, go to Procurement → New Request, choose a category and item from the catalog, fill in the quantity and reason, and submit.</p>'
+    + '<p><strong>Checking on a request:</strong> Procurement → All Requests shows every request and its current status and history.</p>'
+    + '<p>For anything else, use the Contact details below.</p>');
+}
+function renderContactPage(){
+  renderStaticInfoPage('Contact',
+    '<p><strong>Taqwa Islamic School</strong><br>A-506, GTB Nagar, Kareli, Prayagraj (Allahabad)</p>'
+    + '<p><strong>Phone:</strong> +91 93351 45818, 63881 05929</p>'
+    + '<p><strong>Email:</strong> taqwa.allahabad@gmail.com</p>');
+}
+
 
 /* ============================================================
    Modal
@@ -1087,6 +1163,9 @@ function renderRoute(){
   const hash = location.hash || '#/';
   const parts = hash.replace('#/','').split('/').filter(Boolean);
   if(!parts.length) return renderHomePage();
+  if(parts[0]==='about') return renderAboutPage();
+  if(parts[0]==='help') return renderHelpPage();
+  if(parts[0]==='contact') return renderContactPage();
   if(parts[0]==='inventory' && parts[1]==='item' && parts[2]) return renderInventoryItemDetailPage(parts[2]);
   if(parts[0]==='inventory' && parts[1]==='category' && parts[2]) return renderCategoryPage(parts[2]);
   if(parts[0]==='inventory' && !parts[1]) return renderInventoryPage();
@@ -1294,24 +1373,93 @@ function renderHBarList(data){
 }
 
 
+function animateLandingCounters(){
+  document.querySelectorAll('.landing-stat-num').forEach(el=>{
+    const target = Number(el.getAttribute('data-count'))||0;
+    const duration = 900;
+    const start = performance.now();
+    function tick(now){
+      const progress = Math.min(1, (now-start)/duration);
+      const eased = 1 - Math.pow(1-progress, 3);
+      el.textContent = Math.round(target*eased).toLocaleString('en-IN');
+      if(progress < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+}
 function renderHomePage(){
   const app = document.getElementById('app');
   if(!isSignedIn()){
+    const totalItemsCount = DB.inventoryItems.filter(i=>!i.deleted).length;
+    const catCount = DB.categories.filter(c=>!c.deleted).length;
+    const bldgCount = DB.buildings.filter(b=>!b.deleted).length;
+    const processedCount = DB.requestItems.filter(r=>!r.deleted).length;
+
+    const googleIcon = '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+
+    const featureBadges = [
+      ['📦','Inventory','Management'],
+      ['🛒','Procurement','Workflow'],
+      ['📝','Notesheet','Approval'],
+      ['📊','Reports &','Analytics']
+    ].map(f=>'<div class="landing-feature-badge"><span class="landing-feature-icon">'+f[0]+'</span><span>'+f[1]+'<br>'+f[2]+'</span></div>').join('');
+
+    const workflowSteps = [
+      ['📋','Need','Identified','admin'],
+      ['📝','Purchase','Request','procurement'],
+      ['📄','Notesheet','Created','reports'],
+      ['✅','Approval','Process','inventory'],
+      ['🛒','Purchase','Order','dashboard'],
+      ['📦','Receiving &','Verification','inventory'],
+      ['🏠','Inventory','Updated','procurement'],
+      ['👥','Department','Issue','reports']
+    ];
+    const workflowHtml = workflowSteps.map((s,i)=>
+      '<div class="workflow-step"><div class="workflow-step-icon accent-'+s[3]+'">'+s[0]+'</div><div class="workflow-step-label">'+s[1]+'<br>'+s[2]+'</div></div>'
+      + (i<workflowSteps.length-1 ? '<div class="workflow-arrow">→</div>' : '')
+    ).join('');
+
     app.innerHTML =
       '<div class="landing-banner" style="background-image:url(\''+BANNER_DATA_URI+'\');">'
-      + '<div class="landing-banner-overlay">'
-      +   '<div class="landing-signin-card">'
-      +     '<h1>Taqwa Islamic School</h1>'
-      +     '<p>Inventory &amp; Procurement Portal — request, approve, purchase, receive, and track every item, from need to completion.</p>'
-      +     '<button class="landing-signin-btn" id="landing-login-btn">'
-      +       '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>'
-      +       '<span>Sign in with Google</span>'
-      +     '</button>'
+      + '<div class="landing-white-overlay"></div>'
+      + '<div class="wrap landing-hero-split">'
+      +   '<div class="landing-hero-left">'
+      +     '<h1>Inventory &amp; Procurement Portal</h1>'
+      +     '<h2>Taqwa Islamic School</h2>'
+      +     '<p>Manage inventory, procurement, notesheets and approvals from one integrated platform.</p>'
+      +     '<div class="landing-feature-row">'+featureBadges+'</div>'
+      +   '</div>'
+      +   '<div class="landing-hero-right">'
+      +     '<div class="landing-signin-card">'
+      +       '<h3>Welcome Back!</h3>'
+      +       '<p class="landing-signin-sub">Secure login for authorised school staff</p>'
+      +       '<button class="landing-signin-btn" id="landing-login-btn">'+googleIcon+'<span>Sign in with Google</span></button>'
+      +       '<ul class="landing-trust-list">'
+      +         '<li>🛡️ Secure Google Authentication</li>'
+      +         '<li>👤 School Staff Access Only</li>'
+      +         '<li>🔒 Permanent Audit Trail</li>'
+      +       '</ul>'
+      +     '</div>'
       +   '</div>'
       + '</div>'
+      + '</div>'
+      + '<div class="landing-workflow-section">'
+      +   '<div class="wrap">'
+      +     '<div class="landing-section-heading">How Procurement Works</div>'
+      +     '<div class="workflow-row">'+workflowHtml+'</div>'
+      +   '</div>'
+      + '</div>'
+      + '<div class="landing-stats-section wrap">'
+      +   '<div class="landing-stats-grid">'
+      +     '<div class="landing-stat-card"><div class="landing-stat-icon accent-inventory">📦</div><div><div class="landing-stat-num" data-count="'+totalItemsCount+'">0</div><div class="landing-stat-lbl">Inventory Items</div></div></div>'
+      +     '<div class="landing-stat-card"><div class="landing-stat-icon accent-procurement">🗂️</div><div><div class="landing-stat-num" data-count="'+catCount+'">0</div><div class="landing-stat-lbl">Categories</div></div></div>'
+      +     '<div class="landing-stat-card"><div class="landing-stat-icon accent-dashboard">🏢</div><div><div class="landing-stat-num" data-count="'+bldgCount+'">0</div><div class="landing-stat-lbl">Buildings</div></div></div>'
+      +     '<div class="landing-stat-card"><div class="landing-stat-icon accent-reports">📄</div><div><div class="landing-stat-num" data-count="'+processedCount+'">0</div><div class="landing-stat-lbl">Purchase Requests Processed</div></div></div>'
+      +   '</div>'
       + '</div>';
     const landingBtn = document.getElementById('landing-login-btn');
     if(landingBtn) landingBtn.addEventListener('click', login);
+    animateLandingCounters();
     return;
   }
   const totalItems = DB.inventoryItems.length;
