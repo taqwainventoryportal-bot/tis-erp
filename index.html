@@ -295,6 +295,15 @@ tbody tr:hover{ background:#F8FAFC; }
 
 /* ---- Timeline ---- */
 /* ---- Procurement visual stepper ---- */
+.circ-status{ display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; padding:8px 14px; border-radius:8px; margin-bottom:12px; }
+.circ-status-current{ background:var(--color-primary-light); color:var(--color-primary-dark); }
+.circ-status-declined{ background:var(--color-danger-soft); color:var(--color-danger); }
+.circ-trail{ display:flex; flex-direction:column; gap:6px; margin-bottom:16px; }
+.circ-trail-row{ display:flex; align-items:center; gap:8px; font-size:12.5px; flex-wrap:wrap; background:var(--color-surface-2); border-radius:8px; padding:7px 11px; }
+.circ-trail-from{ font-weight:700; color:var(--color-ink); }
+.circ-trail-arrow{ color:var(--color-ink-faint); }
+.circ-trail-action{ color:var(--color-ink-soft); }
+.circ-trail-comment{ color:var(--color-ink-faint); font-style:italic; }
 .proc-stepper{ display:flex; align-items:center; flex-wrap:wrap; gap:0; margin-bottom:16px; }
 .proc-step{ display:flex; flex-direction:column; align-items:center; gap:4px; min-width:78px; text-align:center; }
 .proc-step-icon{ width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; border:2px solid var(--color-border); color:var(--color-ink-faint); background:var(--color-surface); }
@@ -677,25 +686,91 @@ function canManageTopRoles(){ return isAdmin(); } // only Admin edits Chairman/P
 function roleKeyLabel(key){
   return { admin:'Admin', chairman:'Chairman', principal:'Principal', coordinator:'Coordinator', accountant:'Accountant', staff:'Staff' }[key] || key;
 }
-function requiredApprovalChain(reqItem){
-  if(reqItem.procurementPolicy === 'not_required') return ['accountant'];
-  switch(reqItem.valueClass){
-    case 'low': return ['coordinator'];
-    case 'medium': return ['coordinator','principal'];
-    case 'high': return ['coordinator','principal','chairman'];
-    case 'emergency': return ['chairman'];
-    default: return ['coordinator'];
+/* ============================================================
+   Circulation engine — replaces the old fixed linear approval chain.
+   Items now genuinely circulate: any current holder can forward to
+   another authority, approve (Accountant only), or decline (always
+   with a mandatory comment). No matter how far up it travels, the
+   trip back down always passes through Coordinator before it can
+   reach Accountant for final acceptance.
+   ============================================================ */
+function initCirculation(reqItem){
+  reqItem.currentHolderRole = 'accountant';
+  reqItem.hasCirculated = false;
+  reqItem.circulationLog = [];
+}
+function isFastTrack(reqItem){ return reqItem.procurementPolicy === 'not_required'; }
+function canDirectApproveAtEntry(reqItem){
+  return isFastTrack(reqItem) || reqItem.valueClass === 'low';
+}
+function initialForwardTarget(reqItem){
+  if(reqItem.valueClass === 'medium') return 'coordinator';
+  if(reqItem.valueClass === 'high' || reqItem.valueClass === 'emergency') return 'principal';
+  return 'coordinator';
+}
+/* Valid forward destinations for whoever currently holds the item.
+   Accountant is only ever reachable from Coordinator — this single
+   rule is what enforces "always back through Coordinator first". */
+function forwardTargetsFor(role){
+  if(role === 'coordinator') return ['accountant','principal','chairman'];
+  if(role === 'principal') return ['coordinator','chairman'];
+  if(role === 'chairman') return ['coordinator','principal'];
+  return [];
+}
+function circulationActionsFor(reqItem){
+  if(reqItem.status !== 'pending_approval') return { canApprove:false, canDecline:false, canForward:false, forwardTargets:[] };
+  const role = reqItem.currentHolderRole;
+  if(role === 'accountant'){
+    if(!reqItem.hasCirculated){
+      // Entry point
+      const isLow = reqItem.valueClass === 'low' && !isFastTrack(reqItem);
+      const isMedHigh = !isFastTrack(reqItem) && reqItem.valueClass !== 'low';
+      return {
+        canApprove: canDirectApproveAtEntry(reqItem),
+        canDecline: true,
+        canForward: isLow || isMedHigh,
+        forwardFixedTarget: isMedHigh ? initialForwardTarget(reqItem) : null,
+        forwardTargets: isLow ? ['coordinator'] : []
+      };
+    }
+    // Returned to Accountant — final acceptance only
+    return { canApprove:true, canDecline:true, canForward:false, forwardTargets:[] };
   }
+  // Coordinator / Principal / Chairman holding it
+  return { canApprove:false, canDecline:true, canForward:true, forwardTargets: forwardTargetsFor(role) };
 }
-function currentApprovalRole(reqItem){
-  const chain = reqItem.approvalChain || requiredApprovalChain(reqItem);
-  return chain[reqItem.approvalIndex] || null;
-}
-function canActOnApproval(reqItem){
+function canActOnCirculation(reqItem){
   if(reqItem.status !== 'pending_approval') return false;
-  const role = currentApprovalRole(reqItem);
-  if(!role) return false;
-  return hasRole(role);
+  return hasRole(reqItem.currentHolderRole);
+}
+function requestItemSiblings(reqItem){
+  return DB.requestItems.filter(r=>!r.deleted && r.requestId===reqItem.requestId);
+}
+async function applyCirculationAction(reqItem, action, targetRole, comment){
+  const siblings = requestItemSiblings(reqItem); // same-tier bundle, moves together
+  const actorName = (myStaffRecord()||{}).name || currentUserEmail;
+  siblings.forEach(r=>{
+    const fromRole = r.currentHolderRole;
+    if(action === 'approve'){
+      r.circulationLog.push({ id:nextId('circ'), fromRole, fromEmail:currentUserEmail, fromName:actorName, toRole:null, action:'approved', comment:comment||'', timestamp:new Date().toISOString() });
+      r.history.push({ stage:'Accountant Final Approval', action:'approved', actorEmail:currentUserEmail, actorName, remark:comment||'', timestamp:new Date().toISOString() });
+      r.status = 'purchase_pending';
+      if(!r.assignedPurchaserEmail){ r.assignedPurchaserEmail = r.requestedByEmail; r.assignedPurchaserName = r.requestedByName; }
+      generatePurchaseOrder(r);
+    } else if(action === 'decline'){
+      r.circulationLog.push({ id:nextId('circ'), fromRole, fromEmail:currentUserEmail, fromName:actorName, toRole:null, action:'declined', comment:comment, timestamp:new Date().toISOString() });
+      r.history.push({ stage:roleKeyLabel(fromRole)+' Decline', action:'declined', actorEmail:currentUserEmail, actorName, remark:comment, timestamp:new Date().toISOString() });
+      r.status = 'rejected';
+    } else if(action === 'forward'){
+      let finalTarget = targetRole;
+      if(finalTarget === 'accountant' && fromRole !== 'coordinator'){ finalTarget = 'coordinator'; } // safety net, UI shouldn't offer this anyway
+      r.circulationLog.push({ id:nextId('circ'), fromRole, fromEmail:currentUserEmail, fromName:actorName, toRole:finalTarget, action:'forwarded', comment:comment||'', timestamp:new Date().toISOString() });
+      r.history.push({ stage:roleKeyLabel(fromRole)+' → '+roleKeyLabel(finalTarget), action:'forwarded', actorEmail:currentUserEmail, actorName, remark:comment||'', timestamp:new Date().toISOString() });
+      r.currentHolderRole = finalTarget;
+      r.hasCirculated = true;
+    }
+  });
+  await saveDb();
 }
 function isMyPurchaseTask(reqItem){
   return isSignedIn() && reqItem.assignedPurchaserEmail && reqItem.assignedPurchaserEmail.toLowerCase()===emailLower();
@@ -815,6 +890,11 @@ async function loadDb(){
   });
   DB.requestItems.forEach(r=>{
     if(!Array.isArray(r.notes)) r.notes = [];
+    if(!r.currentHolderRole && r.status==='pending_approval') initCirculation(r);
+    if(!Array.isArray(r.circulationLog)) r.circulationLog = [];
+  });
+  DB.staff.forEach(s=>{
+    if(s.canConsume===undefined) s.canConsume = false;
   });
   // Backfill new category fields for DBs saved before this feature existed
   DB.categories.forEach(c=>{
@@ -1059,7 +1139,7 @@ function pendingForMe(){
   const out = [];
   DB.requestItems.forEach(r=>{
     if(r.deleted) return;
-    if(r.status==='pending_approval' && canActOnApproval(r)) out.push(r);
+    if(r.status==='pending_approval' && canActOnCirculation(r)) out.push(r);
     else if(r.status==='purchase_pending' && isMyPurchaseTask(r)) out.push(r);
     else if(r.status==='purchased' && isMyPurchaseTask(r)) out.push(r);
     else if(r.status==='received' && (isMyPurchaseTask(r) || isApproverRole() || isAdmin())) out.push(r);
@@ -1131,6 +1211,25 @@ function currentMonthExpenditure(){
 }
 function totalExpenditureAllTime(){
   return purchasedItems().reduce((s,r)=> s + (Number(r.purchase.totalAmount)||0), 0);
+}
+/* Consumption — entirely separate from Expenditure. Expenditure = money spent
+   on purchases received. Consumption = stock actually used up, tracked via
+   Issue-type ledger entries, independent of any specific purchase. */
+function consumptionEntriesInRange(sinceDate){
+  return DB.stockLedger.filter(e=> e.type==='Issue' && (!sinceDate || new Date(e.date) >= sinceDate));
+}
+function currentMonthConsumptionQty(){
+  const now = new Date(); const k = monthKey(now);
+  let total = 0;
+  DB.stockLedger.forEach(e=>{
+    if(e.type!=='Issue') return;
+    const d = new Date(e.date);
+    if(!isNaN(d.getTime()) && monthKey(d)===k) total += Number(e.quantityOut)||0;
+  });
+  return total;
+}
+function totalConsumptionQtyAllTime(){
+  return DB.stockLedger.filter(e=>e.type==='Issue').reduce((s,e)=>s+(Number(e.quantityOut)||0),0);
 }
 
 /* ============================================================
@@ -1228,6 +1327,8 @@ function renderHomePage(){
   const byStatus = computeRequestsByStatus();
   const curMonth = currentMonthExpenditure();
   const allTime = totalExpenditureAllTime();
+  const consumptionThisMonth = currentMonthConsumptionQty();
+  const consumptionAllTime = totalConsumptionQtyAllTime();
   const hasAnyRequests = DB.requestItems.some(r=>!r.deleted);
 
   app.innerHTML =
@@ -1241,11 +1342,16 @@ function renderHomePage(){
     +   '<div class="stat-card"><div class="stat-icon" style="background:var(--color-medium-soft);">'+iconFileText(17,'var(--color-medium)')+'</div><div><div class="stat-num">'+pendingAll+'</div><div class="stat-lbl">Requests Pending</div></div></div>'
     +   (isSignedIn() ? '<div class="stat-card"><div class="stat-icon" style="background:var(--color-gold-soft);">'+iconClipboardCheck(17,'var(--color-gold-bright)')+'</div><div><div class="stat-num">'+myPending+'</div><div class="stat-lbl">Awaiting My Action</div></div></div>' : '')
     + '</div>'
-    + '<div class="section-heading">Spending Overview</div>'
+    + '<div class="section-heading">Spending Overview (Purchased &amp; Received Only)</div>'
     + '<div class="kpi-row">'
     +   '<div class="kpi-card"><div class="kpi-lbl">This Month\'s Expenditure</div><div class="kpi-val">'+formatMoney(curMonth)+'</div></div>'
     +   '<div class="kpi-card"><div class="kpi-lbl">Total Expenditure (All Time)</div><div class="kpi-val" style="color:var(--color-success);">'+formatMoney(allTime)+'</div></div>'
     +   '<div class="kpi-card"><div class="kpi-lbl">Requests Awaiting Approval</div><div class="kpi-val" style="color:var(--color-medium);">'+pendingAll+'</div></div>'
+    + '</div>'
+    + '<div class="section-heading">Consumption (Stock Actually Used — Separate from Expenditure)</div>'
+    + '<div class="kpi-row">'
+    +   '<div class="kpi-card"><div class="kpi-lbl">Consumed This Month</div><div class="kpi-val">'+consumptionThisMonth+' units</div></div>'
+    +   '<div class="kpi-card"><div class="kpi-lbl">Consumed (All Time)</div><div class="kpi-val" style="color:var(--color-success);">'+consumptionAllTime+' units</div></div>'
     + '</div>'
     + (hasAnyRequests ?
       ('<div class="analytics-grid">'
@@ -1267,10 +1373,37 @@ function renderHomePage(){
 /* ============================================================
    Inventory — department list
    ============================================================ */
+function canManageConsumption(){
+  if(isAdmin() || isAccountant() || isCoordinator()) return true;
+  const s = myStaffRecord();
+  return Boolean(s && s.canConsume);
+}
+let inventoryPageTab = 'browse';
 function renderInventoryPage(){
   const app = document.getElementById('app');
+  app.innerHTML =
+    '<div class="content wrap module-inventory">'
+    + '<div class="page-title"><h2>Inventory Management</h2>'
+    + (isAdmin() ? '<button class="btn btn-primary btn-sm" id="manage-depts-btn">Manage Departments &amp; Categories</button>' : '')
+    + '</div>'
+    + '<div class="page-subtitle">Select a department to view and manage its stock.</div>'
+    + '<div class="tab-strip">'
+    +   '<button class="tab-btn '+(inventoryPageTab==='browse'?'active':'')+'" data-inv-tab="browse">Browse by Department</button>'
+    +   (canManageConsumption() ? '<button class="tab-btn '+(inventoryPageTab==='consumption'?'active':'')+'" data-inv-tab="consumption">Stock Consumption</button>' : '')
+    + '</div>'
+    + '<div class="tab-panel" id="inv-page-panel"></div>'
+    + '</div>';
+  const btn = document.getElementById('manage-depts-btn'); if(btn) btn.addEventListener('click', openManageDeptsModal);
+  document.querySelectorAll('[data-inv-tab]').forEach(b=>{
+    b.addEventListener('click', ()=>{ inventoryPageTab = b.getAttribute('data-inv-tab'); renderInventoryPage(); });
+  });
+  if(inventoryPageTab==='consumption' && canManageConsumption()) renderConsumptionTab();
+  else renderInventoryBrowseTab();
+}
+function renderInventoryBrowseTab(){
+  const panel = document.getElementById('inv-page-panel');
   const cards = DB.departments.filter(d=>!d.deleted).sort((a,b)=>a.sortOrder-b.sortOrder).map(d=>{
-    const items = DB.inventoryItems.filter(i=>i.departmentId===d.id);
+    const items = DB.inventoryItems.filter(i=>i.departmentId===d.id && !i.deleted);
     const cats = DB.categories.filter(c=>c.departmentId===d.id && !c.deleted).length;
     const low = items.filter(i=> Number(i.reorderThreshold)>0 && Number(i.quantity) <= Number(i.reorderThreshold)).length;
     return '<a href="#/inventory/'+d.id+'" class="card-link"><div class="card">'
@@ -1280,16 +1413,40 @@ function renderInventoryPage(){
       + (low ? '<div class="card-badge-row"><span class="badge badge-high">'+low+' low stock</span></div>' : '')
       + '</div></a>';
   }).join('');
-
-  app.innerHTML =
-    '<div class="content wrap module-inventory">'
-    + '<div class="page-title"><h2>Inventory Management</h2>'
-    + (isAdmin() ? '<button class="btn btn-primary btn-sm" id="manage-depts-btn">Manage Departments &amp; Categories</button>' : '')
-    + '</div>'
-    + '<div class="page-subtitle">Select a department to view and manage its stock.</div>'
-    + '<div class="card-grid">'+(cards || '<div class="empty-state"><div class="icon">🗂️</div><h3>No departments yet</h3></div>')+'</div>'
-    + '</div>';
-  const btn = document.getElementById('manage-depts-btn'); if(btn) btn.addEventListener('click', openManageDeptsModal);
+  panel.innerHTML = '<div class="card-grid">'+(cards || '<div class="empty-state"><div class="icon">🗂️</div><h3>No departments yet</h3></div>')+'</div>';
+}
+function renderConsumptionTab(){
+  const panel = document.getElementById('inv-page-panel');
+  const items = DB.inventoryItems.filter(i=>!i.deleted).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📉</div><h3>No stock to consume yet</h3></div>'; return; }
+  panel.innerHTML = '<div class="page-subtitle-inline">Record consumption directly against any item\'s stock — independent of any specific purchase.</div>'
+    + '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Department</th><th>Category</th><th>Current Stock</th><th></th></tr></thead><tbody>'
+    + items.map(i=>'<tr><td>'+escapeHtml(i.name)+'</td><td>'+escapeHtml(deptName(i.departmentId))+'</td><td>'+escapeHtml(catName(i.categoryId))+'</td><td><strong>'+escapeHtml(i.quantity)+'</strong> '+escapeHtml(i.unit||'')+'</td><td><button class="btn btn-outline btn-sm" data-consume-item="'+i.id+'">Consume</button></td></tr>').join('')
+    + '</tbody></table></div>';
+  panel.querySelectorAll('[data-consume-item]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openConsumeModal(btn.getAttribute('data-consume-item')));
+  });
+}
+function openConsumeModal(itemId){
+  const item = DB.inventoryItems.find(x=>x.id===itemId);
+  if(!item) return;
+  const body = '<div class="field-hint" style="margin-bottom:10px;">Current stock: <strong>'+escapeHtml(item.quantity)+' '+escapeHtml(item.unit||'')+'</strong></div>'
+    + '<div class="field"><label>Quantity Consumed</label><input type="number" id="consume-qty" min="1" max="'+item.quantity+'" value="1"></div>'
+    + '<div class="field"><label>Date</label><input type="date" id="consume-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+    + '<div class="field"><label>Remarks / Purpose</label><textarea id="consume-remarks" placeholder="e.g. Used for Class 5 art project"></textarea></div>';
+  openModal('Record Consumption — '+escapeHtml(item.name), body, '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-primary" id="consume-submit-btn">Record</button>', 'module-inventory');
+  document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+  document.getElementById('consume-submit-btn').addEventListener('click', async ()=>{
+    const qty = Number(document.getElementById('consume-qty').value)||0;
+    const date = document.getElementById('consume-date').value;
+    const remark = document.getElementById('consume-remarks').value.trim();
+    if(qty<=0){ toast('Enter a quantity greater than zero','error'); return; }
+    if(qty > Number(item.quantity)){ toast('Cannot consume more than current stock','error'); return; }
+    const balance = pushLedgerEntry(item.id, 'Issue', '', 0, qty, remark || 'Stock consumption', date);
+    item.quantity = balance; item.updatedAt = new Date().toISOString();
+    itemHistoryPush(item, 'Consumed', qty+' consumed'+(remark?' — '+remark:''));
+    await saveDb(); toast('Consumption recorded','success'); closeModal(); renderInventoryPage();
+  });
 }
 
 function openManageDeptsModal(){
@@ -1695,8 +1852,8 @@ function itemLedgerEntries(itemId){
   return DB.stockLedger.filter(e=>e.inventoryItemId===itemId).sort((a,b)=>(a.timestamp||'').localeCompare(b.timestamp||''));
 }
 function pushLedgerEntry(itemId, type, referenceNumber, qtyIn, qtyOut, remark, txnDate){
-  const entries = itemLedgerEntries(itemId);
-  const prevBalance = entries.length ? entries[entries.length-1].runningBalance : 0;
+  const item = DB.inventoryItems.find(i=>i.id===itemId);
+  const prevBalance = item ? (Number(item.quantity)||0) : 0; // item.quantity is always the authoritative current stock
   const runningBalance = prevBalance + (Number(qtyIn)||0) - (Number(qtyOut)||0);
   DB.stockLedger.push({
     id: nextId('ledg'), inventoryItemId: itemId, date: txnDate || new Date().toISOString().slice(0,10),
@@ -1728,13 +1885,12 @@ function syncConsumableStock(r){
   const cat = DB.categories.find(c=>c.id===r.categoryId);
   let item = DB.inventoryItems.find(i=> !i.deleted && i.categoryId===r.categoryId && (i.name||'').toLowerCase()===(r.itemName||'').toLowerCase());
   if(item){
-    item.quantity = (Number(item.quantity)||0) + qty;
     item.updatedAt = new Date().toISOString();
     itemHistoryPush(item, 'Stock received', qty+' received via '+r.requestNumber);
   } else {
     item = {
       id: nextId('item'), name: r.itemName, departmentId: cat ? cat.departmentId : DB.departments[0].id, categoryId: r.categoryId,
-      quantity: qty, unit: '', cost: unitCost, reorderThreshold: 0, minStock: 0, preferredSupplier: r.purchase ? (r.purchase.supplier||'') : '',
+      quantity: 0, unit: '', cost: unitCost, reorderThreshold: 0, minStock: 0, preferredSupplier: r.purchase ? (r.purchase.supplier||'') : '',
       purchaseDate: r.purchase ? r.purchase.purchaseDate : '', status:'Good',
       remarks: 'Auto-added from Procurement · '+r.requestNumber, linkedRequestItemId: r.id,
       history: [], updatedAt: new Date().toISOString()
@@ -1754,7 +1910,7 @@ function syncAssetToInventory(r, personEmail, personName, buildingId, roomId){
   const qty = (r.purchase && r.purchase.quantityPurchased) || 1;
   const item = {
     id: nextId('item'), name: r.itemName, departmentId: cat ? cat.departmentId : DB.departments[0].id, categoryId: r.categoryId,
-    quantity: qty, unit:'unit', cost: r.purchase ? r.purchase.totalAmount : 0, reorderThreshold: 0, minStock: 0,
+    quantity: 0, unit:'unit', cost: r.purchase ? r.purchase.totalAmount : 0, reorderThreshold: 0, minStock: 0,
     preferredSupplier: r.purchase ? (r.purchase.supplier||'') : '',
     purchaseDate: r.purchase ? r.purchase.purchaseDate : '', status:'Good',
     remarks: 'Responsible: '+personName+' ('+buildingName(buildingId)+(roomId?' / '+roomName(roomId):'')+') · Auto-added from Procurement · '+r.requestNumber,
@@ -1764,9 +1920,10 @@ function syncAssetToInventory(r, personEmail, personName, buildingId, roomId){
   itemHistoryPush(item, 'Created', 'Auto-created via '+r.requestNumber+', assigned to '+personName);
   const bal = pushLedgerEntry(item.id, 'Goods Receipt', r.requestNumber, qty, 0, 'Asset received, assigned to '+personName, r.purchase?r.purchase.purchaseDate:null);
   DB.stockLedger[DB.stockLedger.length-1].unitCostAtEntry = qty>0 ? (item.cost/qty) : item.cost;
+  item.quantity = bal;
 }
 
-function myApprovalQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='pending_approval' && canActOnApproval(r)); }
+function myApprovalQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='pending_approval' && canActOnCirculation(r)); }
 function myPurchaseQueue(){ return DB.requestItems.filter(r=> !r.deleted && (r.status==='purchase_pending'||r.status==='purchased') && isMyPurchaseTask(r)); }
 function myAssignmentQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='received' && (isMyPurchaseTask(r) || isApproverRole() || isAdmin())); }
 function myAccountantQueue(){ return DB.requestItems.filter(r=> !r.deleted && isTerminal(r) && !r.accountantClosed && isAccountant()); }
@@ -1917,54 +2074,68 @@ function renderNewRequestTab(){
       const get = (field)=>{ const el = wrap.querySelector('[data-line-id="'+line.localId+'"][data-line-field="'+field+'"]'); return el ? el.value.trim() : ''; };
       const catalogItemId = get('catalogItemId');
       const catalogItem = DB.itemCatalog.find(i=>i.id===catalogItemId);
+      const categoryId = get('categoryId');
+      const cat = DB.categories.find(c=>c.id===categoryId);
       return {
-        categoryId: get('categoryId'),
+        categoryId,
         catalogItemId,
         itemName: catalogItem ? catalogItem.name : '',
         itemCode: catalogItem ? catalogItem.code : '',
         quantityRequested: Number(get('quantityRequested'))||0,
         priority: get('priority'),
         reason: get('reason'),
-        description: get('description')
+        description: get('description'),
+        itemTypeId: cat ? cat.itemTypeId : 'type_consumable',
+        procurementPolicy: cat ? cat.procurementPolicy : 'required',
+        valueClass: cat ? cat.valueClass : 'low'
       };
     });
     if(lineData.some(l=>!l.itemName || !l.quantityRequested)){ toast('Every item needs a selected catalog item and quantity','error'); return; }
     const buildingId = buildingSel.value;
     const roomId = document.getElementById('req-room').value || null;
     const requestDate = document.getElementById('req-date').value;
-    const requestNumber = requestNumberNext();
-    const requestId = nextId('req');
-    const itemIds = [];
-    lineData.forEach(l=>{
-      const cat = DB.categories.find(c=>c.id===l.categoryId);
-      const itemTypeId = cat ? cat.itemTypeId : 'type_consumable';
-      const procurementPolicy = cat ? cat.procurementPolicy : 'required';
-      const valueClass = cat ? cat.valueClass : 'low';
-      const chain = requiredApprovalChain({ procurementPolicy, valueClass });
-      const id = nextId('ri');
-      itemIds.push(id);
-      DB.requestItems.push({
-        id, requestId, requestNumber, requestDate,
-        requestedByEmail: currentUserEmail, requestedByName: (myStaffRecord()||{}).name || currentUserEmail,
-        buildingId, roomId,
-        categoryId: l.categoryId, itemTypeId, itemName: l.itemName, itemCode: l.itemCode, catalogItemId: l.catalogItemId, quantityRequested: l.quantityRequested,
-        priority: l.priority, reason: l.reason, description: l.description,
-        valueClass, procurementPolicy,
-        linkedAssetId: null,
-        status: 'pending_approval',
-        approvalChain: chain, approvalIndex: 0,
-        assignedPurchaserEmail: null, assignedPurchaserName: null,
-        purchase: null, receipt: null, assignments: [], maintenanceEvents: [], disposal: null,
-        accountantClosed: false, accountantClosedByEmail: null, accountantClosedAt: null, accountantRemark: null,
-        notes: [],
-        history: [{ stage:'Requested', action:'created', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:'', timestamp:new Date().toISOString() }],
-        createdAt: new Date().toISOString()
+
+    // Auto-split: a request can only contain one Value Classification.
+    // Items of a different tier silently become their own separate request.
+    const groups = {};
+    lineData.forEach(l=>{ (groups[l.valueClass] = groups[l.valueClass] || []).push(l); });
+    const groupKeys = Object.keys(groups);
+    const createdNumbers = [];
+    groupKeys.forEach(tierKey=>{
+      const items = groups[tierKey];
+      const requestNumber = requestNumberNext();
+      const requestId = nextId('req');
+      const itemIds = [];
+      items.forEach(l=>{
+        const id = nextId('ri');
+        itemIds.push(id);
+        const record = {
+          id, requestId, requestNumber, requestDate,
+          requestedByEmail: currentUserEmail, requestedByName: (myStaffRecord()||{}).name || currentUserEmail,
+          buildingId, roomId,
+          categoryId: l.categoryId, itemTypeId: l.itemTypeId, itemName: l.itemName, itemCode: l.itemCode, catalogItemId: l.catalogItemId, quantityRequested: l.quantityRequested,
+          priority: l.priority, reason: l.reason, description: l.description,
+          valueClass: l.valueClass, procurementPolicy: l.procurementPolicy,
+          linkedAssetId: null,
+          status: 'pending_approval',
+          assignedPurchaserEmail: null, assignedPurchaserName: null,
+          purchase: null, receipt: null, assignments: [], maintenanceEvents: [], disposal: null,
+          accountantClosed: false, accountantClosedByEmail: null, accountantClosedAt: null, accountantRemark: null,
+          notes: [],
+          history: [{ stage:'Requested', action:'created', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:'', timestamp:new Date().toISOString() }],
+          createdAt: new Date().toISOString()
+        };
+        initCirculation(record);
+        DB.requestItems.push(record);
       });
+      DB.requests.push({ id: requestId, requestNumber, requestDate, requestedByEmail: currentUserEmail, buildingId, roomId, createdAt: new Date().toISOString(), itemIds });
+      createdNumbers.push(requestNumber);
     });
-    DB.requests.push({ id: requestId, requestNumber, requestDate, requestedByEmail: currentUserEmail, buildingId, roomId, createdAt: new Date().toISOString(), itemIds });
     await saveDb();
     newRequestLines = [];
-    toast('Purchase request '+requestNumber+' submitted', 'success');
+    const requestNumber = createdNumbers[0];
+    if(createdNumbers.length > 1){ toast('Submitted as '+createdNumbers.length+' separate requests (mixed value tiers): '+createdNumbers.join(', '), 'success'); }
+    else { toast('Purchase request '+requestNumber+' submitted', 'success'); }
     procTab = 'all';
     renderProcurementPage();
   });
@@ -1974,68 +2145,70 @@ function renderNewRequestTab(){
 function renderApprovalsTab(){
   const panel = document.getElementById('proc-panel');
   const items = myApprovalQueue();
-  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">✅</div><h3>Nothing awaiting your approval</h3></div>'; return; }
-  panel.innerHTML =
-    '<div style="display:flex; gap:8px; margin-bottom:12px;">'
-    + '<button class="btn btn-outline btn-sm" id="bulk-approve-btn">Approve Selected</button>'
-    + '<button class="btn btn-danger btn-sm" id="bulk-reject-btn">Reject Selected</button>'
-    + '</div>'
-    + '<div class="approval-card-grid">' + items.map(r=>renderApprovalCard(r)).join('') + '</div>';
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">✅</div><h3>Nothing awaiting your action</h3></div>'; return; }
+  panel.innerHTML = '<div class="approval-card-grid">' + items.map(r=>renderApprovalCard(r)).join('') + '</div>';
 
   items.forEach(r=>{
     const card = panel.querySelector('[data-approval-card="'+r.id+'"]');
-    card.querySelector('[data-approve-one]').addEventListener('click', ()=>actOnApproval(r, 'approve', card));
-    card.querySelector('[data-reject-one]').addEventListener('click', ()=>actOnApproval(r, 'reject', card));
-  });
-  document.getElementById('bulk-approve-btn').addEventListener('click', async ()=>{
-    const selected = items.filter(r=> panel.querySelector('[data-select="'+r.id+'"]').checked);
-    if(!selected.length){ toast('Select at least one item','error'); return; }
-    for(const r of selected){ await actOnApproval(r, 'approve', null, true); }
-    await saveDb(); toast(selected.length+' item(s) approved','success'); renderProcurementPage();
-  });
-  document.getElementById('bulk-reject-btn').addEventListener('click', async ()=>{
-    const selected = items.filter(r=> panel.querySelector('[data-select="'+r.id+'"]').checked);
-    if(!selected.length){ toast('Select at least one item','error'); return; }
-    for(const r of selected){ await actOnApproval(r, 'reject', null, true); }
-    await saveDb(); toast(selected.length+' item(s) rejected','success'); renderProcurementPage();
+    const approveBtn = card.querySelector('[data-approve-one]');
+    if(approveBtn) approveBtn.addEventListener('click', ()=>submitCirculationAction(r, 'approve'));
+    const declineBtn = card.querySelector('[data-decline-one]');
+    if(declineBtn) declineBtn.addEventListener('click', ()=>submitCirculationAction(r, 'decline'));
+    const forwardBtn = card.querySelector('[data-forward-one]');
+    if(forwardBtn) forwardBtn.addEventListener('click', ()=>submitCirculationAction(r, 'forward'));
+    const purchaserEl = card.querySelector('[data-purchaser="'+r.id+'"]');
+    if(purchaserEl) purchaserEl.addEventListener('change', ()=>{
+      if(purchaserEl.value){ const s = DB.staff.find(x=>x.email===purchaserEl.value); r.assignedPurchaserEmail = purchaserEl.value; r.assignedPurchaserName = s?s.name:purchaserEl.value; }
+    });
   });
 }
 function renderApprovalCard(r){
+  const acts = circulationActionsFor(r);
   const staffOptions = DB.staff.filter(s=>s.active!==false).map(s=>'<option value="'+s.email+'">'+escapeHtml(s.name)+'</option>').join('');
-  return '<div class="approval-card" data-approval-card="'+r.id+'">'
-    + '<div class="approval-card-top"><label class="chk-row"><input type="checkbox" data-select="'+r.id+'"> <strong>'+escapeHtml(r.itemName)+'</strong></label>'+valueClassBadge(r.valueClass)+'</div>'
-    + '<div class="approval-card-meta">'+escapeHtml(r.requestNumber)+' · '+escapeHtml(catName(r.categoryId))+' · Qty '+r.quantityRequested+' · '+priorityBadge(r.priority)+'</div>'
-    + '<div class="approval-card-meta">'+escapeHtml(buildingName(r.buildingId))+(r.roomId?' / '+escapeHtml(roomName(r.roomId)):'')+' · Requested by '+escapeHtml(r.requestedByName||r.requestedByEmail)+'</div>'
-    + (r.reason ? '<div class="approval-card-reason">"'+escapeHtml(r.reason)+'"</div>' : '')
-    + '<div class="field" style="margin-top:8px;"><label>Delegate Purchaser</label><select data-purchaser="'+r.id+'"><option value="">— Not yet decided —</option>'+staffOptions+'</select></div>'
-    + '<div class="field"><label>Remarks (optional)</label><input type="text" data-remark="'+r.id+'"></div>'
-    + '<div class="approval-card-actions"><button class="btn btn-primary btn-sm" data-approve-one="'+r.id+'">Approve</button><button class="btn btn-danger btn-sm" data-reject-one="'+r.id+'">Reject</button></div>'
-    + '</div>';
-}
-async function actOnApproval(r, action, cardEl, skipSave){
-  const remarkEl = document.querySelector('[data-remark="'+r.id+'"]');
-  const purchaserEl = document.querySelector('[data-purchaser="'+r.id+'"]');
-  const remark = remarkEl ? remarkEl.value : '';
-  const role = currentApprovalRole(r);
-  const stageLabel = roleKeyLabel(role)+' Approval';
-  if(purchaserEl && purchaserEl.value){
-    const staffRec = DB.staff.find(s=>s.email===purchaserEl.value);
-    r.assignedPurchaserEmail = purchaserEl.value;
-    r.assignedPurchaserName = staffRec ? staffRec.name : purchaserEl.value;
+  const siblingCount = requestItemSiblings(r).length;
+  let actionsHtml = '';
+  if(acts.canApprove){
+    actionsHtml += '<button class="btn btn-primary btn-sm" data-approve-one="'+r.id+'">Approve'+(!r.hasCirculated?'':' (Final)')+'</button>';
   }
-  r.history.push({ stage: stageLabel, action: action==='approve'?'approved':'rejected', actorEmail: currentUserEmail, actorName: (myStaffRecord()||{}).name || currentUserEmail, remark, timestamp: new Date().toISOString() });
-  if(action==='reject'){
-    r.status = 'rejected';
-  } else {
-    if(r.approvalIndex < r.approvalChain.length - 1){
-      r.approvalIndex += 1;
-    } else {
-      r.status = 'purchase_pending';
-      if(!r.assignedPurchaserEmail){ r.assignedPurchaserEmail = r.requestedByEmail; r.assignedPurchaserName = r.requestedByName; }
-      generatePurchaseOrder(r);
+  if(acts.canForward){
+    if(acts.forwardFixedTarget){
+      actionsHtml += '<button class="btn btn-outline btn-sm" data-forward-one="'+r.id+'" data-fixed-target="'+acts.forwardFixedTarget+'">Send to '+roleKeyLabel(acts.forwardFixedTarget)+'</button>';
+    } else if(acts.forwardTargets && acts.forwardTargets.length){
+      actionsHtml += '<select class="forward-target-select" id="forward-target-'+r.id+'" style="font-size:12.5px; padding:6px 8px; border:1.5px solid var(--color-border); border-radius:6px;">'
+        + acts.forwardTargets.map(t=>'<option value="'+t+'">Send to '+roleKeyLabel(t)+'</option>').join('')
+        + '</select>'
+        + '<button class="btn btn-outline btn-sm" data-forward-one="'+r.id+'">Forward</button>';
     }
   }
-  if(!skipSave){ await saveDb(); toast(action==='approve'?'Approved':'Rejected', action==='approve'?'success':'error'); renderProcurementPage(); }
+  if(acts.canDecline){
+    actionsHtml += '<button class="btn btn-danger btn-sm" data-decline-one="'+r.id+'">Decline</button>';
+  }
+  return '<div class="approval-card" data-approval-card="'+r.id+'">'
+    + '<div class="approval-card-top"><strong>'+escapeHtml(r.itemName)+'</strong>'+valueClassBadge(r.valueClass)+'</div>'
+    + '<div class="approval-card-meta">'+escapeHtml(r.requestNumber)+' · '+escapeHtml(catName(r.categoryId))+' · Qty '+r.quantityRequested+' · '+priorityBadge(r.priority)+(siblingCount>1?' · <span class="badge badge-status">Bundle of '+siblingCount+'</span>':'')+'</div>'
+    + '<div class="approval-card-meta">'+escapeHtml(buildingName(r.buildingId))+(r.roomId?' / '+escapeHtml(roomName(r.roomId)):'')+' · Requested by '+escapeHtml(r.requestedByName||r.requestedByEmail)+'</div>'
+    + (r.reason ? '<div class="approval-card-reason">"'+escapeHtml(r.reason)+'"</div>' : '')
+    + (r.circulationLog && r.circulationLog.length ? '<div class="field-hint" style="margin-top:6px;">Trail: '+r.circulationLog.map(c=>roleKeyLabel(c.fromRole)+(c.toRole?' → '+roleKeyLabel(c.toRole):' ('+c.action+')')).join(' · ')+'</div>' : '')
+    + (canDirectApproveAtEntry(r) && !r.hasCirculated ? '<div class="field" style="margin-top:8px;"><label>Delegate Purchaser (optional)</label><select data-purchaser="'+r.id+'"><option value="">— Not yet decided —</option>'+staffOptions+'</select></div>' : '')
+    + '<div class="field"><label>Comment '+(acts.canDecline?'(required to Decline)':'(optional)')+'</label><input type="text" id="comment-'+r.id+'"></div>'
+    + '<div class="approval-card-actions">'+actionsHtml+'</div>'
+    + '</div>';
+}
+async function submitCirculationAction(r, action){
+  const commentEl = document.getElementById('comment-'+r.id);
+  const comment = commentEl ? commentEl.value.trim() : '';
+  if(action === 'decline' && !comment){ toast('A comment is required to decline','error'); return; }
+  let targetRole = null;
+  if(action === 'forward'){
+    const forwardBtn = document.querySelector('[data-forward-one="'+r.id+'"]');
+    const fixedTarget = forwardBtn ? forwardBtn.getAttribute('data-fixed-target') : null;
+    if(fixedTarget){ targetRole = fixedTarget; }
+    else{ const sel = document.getElementById('forward-target-'+r.id); targetRole = sel ? sel.value : null; }
+    if(!targetRole){ toast('Choose where to send this','error'); return; }
+  }
+  await applyCirculationAction(r, action, targetRole, comment);
+  toast(action==='approve'?'Approved':action==='decline'?'Declined':'Forwarded to '+roleKeyLabel(targetRole), action==='decline'?'error':'success');
+  renderProcurementPage();
 }
 
 /* ---------------- My Purchase Tasks ---------------- */
@@ -2163,46 +2336,44 @@ function openItemDetailModal(id){
   renderItemDetailModalBody(r);
 }
 /* ============================================================
-   Visual Procurement Timeline stepper — badges stay as secondary info
+   Circulation display — "current holder + trail" replaces the old
+   fixed left-to-right stepper, since items can move up, down, and
+   sideways rather than through one linear chain. Status badges
+   remain as secondary info alongside it.
    ============================================================ */
-function procurementSteps(r){
-  const pattern = itemPattern(r);
-  const steps = [{ key:'created', label:'Request Created' }];
-  const chain = r.approvalChain || requiredApprovalChain(r);
-  chain.forEach(role=> steps.push({ key:'approve_'+role, label: roleKeyLabel(role)+' Approval' }));
-  steps.push({ key:'purchase', label:'Purchase' });
-  if(pattern!=='service'){ steps.push({ key:'receive', label:'Receiving' }); }
-  if(pattern==='asset'){ steps.push({ key:'assign', label:'Assignment' }); }
-  steps.push({ key:'closed', label:'Closed' });
-  return steps;
-}
-function currentStepIndex(r, steps){
-  if(r.status==='rejected') return steps.findIndex(s=>s.key.startsWith('approve_'))>=0 ? 0 : 0;
-  if(r.status==='pending_approval'){
-    const role = currentApprovalRole(r);
-    const idx = steps.findIndex(s=>s.key==='approve_'+role);
-    return idx>=0 ? idx : 1;
-  }
-  if(r.status==='purchase_pending') return steps.findIndex(s=>s.key==='purchase');
-  if(r.status==='purchased') return steps.findIndex(s=>s.key==='purchase')+1;
-  if(r.status==='received') return steps.findIndex(s=>s.key==='receive')+1;
-  if(r.status==='assigned' || r.status==='active') return steps.length-1;
-  if(r.status==='completed' || r.status==='archived'){
-    return r.accountantClosed ? steps.length-1 : steps.length-2;
-  }
-  return 0;
-}
 function renderProcurementStepper(r){
   if(r.status==='rejected'){
-    return '<div class="field-hint" style="margin-bottom:14px; color:var(--color-danger);">⊘ This request was rejected and the workflow stopped.</div>';
+    const last = r.circulationLog && r.circulationLog.length ? r.circulationLog[r.circulationLog.length-1] : null;
+    return '<div class="circ-status circ-status-declined">⊘ Declined'+(last?' by '+roleKeyLabel(last.fromRole):'')+'</div>' + renderCirculationTrail(r);
   }
-  const steps = procurementSteps(r);
-  const curIdx = currentStepIndex(r, steps);
-  return '<div class="proc-stepper">' + steps.map((s,i)=>{
+  if(r.status==='pending_approval'){
+    return '<div class="circ-status circ-status-current">● Currently with <strong>'+roleKeyLabel(r.currentHolderRole)+'</strong></div>' + renderCirculationTrail(r);
+  }
+  // Past circulation — show the post-approval lifecycle as a simple linear strip
+  const pattern = itemPattern(r);
+  const steps = [{ key:'purchase', label:'Purchase' }];
+  if(pattern!=='service') steps.push({ key:'receive', label:'Receiving' });
+  if(pattern==='asset') steps.push({ key:'assign', label:'Assignment' });
+  steps.push({ key:'closed', label:'Closed' });
+  let curIdx = 0;
+  if(r.status==='purchase_pending') curIdx = 0;
+  else if(r.status==='purchased') curIdx = steps.findIndex(s=>s.key==='purchase')+1;
+  else if(r.status==='received') curIdx = steps.findIndex(s=>s.key==='receive')>=0 ? steps.findIndex(s=>s.key==='receive')+1 : 1;
+  else if(r.status==='assigned' || r.status==='active') curIdx = steps.length-1;
+  else if(r.status==='completed' || r.status==='archived') curIdx = r.accountantClosed ? steps.length : steps.length-1;
+  const linear = '<div class="proc-stepper">' + steps.map((s,i)=>{
     const state = i<curIdx ? 'done' : (i===curIdx ? 'current' : 'todo');
     const icon = state==='done' ? '✓' : (state==='current' ? '●' : '○');
     return '<div class="proc-step '+state+'"><span class="proc-step-icon">'+icon+'</span><span class="proc-step-label">'+escapeHtml(s.label)+'</span></div>';
   }).join('<div class="proc-step-connector"></div>') + '</div>';
+  return linear + renderCirculationTrail(r);
+}
+function renderCirculationTrail(r){
+  if(!r.circulationLog || !r.circulationLog.length) return '';
+  return '<div class="circ-trail">' + r.circulationLog.map(c=>{
+    const label = c.action==='approved' ? 'Approved' : c.action==='declined' ? 'Declined' : 'Forwarded to '+roleKeyLabel(c.toRole);
+    return '<div class="circ-trail-row"><span class="circ-trail-from">'+roleKeyLabel(c.fromRole)+'</span><span class="circ-trail-arrow">→</span><span class="circ-trail-action">'+label+'</span>'+(c.comment?'<span class="circ-trail-comment">"'+escapeHtml(c.comment)+'"</span>':'')+'</div>';
+  }).join('') + '</div>';
 }
 function renderItemDetailModalBody(r){
   const pattern = itemPattern(r);
@@ -2311,19 +2482,51 @@ function renderItemActionBox(r){
   box.innerHTML = '';
   const pattern = itemPattern(r);
 
-  if(r.status==='pending_approval' && canActOnApproval(r)){
+  if(r.status==='pending_approval' && canActOnCirculation(r)){
+    const acts = circulationActionsFor(r);
     const staffOptions = DB.staff.filter(s=>s.active!==false).map(s=>'<option value="'+s.email+'" '+(r.assignedPurchaserEmail===s.email?'selected':'')+'>'+escapeHtml(s.name)+'</option>').join('');
+    let actionsHtml = '';
+    if(acts.canApprove) actionsHtml += '<button class="btn btn-primary" id="modal-approve-btn">Approve'+(r.hasCirculated?' (Final)':'')+'</button>';
+    if(acts.canForward){
+      if(acts.forwardFixedTarget){
+        actionsHtml += '<button class="btn btn-outline" id="modal-forward-btn" data-fixed-target="'+acts.forwardFixedTarget+'">Send to '+roleKeyLabel(acts.forwardFixedTarget)+'</button>';
+      } else if(acts.forwardTargets && acts.forwardTargets.length){
+        actionsHtml += '<select id="modal-forward-target" style="font-size:13px; padding:8px 10px; border:1.5px solid var(--color-border); border-radius:6px;">'
+          + acts.forwardTargets.map(t=>'<option value="'+t+'">Send to '+roleKeyLabel(t)+'</option>').join('')
+          + '</select><button class="btn btn-outline" id="modal-forward-btn">Forward</button>';
+      }
+    }
+    if(acts.canDecline) actionsHtml += '<button class="btn btn-danger" id="modal-decline-btn">Decline</button>';
     box.innerHTML = '<div class="plain-divider"></div>'
-      + '<h4>Approval — '+roleKeyLabel(currentApprovalRole(r))+'</h4>'
-      + '<div class="field"><label>Delegate Purchaser</label><select id="modal-purchaser"><option value="">— Not yet decided —</option>'+staffOptions+'</select></div>'
-      + '<div class="field"><label>Remarks</label><textarea id="modal-remark"></textarea></div>'
-      + '<div style="display:flex; gap:10px;"><button class="btn btn-primary" id="modal-approve-btn">Approve</button><button class="btn btn-danger" id="modal-reject-btn">Reject</button></div>';
-    document.getElementById('modal-approve-btn').addEventListener('click', async ()=>{
-      const sel = document.getElementById('modal-purchaser').value;
-      if(sel){ const s = DB.staff.find(x=>x.email===sel); r.assignedPurchaserEmail = sel; r.assignedPurchaserName = s?s.name:sel; }
-      await actOnApprovalModal(r, 'approve');
+      + '<h4>Currently with you — '+roleKeyLabel(r.currentHolderRole)+'</h4>'
+      + (canDirectApproveAtEntry(r) && !r.hasCirculated ? '<div class="field"><label>Delegate Purchaser (optional)</label><select id="modal-purchaser"><option value="">— Not yet decided —</option>'+staffOptions+'</select></div>' : '')
+      + '<div class="field"><label>Comment '+(acts.canDecline?'(required to Decline)':'(optional)')+'</label><textarea id="modal-remark"></textarea></div>'
+      + '<div style="display:flex; gap:10px; flex-wrap:wrap;">'+actionsHtml+'</div>';
+    const approveBtn = document.getElementById('modal-approve-btn');
+    if(approveBtn) approveBtn.addEventListener('click', async ()=>{
+      const sel = document.getElementById('modal-purchaser');
+      if(sel && sel.value){ const s = DB.staff.find(x=>x.email===sel.value); r.assignedPurchaserEmail = sel.value; r.assignedPurchaserName = s?s.name:sel.value; }
+      const comment = document.getElementById('modal-remark').value.trim();
+      await applyCirculationAction(r, 'approve', null, comment);
+      toast('Approved','success'); openItemDetailModal(r.id);
     });
-    document.getElementById('modal-reject-btn').addEventListener('click', ()=>actOnApprovalModal(r, 'reject'));
+    const declineBtn = document.getElementById('modal-decline-btn');
+    if(declineBtn) declineBtn.addEventListener('click', async ()=>{
+      const comment = document.getElementById('modal-remark').value.trim();
+      if(!comment){ toast('A comment is required to decline','error'); return; }
+      await applyCirculationAction(r, 'decline', null, comment);
+      toast('Declined','error'); openItemDetailModal(r.id);
+    });
+    const forwardBtn = document.getElementById('modal-forward-btn');
+    if(forwardBtn) forwardBtn.addEventListener('click', async ()=>{
+      const fixedTarget = forwardBtn.getAttribute('data-fixed-target');
+      const targetSel = document.getElementById('modal-forward-target');
+      const targetRole = fixedTarget || (targetSel ? targetSel.value : null);
+      if(!targetRole){ toast('Choose where to send this','error'); return; }
+      const comment = document.getElementById('modal-remark').value.trim();
+      await applyCirculationAction(r, 'forward', targetRole, comment);
+      toast('Forwarded to '+roleKeyLabel(targetRole),'success'); openItemDetailModal(r.id);
+    });
     return;
   }
 
@@ -2396,70 +2599,55 @@ function renderItemActionBox(r){
       const remark = document.getElementById('rc-remarks').value.trim();
       r.receipt = { receivedDate: document.getElementById('rc-date').value, receivedByEmail: currentUserEmail, receivedByName: r.assignedPurchaserName||currentUserEmail, remarks: remark, recordedAt: new Date().toISOString() };
       r.history.push({ stage:'Item Received', action:'received', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark, timestamp:new Date().toISOString() });
-      r.status = 'received';
-      if(pattern==='consumable') syncConsumableStock(r);
-      await saveDb(); toast('Marked as received','success'); openItemDetailModal(r.id);
-    });
-    return;
-  }
-
-  if(r.status==='received' && (isMyPurchaseTask(r) || isApproverRole() || isAdmin())){
-    if(pattern==='consumable'){
-      const linkedItem = DB.inventoryItems.find(i=>i.linkedRequestItemId===r.id) || DB.inventoryItems.find(i=>!i.deleted && i.categoryId===r.categoryId && (i.name||'').toLowerCase()===(r.itemName||'').toLowerCase());
-      const currentStock = linkedItem ? (Number(linkedItem.quantity)||0) : 0;
-      box.innerHTML = '<div class="plain-divider"></div><h4>Mark as Consumed</h4>'
-        + '<div class="field-hint" style="margin-bottom:10px;">Current stock: '+currentStock+' '+(linkedItem?escapeHtml(linkedItem.unit||''):'')+'</div>'
-        + '<div class="field"><label>Quantity Consumed</label><input type="number" id="cons-qty" value="'+(r.purchase?r.purchase.quantityPurchased:r.quantityRequested)+'" min="0" max="'+currentStock+'"></div>'
-        + '<div class="field"><label>Date</label><input type="date" id="cons-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
-        + '<div class="field"><label>Remarks</label><textarea id="cons-remarks"></textarea></div>'
-        + '<button class="btn btn-primary" id="cons-submit-btn">Mark Consumed &amp; Complete</button>';
-      document.getElementById('cons-submit-btn').addEventListener('click', async ()=>{
-        const remark = document.getElementById('cons-remarks').value.trim();
-        const qtyConsumed = Number(document.getElementById('cons-qty').value)||0;
-        r.history.push({ stage:'Consumed', action:'completed', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:remark+(qtyConsumed?' ('+qtyConsumed+' consumed)':''), timestamp:new Date().toISOString() });
+      if(pattern==='consumable'){
+        // Receipt completes the purchase process immediately — it reflects in
+        // stock straightaway. Consumption is tracked separately, later, via
+        // Inventory > Stock Consumption, not tied to this specific purchase.
+        syncConsumableStock(r);
         r.status = 'completed';
-        if(linkedItem && qtyConsumed>0){
-          const consDate = document.getElementById('cons-date').value;
-          const balance = pushLedgerEntry(linkedItem.id, 'Issue', r.requestNumber, 0, qtyConsumed, remark || 'Consumed via '+r.requestNumber, consDate);
-          linkedItem.quantity = balance;
-          linkedItem.updatedAt = new Date().toISOString();
-          itemHistoryPush(linkedItem, 'Issued', qtyConsumed+' consumed via '+r.requestNumber);
-        }
-        await saveDb(); toast('Marked consumed','success'); openItemDetailModal(r.id);
-      });
-    } else {
-      const staffOptions = DB.staff.filter(s=>s.active!==false).map(s=>'<option value="'+s.email+'">'+escapeHtml(s.name)+'</option>').join('');
-      const buildings = DB.buildings.filter(b=>!b.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
-      box.innerHTML = '<div class="plain-divider"></div><h4>Assign to Responsible Person</h4>'
-        + '<div class="field"><label>Responsible Person</label><select id="as-person"><option value="'+r.receipt.receivedByEmail+'">'+escapeHtml(r.receipt.receivedByName)+' (Receiver)</option>'+staffOptions+'</select></div>'
-        + '<div class="field-row"><div class="field"><label>Building</label><select id="as-building">'+buildings.map(b=>'<option value="'+b.id+'" '+(b.id===r.buildingId?'selected':'')+'>'+escapeHtml(b.name)+'</option>').join('')+'</select></div><div class="field"><label>Room (optional)</label><select id="as-room"><option value="">— None —</option></select></div></div>'
-        + '<div class="field"><label>Remarks</label><textarea id="as-remarks"></textarea></div>'
-        + '<button class="btn btn-primary" id="as-submit-btn">Assign &amp; Activate</button>';
-      const bSel = document.getElementById('as-building');
-      function refreshAsRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===bSel.value); document.getElementById('as-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
-      bSel.addEventListener('change', refreshAsRooms); refreshAsRooms();
-      document.getElementById('as-submit-btn').addEventListener('click', async ()=>{
-        const personEmail = document.getElementById('as-person').value;
-        const staffRec = DB.staff.find(s=>s.email===personEmail);
-        const personName = staffRec ? staffRec.name : (personEmail===r.receipt.receivedByEmail ? r.receipt.receivedByName : personEmail);
-        const buildingId = bSel.value, roomId = document.getElementById('as-room').value||null;
-        const remark = document.getElementById('as-remarks').value.trim();
-        r.assignments.push({ responsiblePersonEmail:personEmail, responsiblePersonName:personName, buildingId, roomId, categoryId:r.categoryId, remarks:remark, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
-        r.buildingId = buildingId; r.roomId = roomId;
-        r.history.push({ stage:'Assigned', action:'assigned to '+personName, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
-        r.history.push({ stage:'Active', action:'activated', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:'', timestamp:new Date().toISOString() });
+      } else {
+        // Assets/misc/repair/spare now reflect in stock the moment they're received —
+        // Assignment is a follow-up action, never a gate on visibility.
+        syncAssetToInventory(r, r.receipt.receivedByEmail, r.receipt.receivedByName, r.buildingId, r.roomId);
+        r.assignments.push({ responsiblePersonEmail:r.receipt.receivedByEmail, responsiblePersonName:r.receipt.receivedByName, buildingId:r.buildingId, roomId:r.roomId, categoryId:r.categoryId, remarks:'Initial receiver', assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
+        r.history.push({ stage:'Active', action:'activated', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark:'', timestamp:new Date().toISOString() });
         r.status = 'active';
-        syncAssetToInventory(r, personEmail, personName, buildingId, roomId);
-        await saveDb(); toast('Assigned, activated, and added to Stock Overview','success'); openItemDetailModal(r.id);
-      });
-    }
+      }
+      await saveDb(); toast('Marked as received and added to Stock Overview','success'); openItemDetailModal(r.id);
+    });
     return;
   }
 
   if(r.status==='active' && pattern==='asset'){
     const isResponsible = r.assignments.length && r.assignments[r.assignments.length-1].responsiblePersonEmail===currentUserEmail;
-    if(isResponsible || isApproverRole() || isAdmin()){
+    if(isApproverRole() || isAdmin()){
+      const staffOptions = DB.staff.filter(s=>s.active!==false).map(s=>'<option value="'+s.email+'">'+escapeHtml(s.name)+'</option>').join('');
+      const buildings = DB.buildings.filter(b=>!b.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
+      const cur = r.assignments[r.assignments.length-1];
       box.innerHTML = '<div class="plain-divider"></div>'
+        + '<h4>Reassign Responsible Person</h4>'
+        + '<div class="field-hint" style="margin-bottom:8px;">Currently: '+escapeHtml(cur?cur.responsiblePersonName:'—')+'</div>'
+        + '<div class="field"><label>New Responsible Person</label><select id="reassign-person">'+staffOptions+'</select></div>'
+        + '<div class="field-row"><div class="field"><label>Building</label><select id="reassign-building">'+buildings.map(b=>'<option value="'+b.id+'" '+(b.id===r.buildingId?'selected':'')+'>'+escapeHtml(b.name)+'</option>').join('')+'</select></div><div class="field"><label>Room (optional)</label><select id="reassign-room"><option value="">— None —</option></select></div></div>'
+        + '<div class="field"><label>Remarks</label><textarea id="reassign-remarks"></textarea></div>'
+        + '<button class="btn btn-outline btn-sm" id="reassign-submit-btn">Reassign</button>';
+      const rbSel = document.getElementById('reassign-building');
+      function refreshReassignRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===rbSel.value); document.getElementById('reassign-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
+      rbSel.addEventListener('change', refreshReassignRooms); refreshReassignRooms();
+      document.getElementById('reassign-submit-btn').addEventListener('click', async ()=>{
+        const personEmail = document.getElementById('reassign-person').value;
+        const staffRec = DB.staff.find(s=>s.email===personEmail);
+        const personName = staffRec ? staffRec.name : personEmail;
+        const buildingId = rbSel.value, roomId = document.getElementById('reassign-room').value||null;
+        const remark = document.getElementById('reassign-remarks').value.trim();
+        r.assignments.push({ responsiblePersonEmail:personEmail, responsiblePersonName:personName, buildingId, roomId, categoryId:r.categoryId, remarks:remark, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
+        r.buildingId = buildingId; r.roomId = roomId;
+        r.history.push({ stage:'Reassigned', action:'reassigned to '+personName, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
+        await saveDb(); toast('Reassigned','success'); openItemDetailModal(r.id);
+      });
+    }
+    if(isResponsible || isApproverRole() || isAdmin()){
+      box.innerHTML += '<div class="plain-divider"></div>'
         + '<h4>Log Maintenance / Repair Event</h4>'
         + '<div class="field"><label>Date</label><input type="date" id="mnt-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
         + '<div class="field"><label>Description</label><textarea id="mnt-desc"></textarea></div>'
@@ -2516,30 +2704,6 @@ function renderItemActionBox(r){
     return;
   }
 }
-async function actOnApprovalModal(r, action){
-  const remark = document.getElementById('modal-remark').value.trim();
-  await actOnApprovalById(r, action, remark);
-}
-async function actOnApprovalById(r, action, remark){
-  const role = currentApprovalRole(r);
-  const stageLabel = roleKeyLabel(role)+' Approval';
-  r.history.push({ stage: stageLabel, action: action==='approve'?'approved':'rejected', actorEmail: currentUserEmail, actorName: (myStaffRecord()||{}).name || currentUserEmail, remark, timestamp: new Date().toISOString() });
-  if(action==='reject'){
-    r.status = 'rejected';
-  } else {
-    if(r.approvalIndex < r.approvalChain.length - 1){
-      r.approvalIndex += 1;
-    } else {
-      r.status = 'purchase_pending';
-      if(!r.assignedPurchaserEmail){ r.assignedPurchaserEmail = r.requestedByEmail; r.assignedPurchaserName = r.requestedByName; }
-      generatePurchaseOrder(r);
-    }
-  }
-  await saveDb();
-  toast(action==='approve' ? 'Approved' : 'Rejected', action==='approve'?'success':'error');
-  openItemDetailModal(r.id);
-}
-
 /* ============================================================
    Manage Staff (Admin, Chairman, Principal, Coordinator)
    ============================================================ */
@@ -2553,9 +2717,10 @@ function renderManageStaffModalBody(){
     const isTop = topRoles.includes(s.role);
     const canEdit = isTop ? canManageTopRoles() : canManageStaff();
     return '<div class="cat-policy-row">'
-      + '<div class="cat-policy-name">'+escapeHtml(s.name)+' <span class="badge badge-status">'+roleKeyLabel(s.role)+'</span>'+(s.active===false?' <span class="badge badge-rejected">Inactive</span>':'')+'<br><small style="color:var(--color-ink-faint);">'+escapeHtml(s.email||'no email set')+'</small></div>'
+      + '<div class="cat-policy-name">'+escapeHtml(s.name)+' <span class="badge badge-status">'+roleKeyLabel(s.role)+'</span>'+(s.canConsume?' <span class="badge badge-approved">Can Consume</span>':'')+(s.active===false?' <span class="badge badge-rejected">Inactive</span>':'')+'<br><small style="color:var(--color-ink-faint);">'+escapeHtml(s.email||'no email set')+'</small></div>'
       + (canEdit ? ('<div class="cat-policy-controls">'
           + '<button class="btn btn-outline btn-sm" data-edit-staff="'+s.id+'">Edit</button>'
+          + (isAdmin() ? '<button class="btn btn-outline btn-sm" data-toggle-consume="'+s.id+'">'+(s.canConsume?'Revoke Consume':'Allow Consume')+'</button>' : '')
           + '<button class="btn btn-danger btn-sm" data-toggle-staff="'+s.id+'">'+(s.active===false?'Reactivate':'Deactivate')+'</button>'
         + '</div>') : '')
       + '</div>';
@@ -2596,6 +2761,13 @@ function renderManageStaffModalBody(){
     btn.addEventListener('click', async ()=>{
       const s = DB.staff.find(x=>x.id===btn.getAttribute('data-toggle-staff'));
       s.active = s.active===false ? true : false;
+      await saveDb(); toast('Updated','success'); renderManageStaffModalBody();
+    });
+  });
+  document.querySelectorAll('[data-toggle-consume]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const s = DB.staff.find(x=>x.id===btn.getAttribute('data-toggle-consume'));
+      s.canConsume = !s.canConsume;
       await saveDb(); toast('Updated','success'); renderManageStaffModalBody();
     });
   });
