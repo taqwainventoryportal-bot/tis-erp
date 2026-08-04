@@ -1490,10 +1490,27 @@ function renderManageDeptsModalBody(){
   const body = rows
     + '<div class="plain-divider"></div>'
     + '<div class="field"><label>New Category Name</label><input type="text" id="new-cat-name"></div>'
-    + '<button class="btn btn-primary btn-sm" id="add-cat-btn">+ Add Category</button>';
+    + '<button class="btn btn-primary btn-sm" id="add-cat-btn">+ Add Category</button>'
+    + (isAdmin() ? ('<div class="plain-divider"></div>'
+        + '<div class="field-hint" style="margin-bottom:8px; color:var(--color-danger);">One-time cleanup: permanently remove everything above and replace it with the standard 9-category structure. This cannot be undone — old categories/items will not appear in Archive.</div>'
+        + '<button class="btn btn-outline btn-sm" id="reset-cats-btn" style="border-color:var(--color-danger); color:var(--color-danger);">Permanently Remove Old Categories &amp; Reset</button>') : '');
 
   openModal('Manage Categories &amp; Items', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-inventory');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+  const resetBtn = document.getElementById('reset-cats-btn');
+  if(resetBtn) resetBtn.addEventListener('click', async ()=>{
+    if(!confirm('This will PERMANENTLY delete all current categories and catalog items — not archived, not recoverable — then replace them with the standard 9-category structure. Existing inventory items/requests keep their old category name as plain text for history, but the category record itself will be gone. Continue?')) return;
+    if(!confirm('Are you absolutely sure? This cannot be undone.')) return;
+    DB.categories = [];
+    DB.itemCatalog = [];
+    const seedCats = seedCategories();
+    const catIdMap = {};
+    const newCats = seedCats.map(c=>{ const newId = nextId('cat'); catIdMap[c.id] = newId; return Object.assign({}, c, { id:newId }); });
+    const newItems = seedItemCatalog().map(i=> Object.assign({}, i, { id: nextId('ic'), categoryId: catIdMap[i.categoryId] }));
+    DB.categories.push(...newCats);
+    DB.itemCatalog.push(...newItems);
+    await saveDb(); toast('Old categories permanently removed, reset to new structure','success'); renderManageDeptsModalBody(); renderRoute();
+  });
   document.getElementById('add-cat-btn').addEventListener('click', async ()=>{
     const input = document.getElementById('new-cat-name');
     const name = input.value.trim();
