@@ -448,38 +448,20 @@ let tokenClient = null;
 /* ============================================================
    Seed data — editable afterwards from Admin > Manage Departments
    ============================================================ */
-function seedDepartments(){
-  return [
-    { id:"dept_academic", name:"Academic", sortOrder:0 },
-    { id:"dept_administration", name:"Administration", sortOrder:1 },
-    { id:"dept_examination", name:"Examination", sortOrder:2 },
-    { id:"dept_it", name:"IT", sortOrder:3 },
-    { id:"dept_sports", name:"Sports", sortOrder:4 },
-    { id:"dept_maintenance", name:"Maintenance", sortOrder:5 },
-    { id:"dept_medical", name:"Medical", sortOrder:6 },
-    { id:"dept_events", name:"Events", sortOrder:7 }
-  ];
-}
 function seedCategories(){
-  // procurementPolicy: 'required' | 'not_required'
-  // valueClass: 'low' | 'medium' | 'high' | 'emergency' (drives approval routing when policy is 'required')
-  // itemTypeId: default Item Type for items raised under this category
+  // Flat, independent of Department/Building — just "what kind of thing is this".
+  // valueClass/itemTypeId here are now DEFAULTS only, pre-filling new catalog
+  // items in this category; each catalog item can override them individually.
   return [
-    { id:"cat_classroom", departmentId:"dept_academic", name:"Classroom Teaching Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
-    { id:"cat_stationery", departmentId:"dept_academic", name:"Stationery", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
-    { id:"cat_artcraft", departmentId:"dept_academic", name:"Art & Craft Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
-    { id:"cat_library", departmentId:"dept_academic", name:"Library Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
-    { id:"cat_admin_consumables", departmentId:"dept_administration", name:"Administrative Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
-    { id:"cat_office_consumables", departmentId:"dept_administration", name:"Office Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
-    { id:"cat_exam_consumables", departmentId:"dept_examination", name:"Examination Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
-    { id:"cat_computer_lab", departmentId:"dept_it", name:"Computer Lab Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"medium" },
-    { id:"cat_sports_consumables", departmentId:"dept_sports", name:"Sports Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
-    { id:"cat_housekeeping", departmentId:"dept_maintenance", name:"Washroom & Housekeeping Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
-    { id:"cat_elec_plumb", departmentId:"dept_maintenance", name:"Electrical, Plumbing & Accidental Safety Consumables", itemTypeId:"type_repair", procurementPolicy:"required", valueClass:"medium" },
-    { id:"cat_firstaid", departmentId:"dept_medical", name:"First Aid Supplies", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
-    { id:"cat_events_consumables", departmentId:"dept_events", name:"Events & Assembly Consumables", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
-    { id:"cat_assets_general", departmentId:"dept_administration", name:"Furniture & Equipment (Assets)", itemTypeId:"type_asset", procurementPolicy:"required", valueClass:"high" },
-    { id:"cat_services_general", departmentId:"dept_maintenance", name:"Labour & Services", itemTypeId:"type_service", procurementPolicy:"required", valueClass:"medium" }
+    { id:"cat_stationery", name:"Stationery Items", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"cat_kitchen", name:"Kitchen / Pantry Items", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"cat_toiletry", name:"Toiletry / Housekeeping Items", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"cat_firstaid", name:"First Aid Box Items", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"cat_guest", name:"Guest / Hospitality Items", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"cat_electrical", name:"Electrical / Electronic Items", itemTypeId:"type_asset", procurementPolicy:"required", valueClass:"medium" },
+    { id:"cat_artcraft", name:"Art & Craft Items", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"cat_computer", name:"Computer Parts & Electronic Gadgets", itemTypeId:"type_asset", procurementPolicy:"required", valueClass:"high" },
+    { id:"cat_furniture", name:"Furniture", itemTypeId:"type_asset", procurementPolicy:"required", valueClass:"high" }
   ];
 }
 function seedBuildings(){
@@ -493,23 +475,38 @@ function seedRooms(){ return []; }
 function seedItemCatalog(){
   // Master, admin-managed list of procurable items — locks terminology so
   // "Pen", "pen", "Ball Pen" never become three different stock lines.
+  // Each item carries its OWN valueClass + itemTypeId + procurementPolicy —
+  // categories can span wildly different value tiers (a mouse pad and a
+  // monitor both live under Computer Parts), so blanket category-level
+  // settings aren't precise enough on their own.
   return [
-    { id:"ic_1", categoryId:"cat_stationery", code:"STA-001", name:"Ball Pen", description:"Standard blue ball pen" },
-    { id:"ic_2", categoryId:"cat_stationery", code:"STA-002", name:"Pencil", description:"HB graphite pencil" },
-    { id:"ic_3", categoryId:"cat_stationery", code:"STA-003", name:"A4 Paper Ream", description:"500 sheets, 75 GSM" },
-    { id:"ic_4", categoryId:"cat_stationery", code:"STA-004", name:"Stapler", description:"Standard office stapler" },
-    { id:"ic_5", categoryId:"cat_classroom", code:"CLS-001", name:"Whiteboard Marker", description:"Black/blue whiteboard marker" },
-    { id:"ic_6", categoryId:"cat_classroom", code:"CLS-002", name:"Duster", description:"Whiteboard duster" },
-    { id:"ic_7", categoryId:"cat_artcraft", code:"ART-001", name:"Fevicol", description:"White adhesive, 100g" },
-    { id:"ic_8", categoryId:"cat_artcraft", code:"ART-002", name:"Colour Paper", description:"Assorted colour craft paper" },
-    { id:"ic_9", categoryId:"cat_office_consumables", code:"OFC-001", name:"Ball Pen", description:"Standard blue ball pen, office use" },
-    { id:"ic_10", categoryId:"cat_office_consumables", code:"OFC-002", name:"Printer Paper Ream", description:"A4, 75 GSM" },
-    { id:"ic_11", categoryId:"cat_office_consumables", code:"OFC-003", name:"Stapler Pins", description:"Box of stapler pins" },
-    { id:"ic_12", categoryId:"cat_housekeeping", code:"HSK-001", name:"Phenyl", description:"Floor cleaning phenyl, 1L" },
-    { id:"ic_13", categoryId:"cat_housekeeping", code:"HSK-002", name:"Dustbin", description:"Plastic dustbin, medium" },
-    { id:"ic_14", categoryId:"cat_firstaid", code:"MED-001", name:"First Aid Kit Refill", description:"Bandages, antiseptic, cotton" },
-    { id:"ic_15", categoryId:"cat_assets_general", code:"AST-001", name:"Ceiling Fan", description:"Standard ceiling fan" },
-    { id:"ic_16", categoryId:"cat_assets_general", code:"AST-002", name:"Office Chair", description:"Standard office chair" }
+    { id:"ic_1", categoryId:"cat_stationery", code:"STA-001", name:"Ball Pen", description:"Standard blue ball pen", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_2", categoryId:"cat_stationery", code:"STA-002", name:"Pencil", description:"HB graphite pencil", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_3", categoryId:"cat_stationery", code:"STA-003", name:"A4 Sheets (Ream)", description:"500 sheets, 75 GSM", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_4", categoryId:"cat_stationery", code:"STA-004", name:"Whiteboard Marker", description:"Black/blue whiteboard marker", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_5", categoryId:"cat_stationery", code:"STA-005", name:"Stapler Pins", description:"Box of stapler pins", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_6", categoryId:"cat_kitchen", code:"KIT-001", name:"Tea Leaves", description:"Packet", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_7", categoryId:"cat_kitchen", code:"KIT-002", name:"Sugar", description:"1kg pack", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_8", categoryId:"cat_kitchen", code:"KIT-003", name:"Milk", description:"Daily supply", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_9", categoryId:"cat_toiletry", code:"TLT-001", name:"Phenyl", description:"Floor cleaning phenyl, 1L", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_10", categoryId:"cat_toiletry", code:"TLT-002", name:"Harpic", description:"Toilet cleaner", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_11", categoryId:"cat_toiletry", code:"TLT-003", name:"Washing Powder", description:"1kg pack", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_12", categoryId:"cat_firstaid", code:"MED-001", name:"Band-Aids", description:"Box", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_13", categoryId:"cat_firstaid", code:"MED-002", name:"Dettol", description:"Antiseptic liquid", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_14", categoryId:"cat_guest", code:"GST-001", name:"Biscuits", description:"Guest hospitality pack", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_15", categoryId:"cat_electrical", code:"ELE-001", name:"CFL Bulb", description:"Standard CFL bulb", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_16", categoryId:"cat_electrical", code:"ELE-002", name:"Ceiling Fan", description:"Standard ceiling fan", itemTypeId:"type_asset", procurementPolicy:"required", valueClass:"medium" },
+    { id:"ic_17", categoryId:"cat_electrical", code:"ELE-003", name:"Extension Box", description:"Multi-socket extension board", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_18", categoryId:"cat_electrical", code:"ELE-004", name:"Inverter Battery", description:"Replacement battery", itemTypeId:"type_repair", procurementPolicy:"required", valueClass:"medium" },
+    { id:"ic_19", categoryId:"cat_artcraft", code:"ART-001", name:"Fevicol", description:"White adhesive, 100g", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"ic_20", categoryId:"cat_artcraft", code:"ART-002", name:"Chart Paper", description:"Assorted chart paper", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"ic_21", categoryId:"cat_computer", code:"CMP-001", name:"Mouse Pad", description:"Standard mouse pad", itemTypeId:"type_consumable", procurementPolicy:"not_required", valueClass:"low" },
+    { id:"ic_22", categoryId:"cat_computer", code:"CMP-002", name:"Wireless Mouse", description:"Standard wireless mouse", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"low" },
+    { id:"ic_23", categoryId:"cat_computer", code:"CMP-003", name:"Monitor", description:"Desktop monitor", itemTypeId:"type_asset", procurementPolicy:"required", valueClass:"high" },
+    { id:"ic_24", categoryId:"cat_computer", code:"CMP-004", name:"Printer", description:"Office/classroom printer", itemTypeId:"type_asset", procurementPolicy:"required", valueClass:"high" },
+    { id:"ic_25", categoryId:"cat_computer", code:"CMP-005", name:"Toner Cartridge", description:"Printer toner refill", itemTypeId:"type_consumable", procurementPolicy:"required", valueClass:"medium" },
+    { id:"ic_26", categoryId:"cat_furniture", code:"FUR-001", name:"Classroom Desk & Bench", description:"Standard classroom furniture", itemTypeId:"type_asset", procurementPolicy:"required", valueClass:"medium" },
+    { id:"ic_27", categoryId:"cat_furniture", code:"FUR-002", name:"Office Chair", description:"Standard office chair", itemTypeId:"type_asset", procurementPolicy:"required", valueClass:"medium" }
   ];
 }
 function seedItemTypes(){
@@ -536,7 +533,7 @@ function seedStaff(){
 }
 function emptyDb(){
   return {
-    departments: seedDepartments(),
+    departments: [], // dropped as an organizing axis; kept only so legacy saved data doesn't break on load
     categories: seedCategories(),
     inventoryItems: [],
     dismissedAlerts: [],
@@ -630,10 +627,11 @@ function priorityBadge(p){
   const cls = { Low:'badge-low', Medium:'badge-medium', High:'badge-high', Urgent:'badge-high' }[p] || 'badge-status';
   return '<span class="badge '+cls+'">'+escapeHtml(p)+'</span>';
 }
-function itemStatusLabel(status){
+function itemStatusLabel(status, pattern){
+  if(status==='active' && pattern==='asset') return 'Assets Installed';
   return {
     pending_approval:'Pending Approval', rejected:'Rejected', purchase_pending:'Purchase Pending',
-    purchased:'Purchased', received:'Received', assigned:'Assigned', active:'Active',
+    purchased:'Purchased', received: (pattern && pattern!=='consumable') ? 'Received — Awaiting Installation' : 'Received', assigned:'Assigned', active:'Active',
     completed:'Completed', archived:'Archived'
   }[status] || status;
 }
@@ -644,7 +642,7 @@ function itemStatusBadgeClass(status){
     completed:'badge-approved', archived:'badge-status'
   }[status] || 'badge-status';
 }
-function itemStatusBadge(status){ return '<span class="badge '+itemStatusBadgeClass(status)+'">'+itemStatusLabel(status)+'</span>'; }
+function itemStatusBadge(status, pattern){ return '<span class="badge '+itemStatusBadgeClass(status)+'">'+itemStatusLabel(status, pattern)+'</span>'; }
 function deptName(id){ const d = DB.departments.find(x=>x.id===id); return d ? d.name : '—'; }
 function catName(id){ const c = DB.categories.find(x=>x.id===id); return c ? c.name : '—'; }
 function itemName(id){ const i = DB.inventoryItems.find(x=>x.id===id); return i ? i.name : '—'; }
@@ -1048,7 +1046,7 @@ function renderSearchResults(q){
   const reqItems = DB.requestItems.filter(r=> !r.deleted && (r.itemName||'').toLowerCase().includes(q) ).slice(0,6);
   if(!items.length && !reqItems.length){ slot.innerHTML = '<div class="search-results"><a>No matches found</a></div>'; return; }
   let html = '<div class="search-results">';
-  items.forEach(i=>{ html += '<a href="#/inventory/'+i.departmentId+'">'+escapeHtml(i.name)+'<small>Inventory · '+escapeHtml(deptName(i.departmentId))+' · '+escapeHtml(catName(i.categoryId))+'</small></a>'; });
+  items.forEach(i=>{ html += '<a href="#/inventory/category/'+i.categoryId+'">'+escapeHtml(i.name)+'<small>Inventory · '+escapeHtml(catName(i.categoryId))+'</small></a>'; });
   reqItems.forEach(r=>{ html += '<a href="#/procurement/item/'+r.id+'">'+escapeHtml(r.itemName)+'<small>Procurement · '+escapeHtml(r.requestNumber)+' · '+itemStatusLabel(r.status)+'</small></a>'; });
   html += '</div>';
   slot.innerHTML = html;
@@ -1090,8 +1088,8 @@ function renderRoute(){
   const parts = hash.replace('#/','').split('/').filter(Boolean);
   if(!parts.length) return renderHomePage();
   if(parts[0]==='inventory' && parts[1]==='item' && parts[2]) return renderInventoryItemDetailPage(parts[2]);
+  if(parts[0]==='inventory' && parts[1]==='category' && parts[2]) return renderCategoryPage(parts[2]);
   if(parts[0]==='inventory' && !parts[1]) return renderInventoryPage();
-  if(parts[0]==='inventory' && parts[1]) return renderDepartmentPage(parts[1]);
   if(parts[0]==='procurement' && parts[1]==='item' && parts[2]) { renderProcurementPage(); openItemDetailModal(parts[2]); return; }
   if(parts[0]==='procurement') return renderProcurementPage(parts[1]);
   return renderHomePage();
@@ -1107,7 +1105,7 @@ function computeActiveAlerts(){
     if(threshold>0 && Number(item.quantity) <= threshold){
       const key = 'lowstock_'+item.id;
       if(!DB.dismissedAlerts.includes(key)){
-        alerts.push({ key, title:'Low stock: '+item.name, message: deptName(item.departmentId)+' · '+catName(item.categoryId)+' — only '+item.quantity+' '+(item.unit||'')+' left (reorder at '+threshold+')' });
+        alerts.push({ key, title:'Low stock: '+item.name, message: catName(item.categoryId)+' — only '+item.quantity+' '+(item.unit||'')+' left (reorder at '+threshold+')' });
       }
     }
   });
@@ -1181,10 +1179,10 @@ function computeCategoryExpenditure(){
   });
   return Object.entries(totals).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value).slice(0,6);
 }
-function computeBuildingExpenditure(){
+function computeItemTypeExpenditure(){
   const totals = {};
   purchasedItems().forEach(r=>{
-    const label = buildingName(r.buildingId);
+    const label = itemTypeName(r.itemTypeId);
     totals[label] = (totals[label]||0) + (Number(r.purchase.totalAmount)||0);
   });
   return Object.entries(totals).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
@@ -1323,7 +1321,7 @@ function renderHomePage(){
 
   const monthly = computeMonthlyExpenditure();
   const byCategory = computeCategoryExpenditure();
-  const byBuilding = computeBuildingExpenditure();
+  const byItemType = computeItemTypeExpenditure();
   const byStatus = computeRequestsByStatus();
   const curMonth = currentMonthExpenditure();
   const allTime = totalExpenditureAllTime();
@@ -1357,7 +1355,7 @@ function renderHomePage(){
       ('<div class="analytics-grid">'
       +   '<div class="chart-card"><div class="chart-card-title">Monthly Expenditure &amp; Purchase Trend</div>'+svgBarChart(monthly)+'</div>'
       +   '<div class="chart-card"><div class="chart-card-title">Category-wise Expenditure</div>'+renderDonutWithLegend(byCategory)+'</div>'
-      +   '<div class="chart-card"><div class="chart-card-title">Building-wise Expenditure</div>'+renderHBarList(byBuilding)+'</div>'
+      +   '<div class="chart-card"><div class="chart-card-title">Expenditure by Item Type</div>'+renderHBarList(byItemType)+'</div>'
       +   '<div class="chart-card"><div class="chart-card-title">Requests by Status</div>'+renderDonutWithLegend(byStatus, 'No requests yet', v=>String(v))+'</div>'
       + '</div>')
       : ('<div class="empty-analytics"><div class="empty-analytics-icon">'+iconBarChart(30,'var(--color-primary)')+'</div>'
@@ -1384,16 +1382,16 @@ function renderInventoryPage(){
   app.innerHTML =
     '<div class="content wrap module-inventory">'
     + '<div class="page-title"><h2>Inventory Management</h2>'
-    + (isAdmin() ? '<button class="btn btn-primary btn-sm" id="manage-depts-btn">Manage Departments &amp; Categories</button>' : '')
+    + (isAdmin() ? '<button class="btn btn-primary btn-sm" id="manage-cats-btn">Manage Categories &amp; Items</button>' : '')
     + '</div>'
-    + '<div class="page-subtitle">Select a department to view and manage its stock.</div>'
+    + '<div class="page-subtitle">Select a category to view and manage its stock.</div>'
     + '<div class="tab-strip">'
-    +   '<button class="tab-btn '+(inventoryPageTab==='browse'?'active':'')+'" data-inv-tab="browse">Browse by Department</button>'
+    +   '<button class="tab-btn '+(inventoryPageTab==='browse'?'active':'')+'" data-inv-tab="browse">Browse by Category</button>'
     +   (canManageConsumption() ? '<button class="tab-btn '+(inventoryPageTab==='consumption'?'active':'')+'" data-inv-tab="consumption">Stock Consumption</button>' : '')
     + '</div>'
     + '<div class="tab-panel" id="inv-page-panel"></div>'
     + '</div>';
-  const btn = document.getElementById('manage-depts-btn'); if(btn) btn.addEventListener('click', openManageDeptsModal);
+  const btn = document.getElementById('manage-cats-btn'); if(btn) btn.addEventListener('click', openManageDeptsModal);
   document.querySelectorAll('[data-inv-tab]').forEach(b=>{
     b.addEventListener('click', ()=>{ inventoryPageTab = b.getAttribute('data-inv-tab'); renderInventoryPage(); });
   });
@@ -1402,26 +1400,25 @@ function renderInventoryPage(){
 }
 function renderInventoryBrowseTab(){
   const panel = document.getElementById('inv-page-panel');
-  const cards = DB.departments.filter(d=>!d.deleted).sort((a,b)=>a.sortOrder-b.sortOrder).map(d=>{
-    const items = DB.inventoryItems.filter(i=>i.departmentId===d.id && !i.deleted);
-    const cats = DB.categories.filter(c=>c.departmentId===d.id && !c.deleted).length;
+  const cards = DB.categories.filter(c=>!c.deleted).map(c=>{
+    const items = DB.inventoryItems.filter(i=>i.categoryId===c.id && !i.deleted);
     const low = items.filter(i=> Number(i.reorderThreshold)>0 && Number(i.quantity) <= Number(i.reorderThreshold)).length;
-    return '<a href="#/inventory/'+d.id+'" class="card-link"><div class="card">'
-      + '<div class="card-icon">'+escapeHtml((d.name||'?').charAt(0).toUpperCase())+'</div>'
-      + '<div class="card-title">'+escapeHtml(d.name)+'</div>'
-      + '<div class="card-meta">'+cats+' categories · '+items.length+' items</div>'
+    return '<a href="#/inventory/category/'+c.id+'" class="card-link"><div class="card">'
+      + '<div class="card-icon">'+escapeHtml((c.name||'?').charAt(0).toUpperCase())+'</div>'
+      + '<div class="card-title">'+escapeHtml(c.name)+'</div>'
+      + '<div class="card-meta">'+items.length+' items</div>'
       + (low ? '<div class="card-badge-row"><span class="badge badge-high">'+low+' low stock</span></div>' : '')
       + '</div></a>';
   }).join('');
-  panel.innerHTML = '<div class="card-grid">'+(cards || '<div class="empty-state"><div class="icon">🗂️</div><h3>No departments yet</h3></div>')+'</div>';
+  panel.innerHTML = '<div class="card-grid">'+(cards || '<div class="empty-state"><div class="icon">🗂️</div><h3>No categories yet</h3></div>')+'</div>';
 }
 function renderConsumptionTab(){
   const panel = document.getElementById('inv-page-panel');
   const items = DB.inventoryItems.filter(i=>!i.deleted).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📉</div><h3>No stock to consume yet</h3></div>'; return; }
-  panel.innerHTML = '<div class="page-subtitle-inline">Record consumption directly against any item\'s stock — independent of any specific purchase.</div>'
-    + '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Department</th><th>Category</th><th>Current Stock</th><th></th></tr></thead><tbody>'
-    + items.map(i=>'<tr><td>'+escapeHtml(i.name)+'</td><td>'+escapeHtml(deptName(i.departmentId))+'</td><td>'+escapeHtml(catName(i.categoryId))+'</td><td><strong>'+escapeHtml(i.quantity)+'</strong> '+escapeHtml(i.unit||'')+'</td><td><button class="btn btn-outline btn-sm" data-consume-item="'+i.id+'">Consume</button></td></tr>').join('')
+  panel.innerHTML = '<div class="page-subtitle-inline">Record consumption directly against any item\'s stock, including where it actually went — independent of any specific purchase.</div>'
+    + '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Current Stock</th><th></th></tr></thead><tbody>'
+    + items.map(i=>'<tr><td>'+escapeHtml(i.name)+'</td><td>'+escapeHtml(catName(i.categoryId))+'</td><td><strong>'+escapeHtml(i.quantity)+'</strong> '+escapeHtml(i.unit||'')+'</td><td><button class="btn btn-outline btn-sm" data-consume-item="'+i.id+'">Consume</button></td></tr>').join('')
     + '</tbody></table></div>';
   panel.querySelectorAll('[data-consume-item]').forEach(btn=>{
     btn.addEventListener('click', ()=>openConsumeModal(btn.getAttribute('data-consume-item')));
@@ -1430,116 +1427,122 @@ function renderConsumptionTab(){
 function openConsumeModal(itemId){
   const item = DB.inventoryItems.find(x=>x.id===itemId);
   if(!item) return;
+  const buildings = DB.buildings.filter(b=>!b.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
   const body = '<div class="field-hint" style="margin-bottom:10px;">Current stock: <strong>'+escapeHtml(item.quantity)+' '+escapeHtml(item.unit||'')+'</strong></div>'
     + '<div class="field"><label>Quantity Consumed</label><input type="number" id="consume-qty" min="1" max="'+item.quantity+'" value="1"></div>'
     + '<div class="field"><label>Date</label><input type="date" id="consume-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+    + '<div class="field-row"><div class="field"><label>Building (where it went)</label><select id="consume-building"><option value="">— Not specified —</option>'+buildings.map(b=>'<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('')+'</select></div><div class="field"><label>Room (optional)</label><select id="consume-room"><option value="">— None —</option></select></div></div>'
     + '<div class="field"><label>Remarks / Purpose</label><textarea id="consume-remarks" placeholder="e.g. Used for Class 5 art project"></textarea></div>';
   openModal('Record Consumption — '+escapeHtml(item.name), body, '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-primary" id="consume-submit-btn">Record</button>', 'module-inventory');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+  const cbSel = document.getElementById('consume-building');
+  function refreshConsumeRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===cbSel.value); document.getElementById('consume-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
+  cbSel.addEventListener('change', refreshConsumeRooms); refreshConsumeRooms();
   document.getElementById('consume-submit-btn').addEventListener('click', async ()=>{
     const qty = Number(document.getElementById('consume-qty').value)||0;
     const date = document.getElementById('consume-date').value;
+    const buildingId = cbSel.value, roomId = document.getElementById('consume-room').value;
+    const location = buildingId ? (buildingName(buildingId)+(roomId?' / '+roomName(roomId):'')) : '';
     const remark = document.getElementById('consume-remarks').value.trim();
     if(qty<=0){ toast('Enter a quantity greater than zero','error'); return; }
     if(qty > Number(item.quantity)){ toast('Cannot consume more than current stock','error'); return; }
-    const balance = pushLedgerEntry(item.id, 'Issue', '', 0, qty, remark || 'Stock consumption', date);
+    const fullRemark = (location ? '['+location+'] ' : '') + (remark || 'Stock consumption');
+    const balance = pushLedgerEntry(item.id, 'Issue', '', 0, qty, fullRemark, date);
     item.quantity = balance; item.updatedAt = new Date().toISOString();
-    itemHistoryPush(item, 'Consumed', qty+' consumed'+(remark?' — '+remark:''));
+    itemHistoryPush(item, 'Consumed', qty+' consumed'+(location?' at '+location:'')+(remark?' — '+remark:''));
     await saveDb(); toast('Consumption recorded','success'); closeModal(); renderInventoryPage();
   });
 }
 
 function openManageDeptsModal(){
   renderManageDeptsModalBody();
+
 }
 function renderManageDeptsModalBody(){
-  const depts = DB.departments.filter(d=>!d.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
   const typeOptions = DB.itemTypes.map(t=>'<option value="'+t.id+'">'+escapeHtml(t.name)+'</option>').join('');
   const valueClassOptions = ['low','medium','high','emergency'].map(v=>'<option value="'+v+'">'+valueClassLabel(v)+'</option>').join('');
-  const rows = depts.map(d=>{
-    const cats = DB.categories.filter(c=>c.departmentId===d.id && !c.deleted);
+  const cats = DB.categories.filter(c=>!c.deleted);
+  const rows = cats.map(c=>{
+    const items = DB.itemCatalog.filter(i=>i.categoryId===c.id && !i.deleted).sort((a,b)=>a.code.localeCompare(b.code));
     return '<div style="border:1px solid var(--color-border); border-radius:10px; padding:12px; margin-bottom:10px;">'
       + '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">'
-      +   '<strong>'+escapeHtml(d.name)+'</strong>'
-      +   '<span style="display:flex; gap:6px;"><button class="btn btn-outline btn-sm" data-rename-dept="'+d.id+'">Rename</button><button class="btn btn-danger btn-sm" data-del-dept="'+d.id+'">Delete</button></span>'
+      +   '<strong>'+escapeHtml(c.name)+'</strong>'
+      +   '<span style="display:flex; gap:6px;"><button class="btn btn-outline btn-sm" data-rename-cat="'+c.id+'">Rename</button><button class="btn btn-danger btn-sm" data-del-cat="'+c.id+'">Delete</button></span>'
       + '</div>'
       + '<div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">'
-      +   cats.map(c=>
+      +   (items.length ? items.map(i=>
           '<div class="cat-policy-row">'
-          + '<div class="cat-policy-name">'+escapeHtml(c.name)+' <button data-del-cat="'+c.id+'" title="Delete category" style="border:none;background:none;cursor:pointer;color:var(--color-danger);font-weight:700;">&times;</button></div>'
+          + '<div class="cat-policy-name"><span class="badge badge-status">'+escapeHtml(i.code)+'</span> '+escapeHtml(i.name)+' <button data-del-item="'+i.id+'" title="Delete item" style="border:none;background:none;cursor:pointer;color:var(--color-danger);font-weight:700;">&times;</button></div>'
           + '<div class="cat-policy-controls">'
-          +   '<select data-cat-itemtype="'+c.id+'" title="Item Type">'+typeOptions.replace('value="'+c.itemTypeId+'"','value="'+c.itemTypeId+'" selected')+'</select>'
-          +   '<select data-cat-valueclass="'+c.id+'" title="Value Classification">'+valueClassOptions.replace('value="'+c.valueClass+'"','value="'+c.valueClass+'" selected')+'</select>'
-          +   '<button class="policy-toggle '+(c.procurementPolicy==='required'?'on':'off')+'" data-cat-policy-toggle="'+c.id+'" title="Toggle whether this category requires approval">'
-          +     (c.procurementPolicy==='required' ? 'Requires Approval' : 'No Approval Required')
+          +   '<select data-item-type="'+i.id+'" title="Item Type">'+typeOptions.replace('value="'+i.itemTypeId+'"','value="'+i.itemTypeId+'" selected')+'</select>'
+          +   '<select data-item-valueclass="'+i.id+'" title="Value Classification">'+valueClassOptions.replace('value="'+i.valueClass+'"','value="'+i.valueClass+'" selected')+'</select>'
+          +   '<button class="policy-toggle '+(i.procurementPolicy==='required'?'on':'off')+'" data-item-policy-toggle="'+i.id+'" title="Toggle whether this item requires approval">'
+          +     (i.procurementPolicy==='required' ? 'Requires Approval' : 'No Approval Required')
           +   '</button>'
           + '</div>'
           + '</div>'
-        ).join('')
+        ).join('') : '<div class="field-hint">No items yet in this category.</div>')
       + '</div>'
-      + '<div style="margin-top:8px; display:flex; gap:6px;"><input type="text" placeholder="New category name" data-newcat-input="'+d.id+'" style="flex:1; padding:6px 9px; border:1.5px solid var(--color-border); border-radius:7px; font-size:12.5px;"><button class="btn btn-outline btn-sm" data-add-cat="'+d.id+'">+ Add</button></div>'
+      + '<div style="margin-top:8px; display:flex; gap:6px;"><input type="text" placeholder="New item name" data-newitem-name="'+c.id+'" style="flex:1; padding:6px 9px; border:1.5px solid var(--color-border); border-radius:7px; font-size:12.5px;"><button class="btn btn-outline btn-sm" data-add-item="'+c.id+'">+ Add</button></div>'
       + '</div>';
   }).join('');
 
   const body = rows
     + '<div class="plain-divider"></div>'
-    + '<div class="field"><label>New Department Name</label><input type="text" id="new-dept-name"></div>'
-    + '<button class="btn btn-primary btn-sm" id="add-dept-btn">+ Add Department</button>';
+    + '<div class="field"><label>New Category Name</label><input type="text" id="new-cat-name"></div>'
+    + '<button class="btn btn-primary btn-sm" id="add-cat-btn">+ Add Category</button>';
 
-  openModal('Manage Departments &amp; Categories', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-inventory');
+  openModal('Manage Categories &amp; Items', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-inventory');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
-  document.getElementById('add-dept-btn').addEventListener('click', async ()=>{
-    const input = document.getElementById('new-dept-name');
+  document.getElementById('add-cat-btn').addEventListener('click', async ()=>{
+    const input = document.getElementById('new-cat-name');
     const name = input.value.trim();
     if(!name) return;
-    DB.departments.push({ id:nextId('dept'), name, sortOrder: DB.departments.length });
-    await saveDb(); toast('Department added','success'); renderManageDeptsModalBody(); renderRoute();
+    DB.categories.push({ id:nextId('cat'), name, itemTypeId:'type_consumable', procurementPolicy:'required', valueClass:'low' });
+    await saveDb(); toast('Category added','success'); renderManageDeptsModalBody(); renderRoute();
   });
-  document.querySelectorAll('[data-add-cat]').forEach(btn=>{
+  document.querySelectorAll('[data-add-item]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      const deptId = btn.getAttribute('data-add-cat');
-      const input = document.querySelector('[data-newcat-input="'+deptId+'"]');
+      const categoryId = btn.getAttribute('data-add-item');
+      const input = document.querySelector('[data-newitem-name="'+categoryId+'"]');
       const name = input.value.trim();
       if(!name) return;
-      DB.categories.push({ id:nextId('cat'), departmentId:deptId, name, itemTypeId:'type_consumable', procurementPolicy:'required', valueClass:'low' });
-      await saveDb(); toast('Category added','success'); renderManageDeptsModalBody(); renderRoute();
+      const cat = DB.categories.find(c=>c.id===categoryId);
+      DB.itemCatalog.push({
+        id:nextId('ic'), categoryId, code: nextItemCode(categoryId), name, description:'',
+        itemTypeId: cat ? cat.itemTypeId : 'type_consumable',
+        procurementPolicy: cat ? cat.procurementPolicy : 'required',
+        valueClass: cat ? cat.valueClass : 'low'
+      });
+      await saveDb(); toast('Item added','success'); renderManageDeptsModalBody(); renderRoute();
     });
   });
-  document.querySelectorAll('[data-cat-itemtype]').forEach(sel=>{
+  document.querySelectorAll('[data-item-type]').forEach(sel=>{
     sel.addEventListener('change', async ()=>{
-      const c = DB.categories.find(x=>x.id===sel.getAttribute('data-cat-itemtype'));
-      if(c){ c.itemTypeId = sel.value; await saveDb(); toast('Item Type updated','success'); }
+      const i = DB.itemCatalog.find(x=>x.id===sel.getAttribute('data-item-type'));
+      if(i){ i.itemTypeId = sel.value; await saveDb(); toast('Item Type updated','success'); }
     });
   });
-  document.querySelectorAll('[data-cat-valueclass]').forEach(sel=>{
+  document.querySelectorAll('[data-item-valueclass]').forEach(sel=>{
     sel.addEventListener('change', async ()=>{
-      const c = DB.categories.find(x=>x.id===sel.getAttribute('data-cat-valueclass'));
-      if(c){ c.valueClass = sel.value; await saveDb(); toast('Value Classification updated','success'); }
+      const i = DB.itemCatalog.find(x=>x.id===sel.getAttribute('data-item-valueclass'));
+      if(i){ i.valueClass = sel.value; await saveDb(); toast('Value Classification updated','success'); }
     });
   });
-  document.querySelectorAll('[data-cat-policy-toggle]').forEach(btn=>{
+  document.querySelectorAll('[data-item-policy-toggle]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      const c = DB.categories.find(x=>x.id===btn.getAttribute('data-cat-policy-toggle'));
-      if(c){ c.procurementPolicy = c.procurementPolicy==='required' ? 'not_required' : 'required'; await saveDb(); toast('Procurement Policy updated','success'); renderManageDeptsModalBody(); }
+      const i = DB.itemCatalog.find(x=>x.id===btn.getAttribute('data-item-policy-toggle'));
+      if(i){ i.procurementPolicy = i.procurementPolicy==='required' ? 'not_required' : 'required'; await saveDb(); toast('Procurement Policy updated','success'); renderManageDeptsModalBody(); }
     });
   });
-  document.querySelectorAll('[data-rename-dept]').forEach(btn=>{
+  document.querySelectorAll('[data-rename-cat]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      const id = btn.getAttribute('data-rename-dept');
-      const d = DB.departments.find(x=>x.id===id);
-      const name = prompt('Rename department:', d.name);
+      const id = btn.getAttribute('data-rename-cat');
+      const c = DB.categories.find(x=>x.id===id);
+      const name = prompt('Rename category:', c.name);
       if(!name || !name.trim()) return;
-      d.name = name.trim();
+      c.name = name.trim();
       await saveDb(); toast('Renamed','success'); renderManageDeptsModalBody(); renderRoute();
-    });
-  });
-  document.querySelectorAll('[data-del-dept]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const id = btn.getAttribute('data-del-dept');
-      const d = DB.departments.find(x=>x.id===id);
-      if(!promptAndArchive('department', d, d.name)) return;
-      DB.categories.filter(c=>c.departmentId===id && !c.deleted).forEach(c=>archiveRecord('category', c, c.name, 'Parent department deleted'));
-      await saveDb(); toast('Department deleted (archived)','success'); renderManageDeptsModalBody(); renderRoute();
     });
   });
   document.querySelectorAll('[data-del-cat]').forEach(btn=>{
@@ -1547,48 +1550,44 @@ function renderManageDeptsModalBody(){
       const id = btn.getAttribute('data-del-cat');
       const c = DB.categories.find(x=>x.id===id);
       if(!promptAndArchive('category', c, c.name)) return;
+      DB.itemCatalog.filter(i=>i.categoryId===id && !i.deleted).forEach(i=>archiveRecord('itemCatalog', i, i.name, 'Parent category deleted'));
       await saveDb(); toast('Category deleted (archived)','success'); renderManageDeptsModalBody(); renderRoute();
+    });
+  });
+  document.querySelectorAll('[data-del-item]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.getAttribute('data-del-item');
+      const i = DB.itemCatalog.find(x=>x.id===id);
+      if(!promptAndArchive('itemCatalog', i, i.code+' '+i.name)) return;
+      await saveDb(); toast('Item deleted (archived)','success'); renderManageDeptsModalBody(); renderRoute();
     });
   });
 }
 
 /* ============================================================
-   Inventory — department detail (category tabs + item tables)
+   Inventory — category detail (flat, no department layer)
    ============================================================ */
-let currentDeptTab = null;
-function renderDepartmentPage(deptId){
+function renderCategoryPage(catId){
   const app = document.getElementById('app');
-  const dept = DB.departments.find(d=>d.id===deptId);
-  if(!dept){ app.innerHTML = '<div class="content wrap"><div class="empty-state"><h3>Department not found</h3></div></div>'; return; }
-  const cats = DB.categories.filter(c=>c.departmentId===deptId && !c.deleted);
-  if(!currentDeptTab || !cats.find(c=>c.id===currentDeptTab)) currentDeptTab = cats[0] ? cats[0].id : null;
+  const cat = DB.categories.find(c=>c.id===catId);
+  if(!cat){ app.innerHTML = '<div class="content wrap"><div class="empty-state"><h3>Category not found</h3></div></div>'; return; }
 
   app.innerHTML =
     '<div class="content wrap module-inventory">'
-    + '<div class="breadcrumb"><a href="#/inventory">Inventory</a> / '+escapeHtml(dept.name)+'</div>'
-    + '<div class="page-title"><h2>'+escapeHtml(dept.name)+'</h2>'
+    + '<div class="breadcrumb"><a href="#/inventory">Inventory</a> / '+escapeHtml(cat.name)+'</div>'
+    + '<div class="page-title"><h2>'+escapeHtml(cat.name)+'</h2>'
     + (isAdmin() ? '<button class="btn btn-primary btn-sm" id="add-item-btn">+ Add Item</button>' : '')
     + '</div>'
-    + '<div class="tab-strip" id="cat-tabs"></div>'
     + '<div class="tab-panel" id="cat-panel"></div>'
     + '</div>';
 
-  const tabStrip = document.getElementById('cat-tabs');
-  if(!cats.length){
-    document.getElementById('cat-panel').innerHTML = '<div class="empty-state"><div class="icon">🗂️</div><h3>No categories yet</h3><p>'+(isAdmin()?'Add one from Manage Departments &amp; Categories.':'Check back later.')+'</p></div>';
-  } else {
-    tabStrip.innerHTML = cats.map(c=>'<button class="tab-btn '+(c.id===currentDeptTab?'active':'')+'" data-cat-tab="'+c.id+'">'+escapeHtml(c.name)+'</button>').join('');
-    tabStrip.querySelectorAll('[data-cat-tab]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{ currentDeptTab = btn.getAttribute('data-cat-tab'); renderDepartmentPage(deptId); });
-    });
-    renderItemsTable(deptId, currentDeptTab);
-  }
+  renderItemsTable(catId);
   const addBtn = document.getElementById('add-item-btn');
-  if(addBtn) addBtn.addEventListener('click', ()=>openItemModal(deptId, currentDeptTab, null));
+  if(addBtn) addBtn.addEventListener('click', ()=>openItemModal(catId, null));
 }
-function renderItemsTable(deptId, catId){
+function renderItemsTable(catId){
   const panel = document.getElementById('cat-panel');
-  const items = DB.inventoryItems.filter(i=>i.departmentId===deptId && i.categoryId===catId && !i.deleted).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const items = DB.inventoryItems.filter(i=>i.categoryId===catId && !i.deleted).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   if(!items.length){
     panel.innerHTML = '<div class="empty-state"><div class="icon">📦</div><h3>No items in this category yet</h3><p>'+(isAdmin()?'Use \u201c+ Add Item\u201d above to add the first one.':'Check back later.')+'</p></div>';
     return;
@@ -1618,7 +1617,7 @@ function renderItemsTable(deptId, catId){
     btn.addEventListener('click', (ev)=>{
       ev.stopPropagation();
       const item = DB.inventoryItems.find(x=>x.id===btn.getAttribute('data-edit-item'));
-      openItemModal(deptId, catId, item);
+      openItemModal(catId, item);
     });
   });
   panel.querySelectorAll('[data-del-item]').forEach(btn=>{
@@ -1626,7 +1625,7 @@ function renderItemsTable(deptId, catId){
       ev.stopPropagation();
       const it = DB.inventoryItems.find(x=>x.id===btn.getAttribute('data-del-item'));
       if(!promptAndArchive('inventoryItem', it, it.name)) return;
-      await saveDb(); toast('Item deleted (archived)','success'); renderDepartmentPage(deptId);
+      await saveDb(); toast('Item deleted (archived)','success'); renderCategoryPage(catId);
     });
   });
 }
@@ -1649,11 +1648,10 @@ function renderInventoryItemDetailPage(itemId){
 
   app.innerHTML =
     '<div class="content wrap module-inventory">'
-    + '<div class="breadcrumb"><a href="#/inventory">Inventory</a> / <a href="#/inventory/'+item.departmentId+'">'+escapeHtml(deptName(item.departmentId))+'</a> / '+escapeHtml(item.name)+'</div>'
+    + '<div class="breadcrumb"><a href="#/inventory">Inventory</a> / <a href="#/inventory/category/'+item.categoryId+'">'+escapeHtml(catName(item.categoryId))+'</a> / '+escapeHtml(item.name)+'</div>'
     + '<div class="page-title"><h2>'+escapeHtml(item.name)+'</h2>'+(item.deleted?'<span class="badge badge-rejected">Deleted (in Archive)</span>':(low?'<span class="badge badge-high">Low Stock</span>':''))+'</div>'
     + '<div class="spec-grid" style="margin:16px 0;">'
     +   '<div class="spec-item"><label>Category</label><div class="val">'+escapeHtml(catName(item.categoryId))+'</div></div>'
-    +   '<div class="spec-item"><label>Department</label><div class="val">'+escapeHtml(deptName(item.departmentId))+'</div></div>'
     +   '<div class="spec-item"><label>Current Stock</label><div class="val">'+escapeHtml(item.quantity)+' '+escapeHtml(item.unit||'')+'</div></div>'
     +   '<div class="spec-item"><label>Minimum Stock</label><div class="val">'+escapeHtml(item.minStock||0)+'</div></div>'
     +   '<div class="spec-item"><label>Reorder Level</label><div class="val">'+escapeHtml(item.reorderThreshold||0)+'</div></div>'
@@ -1674,7 +1672,7 @@ function renderInventoryItemDetailPage(itemId){
 
     + '<div class="section-heading">Pending Purchase Requests</div>'
     + (pending.length ? '<div class="table-wrap"><table><thead><tr><th>Request</th><th>Qty</th><th>Status</th></tr></thead><tbody>'
-        + pending.map(r=>'<tr class="row-clickable" data-open-req="'+r.id+'"><td>'+escapeHtml(r.requestNumber)+'</td><td>'+r.quantityRequested+'</td><td>'+itemStatusBadge(r.status)+'</td></tr>').join('')
+        + pending.map(r=>'<tr class="row-clickable" data-open-req="'+r.id+'"><td>'+escapeHtml(r.requestNumber)+'</td><td>'+r.quantityRequested+'</td><td>'+itemStatusBadge(r.status, itemPattern(r))+'</td></tr>').join('')
         + '</tbody></table></div>'
       : '<div class="empty-state" style="padding:20px;"><div class="icon">✅</div><h3>No pending requests for this item</h3></div>')
 
@@ -1752,8 +1750,8 @@ function renderItemAttachmentsHtml(item, linkedRequest){
     + '</tbody></table></div>';
 }
 
-function openItemModal(deptId, catId, item){
-  const cats = DB.categories.filter(c=>c.departmentId===deptId && !c.deleted);
+function openItemModal(catId, item){
+  const cats = DB.categories.filter(c=>!c.deleted);
   const body =
     '<div class="field"><label>Item Name</label><input type="text" id="it-name" value="'+escapeHtml(item?item.name:'')+'"></div>'
     + '<div class="field"><label>Category</label><select id="it-cat">'+cats.map(c=>'<option value="'+c.id+'" '+(item?(item.categoryId===c.id?'selected':''):(c.id===catId?'selected':''))+'>'+escapeHtml(c.name)+'</option>').join('')+'</select></div>'
@@ -1771,11 +1769,11 @@ function openItemModal(deptId, catId, item){
   document.getElementById('save-item-btn').addEventListener('click', async ()=>{
     const name = document.getElementById('it-name').value.trim();
     if(!name){ toast('Item name is required','error'); return; }
+    const selectedCatId = document.getElementById('it-cat').value;
     const record = {
       id: item ? item.id : nextId('item'),
       name,
-      departmentId: deptId,
-      categoryId: document.getElementById('it-cat').value,
+      categoryId: selectedCatId,
       quantity: Number(document.getElementById('it-qty').value)||0,
       unit: document.getElementById('it-unit').value.trim(),
       cost: Number(document.getElementById('it-cost').value)||0,
@@ -1793,7 +1791,7 @@ function openItemModal(deptId, catId, item){
       DB.inventoryItems.push(record);
       itemHistoryPush(record, 'Created', 'Manually added');
     }
-    await saveDb(); closeModal(); toast('Item saved','success'); renderDepartmentPage(deptId);
+    await saveDb(); closeModal(); toast('Item saved','success'); renderCategoryPage(selectedCatId);
   });
 }
 
@@ -1889,7 +1887,7 @@ function syncConsumableStock(r){
     itemHistoryPush(item, 'Stock received', qty+' received via '+r.requestNumber);
   } else {
     item = {
-      id: nextId('item'), name: r.itemName, departmentId: cat ? cat.departmentId : DB.departments[0].id, categoryId: r.categoryId,
+      id: nextId('item'), name: r.itemName, categoryId: r.categoryId,
       quantity: 0, unit: '', cost: unitCost, reorderThreshold: 0, minStock: 0, preferredSupplier: r.purchase ? (r.purchase.supplier||'') : '',
       purchaseDate: r.purchase ? r.purchase.purchaseDate : '', status:'Good',
       remarks: 'Auto-added from Procurement · '+r.requestNumber, linkedRequestItemId: r.id,
@@ -1905,20 +1903,19 @@ function syncConsumableStock(r){
   item.purchaseDate = itemLastPurchaseDate(item.id);
   if(r.purchase && r.purchase.supplier) item.preferredSupplier = r.purchase.supplier;
 }
-function syncAssetToInventory(r, personEmail, personName, buildingId, roomId){
-  const cat = DB.categories.find(c=>c.id===r.categoryId);
+function syncAssetToInventory(r, personEmail, personName){
   const qty = (r.purchase && r.purchase.quantityPurchased) || 1;
   const item = {
-    id: nextId('item'), name: r.itemName, departmentId: cat ? cat.departmentId : DB.departments[0].id, categoryId: r.categoryId,
+    id: nextId('item'), name: r.itemName, categoryId: r.categoryId,
     quantity: 0, unit:'unit', cost: r.purchase ? r.purchase.totalAmount : 0, reorderThreshold: 0, minStock: 0,
     preferredSupplier: r.purchase ? (r.purchase.supplier||'') : '',
-    purchaseDate: r.purchase ? r.purchase.purchaseDate : '', status:'Good',
-    remarks: 'Responsible: '+personName+' ('+buildingName(buildingId)+(roomId?' / '+roomName(roomId):'')+') · Auto-added from Procurement · '+r.requestNumber,
+    purchaseDate: r.purchase ? r.purchase.purchaseDate : '', status:'Received — Awaiting Installation',
+    remarks: 'Received by '+personName+' · Auto-added from Procurement · '+r.requestNumber,
     linkedRequestItemId: r.id, history: [], updatedAt: new Date().toISOString()
   };
   DB.inventoryItems.push(item);
-  itemHistoryPush(item, 'Created', 'Auto-created via '+r.requestNumber+', assigned to '+personName);
-  const bal = pushLedgerEntry(item.id, 'Goods Receipt', r.requestNumber, qty, 0, 'Asset received, assigned to '+personName, r.purchase?r.purchase.purchaseDate:null);
+  itemHistoryPush(item, 'Created', 'Auto-created via '+r.requestNumber+', received by '+personName);
+  const bal = pushLedgerEntry(item.id, 'Goods Receipt', r.requestNumber, qty, 0, 'Asset received by '+personName, r.purchase?r.purchase.purchaseDate:null);
   DB.stockLedger[DB.stockLedger.length-1].unitCostAtEntry = qty>0 ? (item.cost/qty) : item.cost;
   item.quantity = bal;
 }
@@ -1949,7 +1946,7 @@ function renderProcurementPage(initialTab){
   app.innerHTML =
     '<div class="content wrap module-procurement">'
     + '<div class="page-title"><h2>Procurement</h2>'
-    +   (canManageStaff() ? '<span style="display:flex; gap:8px;"><button class="btn btn-outline btn-sm" id="manage-staff-btn">Manage Staff</button><button class="btn btn-outline btn-sm" id="manage-buildings-btn">Manage Buildings</button>'+(isAdmin()?'<button class="btn btn-outline btn-sm" id="manage-catalog-btn">Item Catalog</button><button class="btn btn-outline btn-sm" id="view-archive-btn">Archive</button>':'')+'</span>' : '')
+    +   (canManageStaff() ? '<span style="display:flex; gap:8px;"><button class="btn btn-outline btn-sm" id="manage-staff-btn">Manage Staff</button><button class="btn btn-outline btn-sm" id="manage-buildings-btn">Manage Buildings</button>'+(isAdmin()?'<button class="btn btn-outline btn-sm" id="view-archive-btn">Archive</button>':'')+'</span>' : '')
     + '</div>'
     + '<div class="page-subtitle-inline">Purchase requests, approvals, purchasing, receiving, assignment and closure — permanently tracked.</div>'
     + '<div class="tab-strip">' + tabs.map(t=>'<button class="tab-btn '+(procTab===t[0]?'active':'')+'" data-proc-tab="'+t[0]+'">'+t[1]+'</button>').join('') + '</div>'
@@ -1960,7 +1957,6 @@ function renderProcurementPage(initialTab){
     btn.addEventListener('click', ()=>{ procTab = btn.getAttribute('data-proc-tab'); renderProcurementPage(); });
   });
   const msBtn = document.getElementById('manage-staff-btn'); if(msBtn) msBtn.addEventListener('click', openManageStaffModal);
-  const mcBtn = document.getElementById('manage-catalog-btn'); if(mcBtn) mcBtn.addEventListener('click', openManageItemCatalogModal);
   const mbBtn = document.getElementById('manage-buildings-btn'); if(mbBtn) mbBtn.addEventListener('click', openManageBuildingsModal);
   const arBtn = document.getElementById('view-archive-btn'); if(arBtn) arBtn.addEventListener('click', openArchiveModal);
 
@@ -1979,16 +1975,11 @@ let newRequestLines = [];
 function renderNewRequestTab(){
   const panel = document.getElementById('proc-panel');
   if(!newRequestLines.length) newRequestLines = [{ localId: nextId('line') }];
-  const buildings = DB.buildings.filter(b=>!b.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
 
   panel.innerHTML =
     '<div class="field-row">'
     +   '<div class="field"><label>Request Date</label><input type="date" id="req-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
     +   '<div class="field"><label>Requested By</label><input type="text" value="'+escapeHtml(currentUserEmail||'')+'" disabled></div>'
-    + '</div>'
-    + '<div class="field-row">'
-    +   '<div class="field"><label>Building</label><select id="req-building">'+buildings.map(b=>'<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('')+'</select></div>'
-    +   '<div class="field"><label>Room</label><select id="req-room"><option value="">— None —</option></select></div>'
     + '</div>'
     + '<div class="plain-divider"></div>'
     + '<h3 style="margin-bottom:10px;">Items</h3>'
@@ -1996,15 +1987,6 @@ function renderNewRequestTab(){
     + '<button class="btn btn-outline btn-sm" id="add-line-btn" style="margin-top:8px;">+ Add Another Item</button>'
     + '<div class="plain-divider"></div>'
     + '<button class="btn btn-primary" id="submit-request-btn">Submit Purchase Request</button>';
-
-  const buildingSel = document.getElementById('req-building');
-  function refreshRooms(){
-    const roomSel = document.getElementById('req-room');
-    const rooms = DB.rooms.filter(r=>r.buildingId===buildingSel.value && !r.deleted);
-    roomSel.innerHTML = '<option value="">— None —</option>' + rooms.map(r=>'<option value="'+r.id+'">'+escapeHtml(r.name)+'</option>').join('');
-  }
-  buildingSel.addEventListener('change', refreshRooms);
-  refreshRooms();
 
   function captureLineValues(){
     const wrap = document.getElementById('req-lines');
@@ -2024,7 +2006,7 @@ function renderNewRequestTab(){
   function renderLines(){
     const wrap = document.getElementById('req-lines');
     wrap.innerHTML = newRequestLines.map((line, idx)=>{
-      const catOptions = DB.categories.filter(c=>!c.deleted).map(c=>'<option value="'+c.id+'" '+(line.categoryId===c.id?'selected':'')+'>'+escapeHtml(c.name)+' ('+escapeHtml(deptName(c.departmentId))+')</option>').join('');
+      const catOptions = DB.categories.filter(c=>!c.deleted).map(c=>'<option value="'+c.id+'" '+(line.categoryId===c.id?'selected':'')+'>'+escapeHtml(c.name)+'</option>').join('');
       const priorities = ['Low','Medium','High','Urgent'];
       const priorityOptions = priorities.map(p=>'<option '+((line.priority||'Medium')===p?'selected':'')+'>'+p+'</option>').join('');
       return '<div class="req-line-card" data-line="'+line.localId+'">'
@@ -2091,8 +2073,6 @@ function renderNewRequestTab(){
       };
     });
     if(lineData.some(l=>!l.itemName || !l.quantityRequested)){ toast('Every item needs a selected catalog item and quantity','error'); return; }
-    const buildingId = buildingSel.value;
-    const roomId = document.getElementById('req-room').value || null;
     const requestDate = document.getElementById('req-date').value;
 
     // Auto-split: a request can only contain one Value Classification.
@@ -2112,7 +2092,6 @@ function renderNewRequestTab(){
         const record = {
           id, requestId, requestNumber, requestDate,
           requestedByEmail: currentUserEmail, requestedByName: (myStaffRecord()||{}).name || currentUserEmail,
-          buildingId, roomId,
           categoryId: l.categoryId, itemTypeId: l.itemTypeId, itemName: l.itemName, itemCode: l.itemCode, catalogItemId: l.catalogItemId, quantityRequested: l.quantityRequested,
           priority: l.priority, reason: l.reason, description: l.description,
           valueClass: l.valueClass, procurementPolicy: l.procurementPolicy,
@@ -2128,7 +2107,7 @@ function renderNewRequestTab(){
         initCirculation(record);
         DB.requestItems.push(record);
       });
-      DB.requests.push({ id: requestId, requestNumber, requestDate, requestedByEmail: currentUserEmail, buildingId, roomId, createdAt: new Date().toISOString(), itemIds });
+      DB.requests.push({ id: requestId, requestNumber, requestDate, requestedByEmail: currentUserEmail, createdAt: new Date().toISOString(), itemIds });
       createdNumbers.push(requestNumber);
     });
     await saveDb();
@@ -2186,7 +2165,7 @@ function renderApprovalCard(r){
   return '<div class="approval-card" data-approval-card="'+r.id+'">'
     + '<div class="approval-card-top"><strong>'+escapeHtml(r.itemName)+'</strong>'+valueClassBadge(r.valueClass)+'</div>'
     + '<div class="approval-card-meta">'+escapeHtml(r.requestNumber)+' · '+escapeHtml(catName(r.categoryId))+' · Qty '+r.quantityRequested+' · '+priorityBadge(r.priority)+(siblingCount>1?' · <span class="badge badge-status">Bundle of '+siblingCount+'</span>':'')+'</div>'
-    + '<div class="approval-card-meta">'+escapeHtml(buildingName(r.buildingId))+(r.roomId?' / '+escapeHtml(roomName(r.roomId)):'')+' · Requested by '+escapeHtml(r.requestedByName||r.requestedByEmail)+'</div>'
+    + '<div class="approval-card-meta">Requested by '+escapeHtml(r.requestedByName||r.requestedByEmail)+'</div>'
     + (r.reason ? '<div class="approval-card-reason">"'+escapeHtml(r.reason)+'"</div>' : '')
     + (r.circulationLog && r.circulationLog.length ? '<div class="field-hint" style="margin-top:6px;">Trail: '+r.circulationLog.map(c=>roleKeyLabel(c.fromRole)+(c.toRole?' → '+roleKeyLabel(c.toRole):' ('+c.action+')')).join(' · ')+'</div>' : '')
     + (canDirectApproveAtEntry(r) && !r.hasCirculated ? '<div class="field" style="margin-top:8px;"><label>Delegate Purchaser (optional)</label><select data-purchaser="'+r.id+'"><option value="">— Not yet decided —</option>'+staffOptions+'</select></div>' : '')
@@ -2217,7 +2196,7 @@ function renderTasksTab(){
   const items = myPurchaseQueue();
   if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🛒</div><h3>No purchase tasks assigned to you</h3></div>'; return; }
   panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Status</th><th>Qty Requested</th><th></th></tr></thead><tbody>'
-    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+itemStatusBadge(r.status)+'</td><td>'+r.quantityRequested+'</td><td><button class="btn btn-primary btn-sm" data-open-task="'+r.id+'">'+(r.status==='purchase_pending'?'Enter Purchase':'Confirm Receipt')+'</button></td></tr>').join('')
+    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+itemStatusBadge(r.status, itemPattern(r))+'</td><td>'+r.quantityRequested+'</td><td><button class="btn btn-primary btn-sm" data-open-task="'+r.id+'">'+(r.status==='purchase_pending'?'Enter Purchase':'Confirm Receipt')+'</button></td></tr>').join('')
     + '</tbody></table></div>';
   panel.querySelectorAll('[data-open-task]').forEach(btn=>{
     btn.addEventListener('click', ()=>openItemDetailModal(btn.getAttribute('data-open-task')));
@@ -2243,7 +2222,7 @@ function renderAccountantTab(){
   const items = myAccountantQueue();
   if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🧾</div><h3>Nothing awaiting reconciliation</h3></div>'; return; }
   panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>'
-    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+(r.purchase?formatMoney(r.purchase.totalAmount):'—')+'</td><td>'+itemStatusBadge(r.status)+'</td><td><button class="btn btn-primary btn-sm" data-open-task="'+r.id+'">Reconcile</button></td></tr>').join('')
+    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+(r.purchase?formatMoney(r.purchase.totalAmount):'—')+'</td><td>'+itemStatusBadge(r.status, itemPattern(r))+'</td><td><button class="btn btn-primary btn-sm" data-open-task="'+r.id+'">Reconcile</button></td></tr>').join('')
     + '</tbody></table></div>';
   panel.querySelectorAll('[data-open-task]').forEach(btn=>{
     btn.addEventListener('click', ()=>openItemDetailModal(btn.getAttribute('data-open-task')));
@@ -2319,8 +2298,8 @@ function renderAllRequestsTab(){
   const panel = document.getElementById('proc-panel');
   const list = DB.requestItems.filter(r=>!r.deleted).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   if(!list.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🗒️</div><h3>No purchase requests yet</h3></div>'; return; }
-  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Building</th><th>Value</th><th>Status</th><th>Raised</th></tr></thead><tbody>'
-    + list.map(r=>'<tr class="row-clickable" data-open-task="'+r.id+'"><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+escapeHtml(buildingName(r.buildingId))+'</td><td>'+valueClassBadge(r.valueClass)+'</td><td>'+itemStatusBadge(r.status)+(r.accountantClosed?' <span class="badge badge-approved">Closed</span>':'')+'</td><td>'+formatDate(r.createdAt)+'</td></tr>').join('')
+  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Category</th><th>Value</th><th>Status</th><th>Raised</th></tr></thead><tbody>'
+    + list.map(r=>'<tr class="row-clickable" data-open-task="'+r.id+'"><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+escapeHtml(catName(r.categoryId))+'</td><td>'+valueClassBadge(r.valueClass)+'</td><td>'+itemStatusBadge(r.status, itemPattern(r))+(r.accountantClosed?' <span class="badge badge-approved">Closed</span>':'')+'</td><td>'+formatDate(r.createdAt)+'</td></tr>').join('')
     + '</tbody></table></div>';
   panel.querySelectorAll('[data-open-task]').forEach(row=>{
     row.addEventListener('click', ()=>openItemDetailModal(row.getAttribute('data-open-task')));
@@ -2379,12 +2358,11 @@ function renderItemDetailModalBody(r){
   const pattern = itemPattern(r);
   let body =
     renderProcurementStepper(r)
-    + '<div class="card-badge-row" style="margin-bottom:10px;">'+itemStatusBadge(r.status)+valueClassBadge(r.valueClass)+priorityBadge(r.priority)+(r.accountantClosed?'<span class="badge badge-approved">Accountant Closed</span>':'')+'</div>'
+    + '<div class="card-badge-row" style="margin-bottom:10px;">'+itemStatusBadge(r.status, itemPattern(r))+valueClassBadge(r.valueClass)+priorityBadge(r.priority)+(r.accountantClosed?'<span class="badge badge-approved">Accountant Closed</span>':'')+'</div>'
     + '<div class="spec-grid" style="margin-bottom:16px;">'
     +   '<div class="spec-item"><label>Request Number</label><div class="val">'+escapeHtml(r.requestNumber)+'</div></div>'
     +   '<div class="spec-item"><label>Category</label><div class="val">'+escapeHtml(catName(r.categoryId))+'</div></div>'
     +   '<div class="spec-item"><label>Item Type</label><div class="val">'+escapeHtml(itemTypeName(r.itemTypeId))+'</div></div>'
-    +   '<div class="spec-item"><label>Building / Room</label><div class="val">'+escapeHtml(buildingName(r.buildingId))+(r.roomId?' / '+escapeHtml(roomName(r.roomId)):'')+'</div></div>'
     +   '<div class="spec-item"><label>Requested By</label><div class="val">'+escapeHtml(r.requestedByName||r.requestedByEmail)+'</div></div>'
     +   '<div class="spec-item"><label>Quantity Requested</label><div class="val">'+r.quantityRequested+'</div></div>'
     +   '<div class="spec-item"><label>Procurement Policy</label><div class="val">'+(r.procurementPolicy==='required'?'Requires Approval':'No Approval Required')+'</div></div>'
@@ -2606,14 +2584,48 @@ function renderItemActionBox(r){
         syncConsumableStock(r);
         r.status = 'completed';
       } else {
-        // Assets/misc/repair/spare now reflect in stock the moment they're received —
-        // Assignment is a follow-up action, never a gate on visibility.
-        syncAssetToInventory(r, r.receipt.receivedByEmail, r.receipt.receivedByName, r.buildingId, r.roomId);
-        r.assignments.push({ responsiblePersonEmail:r.receipt.receivedByEmail, responsiblePersonName:r.receipt.receivedByName, buildingId:r.buildingId, roomId:r.roomId, categoryId:r.categoryId, remarks:'Initial receiver', assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
-        r.history.push({ stage:'Active', action:'activated', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark:'', timestamp:new Date().toISOString() });
-        r.status = 'active';
+        // Assets/misc/repair/spare reflect in stock the moment they're received,
+        // but without a location yet — Building/Room is only known at Install
+        // time (Consumption/Installation is where an item's actual destination
+        // gets captured, not at request time).
+        syncAssetToInventory(r, r.receipt.receivedByEmail, r.receipt.receivedByName);
+        r.status = 'received';
       }
-      await saveDb(); toast('Marked as received and added to Stock Overview','success'); openItemDetailModal(r.id);
+      await saveDb(); toast(pattern==='consumable' ? 'Marked as received and added to Stock Overview' : 'Marked as received — ready to install','success'); openItemDetailModal(r.id);
+    });
+    return;
+  }
+
+  if(r.status==='received' && pattern!=='consumable' && (isMyPurchaseTask(r) || isApproverRole() || isAdmin())){
+    const staffOptions = DB.staff.filter(s=>s.active!==false).map(s=>'<option value="'+s.email+'">'+escapeHtml(s.name)+'</option>').join('');
+    const buildings = DB.buildings.filter(b=>!b.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
+    box.innerHTML = '<div class="plain-divider"></div><h4>Install</h4>'
+      + '<div class="field-hint" style="margin-bottom:8px;">This is where the asset actually goes — captured now, not guessed at request time.</div>'
+      + '<div class="field"><label>Responsible Person</label><select id="install-person"><option value="'+r.receipt.receivedByEmail+'">'+escapeHtml(r.receipt.receivedByName)+' (Receiver)</option>'+staffOptions+'</select></div>'
+      + '<div class="field-row"><div class="field"><label>Building</label><select id="install-building"><option value="">— Select —</option>'+buildings.map(b=>'<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('')+'</select></div><div class="field"><label>Room (optional)</label><select id="install-room"><option value="">— None —</option></select></div></div>'
+      + '<div class="field"><label>Remarks</label><textarea id="install-remarks"></textarea></div>'
+      + '<button class="btn btn-primary" id="install-submit-btn">Install &amp; Activate</button>';
+    const ibSel = document.getElementById('install-building');
+    function refreshInstallRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===ibSel.value); document.getElementById('install-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
+    ibSel.addEventListener('change', refreshInstallRooms); refreshInstallRooms();
+    document.getElementById('install-submit-btn').addEventListener('click', async ()=>{
+      const personEmail = document.getElementById('install-person').value;
+      const staffRec = DB.staff.find(s=>s.email===personEmail);
+      const personName = staffRec ? staffRec.name : (personEmail===r.receipt.receivedByEmail ? r.receipt.receivedByName : personEmail);
+      const buildingId = ibSel.value, roomId = document.getElementById('install-room').value||null;
+      if(!buildingId){ toast('Choose a building','error'); return; }
+      const remark = document.getElementById('install-remarks').value.trim();
+      const item = DB.inventoryItems.find(i=>i.linkedRequestItemId===r.id);
+      r.assignments.push({ responsiblePersonEmail:personEmail, responsiblePersonName:personName, buildingId, roomId, categoryId:r.categoryId, remarks:remark, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
+      r.history.push({ stage:'Installed', action:'installed, assigned to '+personName, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
+      r.status = 'active';
+      if(item){
+        item.status = 'Assets Installed';
+        item.remarks = 'Responsible: '+personName+' ('+buildingName(buildingId)+(roomId?' / '+roomName(roomId):'')+')';
+        item.updatedAt = new Date().toISOString();
+        itemHistoryPush(item, 'Installed', 'Assigned to '+personName+' at '+buildingName(buildingId)+(roomId?' / '+roomName(roomId):''));
+      }
+      await saveDb(); toast('Installed','success'); openItemDetailModal(r.id);
     });
     return;
   }
@@ -2628,7 +2640,7 @@ function renderItemActionBox(r){
         + '<h4>Reassign Responsible Person</h4>'
         + '<div class="field-hint" style="margin-bottom:8px;">Currently: '+escapeHtml(cur?cur.responsiblePersonName:'—')+'</div>'
         + '<div class="field"><label>New Responsible Person</label><select id="reassign-person">'+staffOptions+'</select></div>'
-        + '<div class="field-row"><div class="field"><label>Building</label><select id="reassign-building">'+buildings.map(b=>'<option value="'+b.id+'" '+(b.id===r.buildingId?'selected':'')+'>'+escapeHtml(b.name)+'</option>').join('')+'</select></div><div class="field"><label>Room (optional)</label><select id="reassign-room"><option value="">— None —</option></select></div></div>'
+        + '<div class="field-row"><div class="field"><label>Building</label><select id="reassign-building">'+buildings.map(b=>'<option value="'+b.id+'" '+(cur && b.id===cur.buildingId?'selected':'')+'>'+escapeHtml(b.name)+'</option>').join('')+'</select></div><div class="field"><label>Room (optional)</label><select id="reassign-room"><option value="">— None —</option></select></div></div>'
         + '<div class="field"><label>Remarks</label><textarea id="reassign-remarks"></textarea></div>'
         + '<button class="btn btn-outline btn-sm" id="reassign-submit-btn">Reassign</button>';
       const rbSel = document.getElementById('reassign-building');
@@ -2641,7 +2653,6 @@ function renderItemActionBox(r){
         const buildingId = rbSel.value, roomId = document.getElementById('reassign-room').value||null;
         const remark = document.getElementById('reassign-remarks').value.trim();
         r.assignments.push({ responsiblePersonEmail:personEmail, responsiblePersonName:personName, buildingId, roomId, categoryId:r.categoryId, remarks:remark, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
-        r.buildingId = buildingId; r.roomId = roomId;
         r.history.push({ stage:'Reassigned', action:'reassigned to '+personName, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
         await saveDb(); toast('Reassigned','success'); openItemDetailModal(r.id);
       });
@@ -2796,65 +2807,6 @@ function nextItemCode(categoryId){
   existing.forEach(i=>{ const n = parseInt((i.code.split('-')[1]||'0'),10); if(n>maxNum) maxNum = n; });
   return prefix+'-'+String(maxNum+1).padStart(3,'0');
 }
-function openManageItemCatalogModal(){ renderManageItemCatalogModalBody(); }
-function renderManageItemCatalogModalBody(){
-  const depts = DB.departments.filter(d=>!d.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
-  const rows = depts.map(d=>{
-    const cats = DB.categories.filter(c=>c.departmentId===d.id && !c.deleted);
-    if(!cats.length) return '';
-    return '<div style="margin-bottom:14px;"><strong>'+escapeHtml(d.name)+'</strong>'
-      + cats.map(c=>{
-          const items = DB.itemCatalog.filter(i=>i.categoryId===c.id && !i.deleted).sort((a,b)=>a.code.localeCompare(b.code));
-          return '<div style="border:1px solid var(--color-border); border-radius:10px; padding:10px 12px; margin-top:8px;">'
-            + '<div style="font-size:12.5px; font-weight:700; color:var(--color-ink-soft); margin-bottom:6px;">'+escapeHtml(c.name)+'</div>'
-            + (items.length ? items.map(i=>
-                '<div class="cat-policy-row" style="margin-bottom:6px;">'
-                + '<div class="cat-policy-name"><span class="badge badge-status">'+escapeHtml(i.code)+'</span> '+escapeHtml(i.name)+(i.description?'<br><small style="color:var(--color-ink-faint);">'+escapeHtml(i.description)+'</small>':'')+'</div>'
-                + '<div class="cat-policy-controls"><button class="btn btn-outline btn-sm" data-edit-catalog="'+i.id+'">Edit</button><button class="btn btn-danger btn-sm" data-del-catalog="'+i.id+'">Delete</button></div>'
-                + '</div>'
-              ).join('') : '<div class="field-hint">No items yet in this category.</div>')
-            + '<div style="display:flex; gap:6px; margin-top:6px;">'
-            +   '<input type="text" placeholder="Item name" data-newitem-name="'+c.id+'" style="flex:1; padding:6px 9px; border:1.5px solid var(--color-border); border-radius:7px; font-size:12.5px;">'
-            +   '<input type="text" placeholder="Description (optional)" data-newitem-desc="'+c.id+'" style="flex:1; padding:6px 9px; border:1.5px solid var(--color-border); border-radius:7px; font-size:12.5px;">'
-            +   '<button class="btn btn-outline btn-sm" data-add-catalog="'+c.id+'">+ Add</button>'
-            + '</div>'
-            + '</div>';
-        }).join('')
-      + '</div>';
-  }).join('');
-
-  openModal('Manage Item Catalog', rows || '<div class="empty-state"><h3>No categories yet</h3></div>', '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-admin');
-  document.getElementById('modal-done-btn').addEventListener('click', closeModal);
-  document.querySelectorAll('[data-add-catalog]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const categoryId = btn.getAttribute('data-add-catalog');
-      const nameInput = document.querySelector('[data-newitem-name="'+categoryId+'"]');
-      const descInput = document.querySelector('[data-newitem-desc="'+categoryId+'"]');
-      const name = nameInput.value.trim();
-      if(!name){ toast('Item name required','error'); return; }
-      DB.itemCatalog.push({ id: nextId('ic'), categoryId, code: nextItemCode(categoryId), name, description: descInput.value.trim() });
-      await saveDb(); toast('Item added to catalog','success'); renderManageItemCatalogModalBody();
-    });
-  });
-  document.querySelectorAll('[data-edit-catalog]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const ic = DB.itemCatalog.find(x=>x.id===btn.getAttribute('data-edit-catalog'));
-      const name = prompt('Item name:', ic.name); if(name===null) return;
-      const desc = prompt('Description:', ic.description||''); if(desc===null) return;
-      ic.name = name.trim()||ic.name; ic.description = desc.trim();
-      await saveDb(); toast('Updated','success'); renderManageItemCatalogModalBody();
-    });
-  });
-  document.querySelectorAll('[data-del-catalog]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const ic = DB.itemCatalog.find(x=>x.id===btn.getAttribute('data-del-catalog'));
-      if(!promptAndArchive('itemCatalog', ic, ic.code+' '+ic.name)) return;
-      await saveDb(); toast('Deleted (archived)','success'); renderManageItemCatalogModalBody();
-    });
-  });
-}
-
-
 /* ============================================================
    Archive — Admin only. Everything ever soft-deleted, restorable.
    ============================================================ */
@@ -2935,7 +2887,6 @@ async function buildRequestItemReportPdf(r){
   section('Request Number:', r.requestNumber);
   section('Request Date:', formatDateDMY(r.requestDate));
   section('Requested By:', r.requestedByName || r.requestedByEmail);
-  section('Building / Room:', buildingName(r.buildingId)+(r.roomId?' / '+roomName(r.roomId):''));
   section('Category:', catName(r.categoryId));
   section('Item Type:', itemTypeName(r.itemTypeId));
   section('Quantity Requested:', String(r.quantityRequested));
