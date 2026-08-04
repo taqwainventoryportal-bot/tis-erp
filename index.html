@@ -38,7 +38,7 @@
   --color-gold-soft: #F1F5F9;
 
   /* Module accents */
-  --accent-inventory: #10B981;
+  --accent-inventory: #059669;
   --accent-inventory-dark: #047857;
   --accent-inventory-soft: #D1FAE5;
   --accent-procurement: #F59E0B;
@@ -246,13 +246,14 @@ button{ font-family:inherit; cursor:pointer; }
 /* Module scoping: overriding --color-primary locally lets every existing
    button, tab, icon, and focus ring automatically pick up the right module
    accent without touching each component individually. */
-.module-inventory{ --color-primary: var(--accent-inventory); --color-primary-dark: var(--accent-inventory-dark); --color-primary-light: var(--accent-inventory-soft); }
+.module-inventory{ --color-primary: var(--accent-inventory); --color-primary-dark: var(--accent-inventory-dark); --color-primary-light: var(--accent-inventory-soft); --color-ink: #0F172A; }
 .module-procurement{ --color-primary: var(--accent-procurement); --color-primary-dark: var(--accent-procurement-dark); --color-primary-light: var(--accent-procurement-soft); }
 .module-admin{ --color-primary: var(--accent-admin); --color-primary-dark: var(--accent-admin-dark); --color-primary-light: var(--accent-admin-soft); }
 .page-title{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
-.page-title h2{ font-size:23px; position:relative; display:inline-block; }
-.page-title h2::after{ content:''; position:absolute; left:0; bottom:-6px; width:46px; height:3px; background:var(--color-gold); border-radius:2px; }
-.page-subtitle{ color:var(--color-ink-soft); font-size:13.5px; margin:14px 0 4px; }
+.page-title h2{ font-size:25px; font-weight:800; position:relative; display:inline-flex; align-items:center; gap:12px; letter-spacing:-.02em; }
+.page-title h2::after{ content:''; position:absolute; left:0; bottom:-8px; width:46px; height:3px; background:var(--color-primary); border-radius:2px; }
+.page-title-icon{ width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex:none; }
+.page-subtitle{ color:var(--color-ink-faint); font-size:13.5px; margin:16px 0 4px; }
 .breadcrumb{ font-size:12.5px; color:var(--color-ink-faint); margin-bottom:10px; }
 .breadcrumb a{ text-decoration:none; color:var(--color-primary); font-weight:600; }
 
@@ -262,6 +263,14 @@ button{ font-family:inherit; cursor:pointer; }
 .card-link{ text-decoration:none; color:inherit; display:block; }
 .card-link:hover .card{ box-shadow:var(--shadow); border-color:var(--color-gold); transform:translateY(-1px); }
 .card-icon{ width:40px; height:40px; border-radius:10px; background:var(--color-primary-light); color:var(--color-primary); display:flex; align-items:center; justify-content:center; margin-bottom:10px; font-family:var(--font-display); font-weight:700; font-size:17px; }
+
+/* ---- Inventory category tiles (Round 2 polish) ---- */
+.cat-tile{ display:block; }
+.cat-card{ padding:22px 20px; border:1px solid var(--color-border); box-shadow:none; transition:transform 180ms ease, border-color 180ms ease, background-color 180ms ease; }
+.cat-tile:hover .cat-card{ transform:translateY(-2px); border-color:var(--color-border); background:#FAFBFC; cursor:pointer; }
+.cat-card-icon{ width:46px; height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
+.cat-card-title{ font-size:15px; font-weight:700; color:var(--color-ink); margin-bottom:4px; letter-spacing:-.01em; }
+.cat-card-meta{ font-size:12px; color:var(--color-ink-faint); font-weight:500; }
 .card-title{ font-weight:700; font-size:15.5px; color:var(--color-primary-dark); margin-bottom:2px; }
 .card-meta{ font-size:12.5px; color:var(--color-ink-faint); }
 .card-badge-row{ display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
@@ -273,10 +282,10 @@ button{ font-family:inherit; cursor:pointer; }
 .nav-tile p{ font-size:13px; color:var(--color-ink-soft); margin:0; }
 
 /* ---- Tabs ---- */
-.tab-strip{ display:flex; gap:4px; border-bottom:1.5px solid var(--color-border); margin:18px 0 0; overflow-x:auto; }
-.tab-btn{ background:none; border:none; padding:10px 16px; font-size:13.5px; font-weight:600; color:var(--color-ink-faint); border-bottom:2.5px solid transparent; margin-bottom:-1.5px; white-space:nowrap; }
-.tab-btn:hover{ color:var(--color-primary); }
-.tab-btn.active{ color:var(--color-primary); border-bottom-color:var(--color-gold); }
+.tab-strip{ display:flex; gap:2px; border-bottom:1.5px solid var(--color-border); margin:18px 0 0; overflow-x:auto; }
+.tab-btn{ background:none; border:none; border-radius:6px 6px 0 0; padding:10px 16px; font-size:13.5px; font-weight:600; color:var(--color-ink-faint); border-bottom:2px solid transparent; margin-bottom:-1.5px; white-space:nowrap; transition:color 180ms ease, background-color 180ms ease, border-color 180ms ease; }
+.tab-btn:hover{ color:var(--color-primary-dark); background:var(--color-surface-2); }
+.tab-btn.active{ color:var(--color-primary); border-bottom-color:var(--color-primary); font-weight:700; }
 .tab-panel{ padding-top:18px; }
 
 /* ---- Tables ---- */
@@ -660,6 +669,65 @@ function iconClipboardCheck(size,color){
 }
 function iconBarChart(size,color){
   return outlineIcon('<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>', size, color);
+}
+/* ---- Category-specific icons (Inventory) ---- */
+function iconBook(size,color){
+  return outlineIcon('<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/>', size, color);
+}
+function iconUtensils(size,color){
+  return outlineIcon('<path d="M3 2v7c0 1.1.9 2 2 2h1a2 2 0 0 0 2-2V2"/><path d="M6 11v11"/><path d="M17 2c-2 2-3 4-3 7 0 1.5 1 2 2 2h1v9"/>', size, color);
+}
+function iconSpray(size,color){
+  return outlineIcon('<path d="M5 3v4"/><path d="M3 5h4"/><path d="M14 4v3"/><path d="m11 21 3-11 5 2-3 11z"/><path d="M9.5 9.5 15 8"/><path d="M13 2h.01"/>', size, color);
+}
+function iconHeartPulse(size,color){
+  return outlineIcon('<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/><path d="M3.22 9H9l2-3 3 6 2-3h5.61"/>', size, color);
+}
+function iconBolt(size,color){
+  return outlineIcon('<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/>', size, color);
+}
+function iconPalette(size,color){
+  return outlineIcon('<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2Z"/>', size, color);
+}
+function iconMonitor(size,color){
+  return outlineIcon('<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>', size, color);
+}
+function iconArmchair(size,color){
+  return outlineIcon('<path d="M19 9V6a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v3"/><path d="M3 16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2a2 2 0 0 0-4 0v0H7v0a2 2 0 0 0-4 0Z"/><path d="M5 18v2"/><path d="M19 18v2"/>', size, color);
+}
+function iconCoffee(size,color){
+  return outlineIcon('<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v2"/><path d="M10 2v2"/><path d="M14 2v2"/>', size, color);
+}
+function iconFolderTag(size,color){
+  return outlineIcon('<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>', size, color);
+}
+/* Per-category identity: icon + soft-tinted accent, used everywhere within that
+   category's own Inventory pages (browse card, detail page, item page). */
+const CATEGORY_STYLE_MAP = {
+  cat_stationery:   { icon: iconBook,       accent:'#2563EB', dark:'#1D4ED8', soft:'#EFF6FF' },
+  cat_kitchen:      { icon: iconUtensils,   accent:'#EA580C', dark:'#C2410C', soft:'#FFF7ED' },
+  cat_toiletry:     { icon: iconSpray,      accent:'#0D9488', dark:'#0F766E', soft:'#F0FDFA' },
+  cat_firstaid:     { icon: iconHeartPulse, accent:'#DC2626', dark:'#B91C1C', soft:'#FEF2F2' },
+  cat_guest:        { icon: iconCoffee,     accent:'#DB2777', dark:'#BE185D', soft:'#FDF2F8' },
+  cat_electrical:   { icon: iconBolt,       accent:'#D97706', dark:'#B45309', soft:'#FFFBEB' },
+  cat_artcraft:     { icon: iconPalette,    accent:'#7C3AED', dark:'#6D28D9', soft:'#F5F3FF' },
+  cat_computer:     { icon: iconMonitor,    accent:'#0891B2', dark:'#0E7490', soft:'#ECFEFF' },
+  cat_furniture:    { icon: iconArmchair,   accent:'#92400E', dark:'#78350F', soft:'#FEF3E8' }
+};
+const CATEGORY_STYLE_FALLBACKS = [
+  { icon: iconFolderTag, accent:'#2563EB', dark:'#1D4ED8', soft:'#EFF6FF' },
+  { icon: iconFolderTag, accent:'#059669', dark:'#047857', soft:'#ECFDF5' },
+  { icon: iconFolderTag, accent:'#7C3AED', dark:'#6D28D9', soft:'#F5F3FF' }
+];
+function categoryStyle(catId){
+  if(CATEGORY_STYLE_MAP[catId]) return CATEGORY_STYLE_MAP[catId];
+  const cats = DB.categories.filter(c=>!c.deleted);
+  const idx = cats.findIndex(c=>c.id===catId);
+  return CATEGORY_STYLE_FALLBACKS[Math.max(0,idx) % CATEGORY_STYLE_FALLBACKS.length];
+}
+function categoryScopeStyle(catId){
+  const s = categoryStyle(catId);
+  return '--color-primary:'+s.accent+'; --color-primary-dark:'+s.dark+'; --color-primary-light:'+s.soft+';';
 }
 function statusBadge(status){
   const map = { pending:'badge-pending', approved:'badge-approved', rejected:'badge-rejected' };
@@ -1551,11 +1619,13 @@ function renderInventoryBrowseTab(){
   const cards = DB.categories.filter(c=>!c.deleted).map(c=>{
     const items = DB.inventoryItems.filter(i=>i.categoryId===c.id && !i.deleted);
     const low = items.filter(i=> Number(i.reorderThreshold)>0 && Number(i.quantity) <= Number(i.reorderThreshold)).length;
-    return '<a href="#/inventory/category/'+c.id+'" class="card-link"><div class="card">'
-      + '<div class="card-icon">'+escapeHtml((c.name||'?').charAt(0).toUpperCase())+'</div>'
-      + '<div class="card-title">'+escapeHtml(c.name)+'</div>'
-      + '<div class="card-meta">'+items.length+' items</div>'
-      + (low ? '<div class="card-badge-row"><span class="badge badge-high">'+low+' low stock</span></div>' : '')
+    const style = categoryStyle(c.id);
+    return '<a href="#/inventory/category/'+c.id+'" class="card-link cat-tile">'
+      + '<div class="card cat-card">'
+      +   '<div class="cat-card-icon" style="background:'+style.soft+'; color:'+style.accent+';">'+style.icon(22, style.accent)+'</div>'
+      +   '<div class="cat-card-title">'+escapeHtml(c.name)+'</div>'
+      +   '<div class="cat-card-meta">'+items.length+' item'+(items.length===1?'':'s')+'</div>'
+      +   (low ? '<div class="card-badge-row"><span class="badge badge-high">'+low+' low stock</span></div>' : '')
       + '</div></a>';
   }).join('');
   panel.innerHTML = '<div class="card-grid">'+(cards || '<div class="empty-state"><div class="icon">🗂️</div><h3>No categories yet</h3></div>')+'</div>';
@@ -1612,9 +1682,10 @@ function renderManageDeptsModalBody(){
   const cats = DB.categories.filter(c=>!c.deleted);
   const rows = cats.map(c=>{
     const items = DB.itemCatalog.filter(i=>i.categoryId===c.id && !i.deleted).sort((a,b)=>a.code.localeCompare(b.code));
+    const style = categoryStyle(c.id);
     return '<div style="border:1px solid var(--color-border); border-radius:10px; padding:12px; margin-bottom:10px;">'
-      + '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">'
-      +   '<strong>'+escapeHtml(c.name)+'</strong>'
+      + '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-bottom:8px; border-bottom:2px solid '+style.accent+';">'
+      +   '<span style="display:flex; align-items:center; gap:8px;"><span style="width:26px; height:26px; border-radius:7px; background:'+style.soft+'; color:'+style.accent+'; display:flex; align-items:center; justify-content:center;">'+style.icon(14, style.accent)+'</span><strong>'+escapeHtml(c.name)+'</strong></span>'
       +   '<span style="display:flex; gap:6px;"><button class="btn btn-outline btn-sm" data-rename-cat="'+c.id+'">Rename</button><button class="btn btn-danger btn-sm" data-del-cat="'+c.id+'">Delete</button></span>'
       + '</div>'
       + '<div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">'
@@ -1736,11 +1807,12 @@ function renderCategoryPage(catId){
   const app = document.getElementById('app');
   const cat = DB.categories.find(c=>c.id===catId);
   if(!cat){ app.innerHTML = '<div class="content wrap"><div class="empty-state"><h3>Category not found</h3></div></div>'; return; }
+  const style = categoryStyle(catId);
 
   app.innerHTML =
-    '<div class="content wrap module-inventory">'
+    '<div class="content wrap module-inventory" style="'+categoryScopeStyle(catId)+'">'
     + '<div class="breadcrumb"><a href="#/inventory">Inventory</a> / '+escapeHtml(cat.name)+'</div>'
-    + '<div class="page-title"><h2>'+escapeHtml(cat.name)+'</h2>'
+    + '<div class="page-title"><h2><span class="page-title-icon" style="background:'+style.soft+'; color:'+style.accent+';">'+style.icon(16, style.accent)+'</span>'+escapeHtml(cat.name)+'</h2>'
     + (isAdmin() ? '<button class="btn btn-primary btn-sm" id="add-item-btn">+ Add Item</button>' : '')
     + '</div>'
     + '<div class="tab-panel" id="cat-panel"></div>'
@@ -1811,10 +1883,12 @@ function renderInventoryItemDetailPage(itemId){
   const low = Number(item.reorderThreshold)>0 && Number(item.quantity) <= Number(item.reorderThreshold);
   const linkedRequest = item.linkedRequestItemId ? DB.requestItems.find(r=>r.id===item.linkedRequestItemId) : null;
 
+  const style = categoryStyle(item.categoryId);
+
   app.innerHTML =
-    '<div class="content wrap module-inventory">'
+    '<div class="content wrap module-inventory" style="'+categoryScopeStyle(item.categoryId)+'">'
     + '<div class="breadcrumb"><a href="#/inventory">Inventory</a> / <a href="#/inventory/category/'+item.categoryId+'">'+escapeHtml(catName(item.categoryId))+'</a> / '+escapeHtml(item.name)+'</div>'
-    + '<div class="page-title"><h2>'+escapeHtml(item.name)+'</h2>'+(item.deleted?'<span class="badge badge-rejected">Deleted (in Archive)</span>':(low?'<span class="badge badge-high">Low Stock</span>':''))+'</div>'
+    + '<div class="page-title"><h2><span class="page-title-icon" style="background:'+style.soft+'; color:'+style.accent+';">'+style.icon(16, style.accent)+'</span>'+escapeHtml(item.name)+'</h2>'+(item.deleted?'<span class="badge badge-rejected">Deleted (in Archive)</span>':(low?'<span class="badge badge-high">Low Stock</span>':''))+'</div>'
     + '<div class="spec-grid" style="margin:16px 0;">'
     +   '<div class="spec-item"><label>Category</label><div class="val">'+escapeHtml(catName(item.categoryId))+'</div></div>'
     +   '<div class="spec-item"><label>Current Stock</label><div class="val">'+escapeHtml(item.quantity)+' '+escapeHtml(item.unit||'')+'</div></div>'
