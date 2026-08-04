@@ -265,8 +265,8 @@ button{ font-family:inherit; cursor:pointer; }
 .card-icon{ width:40px; height:40px; border-radius:10px; background:var(--color-primary-light); color:var(--color-primary); display:flex; align-items:center; justify-content:center; margin-bottom:10px; font-family:var(--font-display); font-weight:700; font-size:17px; }
 
 /* ---- Inventory category tiles (Round 2 polish) ---- */
-.cat-tile{ display:block; }
-.cat-card{ padding:22px 20px; border:1px solid var(--color-border); box-shadow:none; transition:transform 180ms ease, border-color 180ms ease, background-color 180ms ease; }
+.cat-tile{ display:flex; height:100%; }
+.cat-card{ padding:22px 20px; border:1px solid var(--color-border); box-shadow:none; transition:transform 180ms ease, border-color 180ms ease, background-color 180ms ease; display:flex; flex-direction:column; width:100%; }
 .cat-tile:hover .cat-card{ transform:translateY(-2px); border-color:var(--color-border); background:#FAFBFC; cursor:pointer; }
 .cat-card-icon{ width:46px; height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
 .cat-card-title{ font-size:15px; font-weight:700; color:var(--color-ink); margin-bottom:4px; letter-spacing:-.01em; }
