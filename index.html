@@ -2405,9 +2405,13 @@ function renderNewRequestTab(){
         priority: get('priority'),
         reason: get('reason'),
         description: get('description'),
-        itemTypeId: cat ? cat.itemTypeId : 'type_consumable',
-        procurementPolicy: cat ? cat.procurementPolicy : 'required',
-        valueClass: cat ? cat.valueClass : 'low'
+        // Catalog item is the source of truth (it can override the category's
+        // defaults per-item, e.g. one expensive item in an otherwise cheap
+        // category) — only fall back to the category default if the catalog
+        // item is somehow missing a value.
+        itemTypeId: catalogItem ? (catalogItem.itemTypeId || (cat?cat.itemTypeId:'type_consumable')) : (cat?cat.itemTypeId:'type_consumable'),
+        procurementPolicy: catalogItem ? (catalogItem.procurementPolicy || (cat?cat.procurementPolicy:'required')) : (cat?cat.procurementPolicy:'required'),
+        valueClass: catalogItem ? (catalogItem.valueClass || (cat?cat.valueClass:'low')) : (cat?cat.valueClass:'low')
       };
     });
     if(lineData.some(l=>!l.itemName || !l.quantityRequested)){ toast('Every item needs a selected catalog item and quantity','error'); return; }
