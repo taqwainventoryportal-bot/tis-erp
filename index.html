@@ -383,15 +383,58 @@ tbody tr:hover{ background:#F8FAFC; }
 .timeline .t-meta{ font-size:11.5px; color:var(--color-ink-faint); margin:2px 0 4px; }
 .timeline .t-remark{ font-size:13px; color:var(--color-ink-soft); background:var(--color-surface-2); border-radius:8px; padding:8px 10px; }
 
-/* ---- Procurement: approval cards ---- */
-.approval-card-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:14px; }
-.approval-card{ background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:16px; }
-.approval-card-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
-.approval-card-meta{ font-size:12px; color:var(--color-ink-soft); margin-bottom:4px; }
-.approval-card-reason{ font-size:12.5px; color:var(--color-ink-faint); font-style:italic; margin:6px 0; }
-.approval-card-actions{ display:flex; gap:8px; margin-top:10px; }
+/* ---- Procurement: approval cards — compact inbox styling ---- */
+.approval-card-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:12px; }
+.approval-card{
+  background:var(--color-surface); border:1px solid var(--color-border); border-radius:10px;
+  box-shadow:var(--shadow-sm); padding:12px 14px; transition:box-shadow 180ms ease, transform 180ms ease;
+}
+.approval-card:hover{ box-shadow:0 4px 14px rgba(15,23,42,.08); transform:translateY(-1px); }
+.approval-card-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:3px; }
+.approval-card-name{ font-size:15.5px; font-weight:700; color:var(--color-ink); line-height:1.3; }
+.approval-card-tags{ display:flex; align-items:center; gap:6px; flex:none; padding-top:1px; }
+.approval-card-meta{ font-size:12px; color:var(--color-ink-soft); margin-bottom:2px; line-height:1.5; }
+.approval-card-reason{ font-size:12px; color:var(--color-ink-faint); font-style:italic; margin:3px 0 0; }
+.approval-card-hint{ font-size:11px; color:var(--color-ink-faint); margin-top:2px; }
+.approval-card-divider{ height:1px; background:var(--color-border); margin:9px 0; }
 .chk-row{ display:flex; align-items:center; gap:7px; font-size:13.5px; }
 .chk-row input{ width:15px; height:15px; }
+
+.priority-chip{
+  display:inline-flex; align-items:center; font-size:10.5px; font-weight:700; letter-spacing:.02em;
+  padding:2px 8px; border-radius:999px; border:1px solid currentColor; background:transparent; white-space:nowrap;
+}
+.priority-chip.chip-low{ color:var(--color-ink-faint); border-color:var(--color-border); }
+.priority-chip.chip-medium{ color:var(--color-medium); }
+.priority-chip.chip-high{ color:var(--color-high); }
+
+.approval-assign{ display:flex; align-items:center; gap:8px; }
+.approval-assign label{ font-size:10.5px; font-weight:600; color:var(--color-ink-faint); text-transform:uppercase; letter-spacing:.03em; flex:none; }
+.approval-assign select{
+  flex:1; min-width:0; padding:6px 8px; font-size:12.5px; border:1.5px solid var(--color-border); border-radius:6px;
+  background:#fff; color:var(--color-ink-soft); transition:border-color 150ms ease, box-shadow 150ms ease;
+}
+.approval-assign select:focus{ outline:none; border-color:var(--color-primary); box-shadow:0 0 0 3px color-mix(in srgb, var(--color-primary) 15%, transparent); }
+
+.approval-card-actions{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.approval-card-actions .forward-target-select{
+  font-size:12px; padding:6px 8px; border:1.5px solid var(--color-border); border-radius:6px;
+  background:#fff; color:var(--color-ink-soft); transition:border-color 150ms ease;
+}
+.approval-card-actions .forward-target-select:focus{ outline:none; border-color:var(--color-primary); }
+
+/* Decline reason stays collapsed until Decline is clicked, per the
+   "only show a control when it's needed" approval-inbox brief. */
+.approval-decline-panel{ max-height:0; opacity:0; overflow:hidden; transition:max-height 200ms ease, opacity 180ms ease, margin-top 200ms ease; }
+.approval-card.declining .approval-card-actions{ display:none; }
+.approval-card.declining .approval-decline-panel{ max-height:170px; opacity:1; margin-top:2px; }
+.approval-decline-panel label{ display:block; font-size:10.5px; font-weight:600; color:var(--color-ink-faint); text-transform:uppercase; letter-spacing:.03em; margin-bottom:4px; }
+.approval-decline-panel textarea{
+  width:100%; min-height:52px; padding:7px 9px; border:1.5px solid var(--color-danger); border-radius:6px;
+  font-family:inherit; font-size:13px; resize:vertical; box-sizing:border-box; background:#fff;
+}
+.approval-decline-panel textarea:focus{ outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--color-danger) 15%, transparent); }
+.approval-decline-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:8px; }
 
 /* ---- Procurement: new request line cards ---- */
 .req-line-card{ border:1px solid var(--color-border); border-radius:var(--radius); padding:14px; margin-bottom:12px; background:var(--color-surface-2); }
@@ -792,6 +835,12 @@ function valueClassBadge(v){ return '<span class="badge '+valueClassBadgeClass(v
 function priorityBadge(p){
   const cls = { Low:'badge-low', Medium:'badge-medium', High:'badge-high', Urgent:'badge-high' }[p] || 'badge-status';
   return '<span class="badge '+cls+'">'+escapeHtml(p)+'</span>';
+}
+// Outlined, lower-weight companion to priorityBadge() — used only on the
+// Approvals inbox so Priority never visually competes with the Value badge.
+function priorityChip(p){
+  const cls = { Low:'chip-low', Medium:'chip-medium', High:'chip-high', Urgent:'chip-high' }[p] || 'chip-low';
+  return '<span class="priority-chip '+cls+'">'+escapeHtml(p)+'</span>';
 }
 function itemStatusLabel(status, pattern){
   if(status==='active' && pattern==='asset') return 'Assets Installed';
@@ -2657,46 +2706,75 @@ function renderApprovalsTab(){
     const card = panel.querySelector('[data-approval-card="'+r.id+'"]');
     const approveBtn = card.querySelector('[data-approve-one]');
     if(approveBtn) approveBtn.addEventListener('click', ()=>submitCirculationAction(r, 'approve'));
-    const declineBtn = card.querySelector('[data-decline-one]');
-    if(declineBtn) declineBtn.addEventListener('click', ()=>submitCirculationAction(r, 'decline'));
     const forwardBtn = card.querySelector('[data-forward-one]');
     if(forwardBtn) forwardBtn.addEventListener('click', ()=>submitCirculationAction(r, 'forward'));
     const purchaserEl = card.querySelector('[data-purchaser="'+r.id+'"]');
     if(purchaserEl) purchaserEl.addEventListener('change', ()=>{
       if(purchaserEl.value){ const s = DB.staff.find(x=>x.email===purchaserEl.value); r.assignedPurchaserEmail = purchaserEl.value; r.assignedPurchaserName = s?s.name:purchaserEl.value; }
     });
+    // Decline stays a single low-weight button until clicked — only then
+    // does the card smoothly reveal the mandatory reason field.
+    const declineToggle = card.querySelector('[data-decline-toggle]');
+    if(declineToggle) declineToggle.addEventListener('click', ()=>{
+      card.classList.add('declining');
+      setTimeout(()=>{ const t = document.getElementById('comment-'+r.id); if(t) t.focus(); }, 200);
+    });
+    const declineCancel = card.querySelector('[data-decline-cancel]');
+    if(declineCancel) declineCancel.addEventListener('click', ()=>{
+      card.classList.remove('declining');
+      const t = document.getElementById('comment-'+r.id); if(t) t.value = '';
+    });
+    const declineConfirm = card.querySelector('[data-decline-confirm]');
+    if(declineConfirm) declineConfirm.addEventListener('click', ()=>submitCirculationAction(r, 'decline'));
   });
 }
 function renderApprovalCard(r){
   const acts = circulationActionsFor(r);
   const staffOptions = DB.staff.filter(s=>s.active!==false).map(s=>'<option value="'+s.email+'">'+escapeHtml(s.name)+'</option>').join('');
   const siblingCount = requestItemSiblings(r).length;
+
+  // Forward / Approve share the primary-actions row; Decline is the one
+  // deliberately lower-weight control that expands into a reason field.
   let actionsHtml = '';
-  if(acts.canApprove){
-    actionsHtml += '<button class="btn btn-primary btn-sm" data-approve-one="'+r.id+'">Approve'+(!r.hasCirculated?'':' (Final)')+'</button>';
-  }
   if(acts.canForward){
     if(acts.forwardFixedTarget){
       actionsHtml += '<button class="btn btn-outline btn-sm" data-forward-one="'+r.id+'" data-fixed-target="'+acts.forwardFixedTarget+'">Send to '+roleKeyLabel(acts.forwardFixedTarget)+'</button>';
     } else if(acts.forwardTargets && acts.forwardTargets.length){
-      actionsHtml += '<select class="forward-target-select" id="forward-target-'+r.id+'" style="font-size:12.5px; padding:6px 8px; border:1.5px solid var(--color-border); border-radius:6px;">'
+      actionsHtml += '<select class="forward-target-select" id="forward-target-'+r.id+'">'
         + acts.forwardTargets.map(t=>'<option value="'+t+'">Send to '+roleKeyLabel(t)+'</option>').join('')
         + '</select>'
         + '<button class="btn btn-outline btn-sm" data-forward-one="'+r.id+'">Forward</button>';
     }
   }
-  if(acts.canDecline){
-    actionsHtml += '<button class="btn btn-danger btn-sm" data-decline-one="'+r.id+'">Decline</button>';
+  if(acts.canApprove){
+    actionsHtml += '<button class="btn btn-primary btn-sm" data-approve-one="'+r.id+'">Approve'+(!r.hasCirculated?'':' (Final)')+'</button>';
   }
+  if(acts.canDecline){
+    actionsHtml += '<button class="btn btn-danger btn-sm" data-decline-toggle="'+r.id+'">Decline</button>';
+  }
+
+  const metaLine = [escapeHtml(r.requestNumber), escapeHtml(catName(r.categoryId)), 'Qty '+r.quantityRequested, 'Requested by '+escapeHtml(r.requestedByName||r.requestedByEmail)].join(' · ');
+
   return '<div class="approval-card" data-approval-card="'+r.id+'">'
-    + '<div class="approval-card-top"><strong>'+escapeHtml(r.itemName)+'</strong>'+valueClassBadge(r.valueClass)+'</div>'
-    + '<div class="approval-card-meta">'+escapeHtml(r.requestNumber)+' · '+escapeHtml(catName(r.categoryId))+' · Qty '+r.quantityRequested+' · '+priorityBadge(r.priority)+(siblingCount>1?' · <span class="field-hint" style="display:inline;">1 of '+siblingCount+' items on this request — approved independently</span>':'')+'</div>'
-    + '<div class="approval-card-meta">Requested by '+escapeHtml(r.requestedByName||r.requestedByEmail)+'</div>'
+    + '<div class="approval-card-top"><span class="approval-card-name">'+escapeHtml(r.itemName)+'</span>'
+    +   '<span class="approval-card-tags">'+valueClassBadge(r.valueClass)+priorityChip(r.priority)+'</span></div>'
+    + '<div class="approval-card-meta">'+metaLine+'</div>'
     + (r.reason ? '<div class="approval-card-reason">"'+escapeHtml(r.reason)+'"</div>' : '')
-    + (r.circulationLog && r.circulationLog.length ? '<div class="field-hint" style="margin-top:6px;">Trail: '+r.circulationLog.map(c=>roleKeyLabel(c.fromRole)+(c.toRole?' → '+roleKeyLabel(c.toRole):' ('+c.action+')')).join(' · ')+'</div>' : '')
-    + (canDirectApproveAtEntry(r) && !r.hasCirculated ? '<div class="field" style="margin-top:8px;"><label>Delegate Purchaser (optional)</label><select data-purchaser="'+r.id+'"><option value="">— Not yet decided —</option>'+staffOptions+'</select></div>' : '')
-    + '<div class="field"><label>Comment '+(acts.canDecline?'(required to Decline)':'(optional)')+'</label><input type="text" id="comment-'+r.id+'"></div>'
+    + (siblingCount>1 ? '<div class="approval-card-hint">1 of '+siblingCount+' items on this request — approved independently</div>' : '')
+    + (r.circulationLog && r.circulationLog.length ? '<div class="approval-card-hint">Trail: '+r.circulationLog.map(c=>roleKeyLabel(c.fromRole)+(c.toRole?' → '+roleKeyLabel(c.toRole):' ('+c.action+')')).join(' · ')+'</div>' : '')
+    + (canDirectApproveAtEntry(r) && !r.hasCirculated
+        ? '<div class="approval-card-divider"></div><div class="approval-assign"><label>Assign to</label><select data-purchaser="'+r.id+'"><option value="">Not yet decided</option>'+staffOptions+'</select></div>'
+        : '')
+    + '<div class="approval-card-divider"></div>'
     + '<div class="approval-card-actions">'+actionsHtml+'</div>'
+    + '<div class="approval-decline-panel">'
+    +   '<label>Decline reason</label>'
+    +   '<textarea id="comment-'+r.id+'" placeholder="Why is this being declined?"></textarea>'
+    +   '<div class="approval-decline-actions">'
+    +     '<button class="btn btn-ghost-dark btn-sm" data-decline-cancel="'+r.id+'">Cancel</button>'
+    +     '<button class="btn btn-danger btn-sm" data-decline-confirm="'+r.id+'">Confirm Decline</button>'
+    +   '</div>'
+    + '</div>'
     + '</div>';
 }
 async function submitCirculationAction(r, action){
