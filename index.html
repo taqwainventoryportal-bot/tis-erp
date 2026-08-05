@@ -1081,6 +1081,18 @@ async function driveGetJson(fileId){
   const res = await driveFetchPublic('/'+fileId, { alt:'media' });
   return res.json();
 }
+// A single momentary network blip (weak wifi, a DNS hiccup, a brief
+// firewall stall) shouldn't strand someone on a dead "could not load"
+// screen at boot — retry a couple of times with backoff before giving up.
+async function driveGetJsonWithRetry(fileId, attempts){
+  attempts = attempts || 3;
+  let lastErr;
+  for(let i=0; i<attempts; i++){
+    try{ return await driveGetJson(fileId); }
+    catch(e){ lastErr = e; if(i < attempts-1) await new Promise(r=>setTimeout(r, 700*(i+1))); }
+  }
+  throw lastErr;
+}
 async function driveSaveJsonAttempt(fileId, data){
   const res = await driveFetchAuthed(DRIVE_UPLOAD_URL+'/'+fileId+'?uploadType=media', {
     method:'PATCH',
@@ -1159,7 +1171,7 @@ function drivePreviewUrl(fileId){ return 'https://drive.google.com/file/d/'+file
    DB load / save
    ============================================================ */
 async function loadDb(){
-  const raw = await driveGetJson(CONFIG.DB_FILE_ID);
+  const raw = await driveGetJsonWithRetry(CONFIG.DB_FILE_ID, 3);
   const base = emptyDb();
   DB = Object.assign(base, raw);
   ['departments','categories','inventoryItems','dismissedAlerts','buildings','rooms','itemTypes','staff','requests','requestItems','archiveLog','stockLedger','itemCatalog','purchaseOrders'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
@@ -3802,7 +3814,12 @@ async function boot(){
     renderRoute();
     startAutoRefresh();
   }catch(e){
-    document.getElementById('app').innerHTML = '<div class="content wrap"><div class="empty-state"><h3>Could not load portal data</h3><p>'+escapeHtml(e.message)+'</p></div></div>';
+    document.getElementById('app').innerHTML = '<div class="content wrap"><div class="empty-state"><h3>Could not load portal data</h3><p>'+escapeHtml(e.message)+'</p>'
+      + '<p class="field-hint" style="margin-top:6px;">This is almost always a temporary connection issue (weak wifi, VPN, or a browser extension blocking the request) rather than a problem with the portal itself.</p>'
+      + '<button class="btn btn-primary" id="retry-boot-btn" style="margin-top:14px;">Retry</button>'
+      + '</div></div>';
+    const retryBtn = document.getElementById('retry-boot-btn');
+    if(retryBtn) retryBtn.addEventListener('click', ()=>{ document.getElementById('app').innerHTML = ''; boot(); });
   }
 }
 /* ============================================================
