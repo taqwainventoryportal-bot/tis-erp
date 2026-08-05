@@ -202,7 +202,7 @@ button{ font-family:inherit; cursor:pointer; }
 
 /* ---- Compact dashboard stat cards ---- */
 .stat-row{ display:grid; grid-template-columns:repeat(auto-fit, minmax(190px,1fr)); gap:12px; margin:0 0 4px; }
-.stat-card{ background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:12px 14px; display:flex; align-items:center; gap:11px; transition:box-shadow .18s ease, transform .18s ease; }
+.stat-card{ background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:12px 14px; display:flex; align-items:center; gap:11px; transition:box-shadow .18s ease, transform .18s ease; text-decoration:none; cursor:pointer; }
 .stat-card:hover{ box-shadow:var(--shadow); transform:translateY(-1px); }
 .stat-icon{ width:34px; height:34px; border-radius:9px; background:var(--color-primary-light); display:flex; align-items:center; justify-content:center; flex:none; }
 .stat-num{ font-size:19px; font-weight:700; color:var(--color-ink); line-height:1.15; letter-spacing:-.01em; }
@@ -856,32 +856,34 @@ function canActOnCirculation(reqItem){
   return hasRole(reqItem.currentHolderRole);
 }
 function requestItemSiblings(reqItem){
+  // Informational only (e.g. "3 items in this request") — items no longer
+  // move together. See applyCirculationAction: bundling was removed because
+  // approving one item silently approved every item sharing its request,
+  // which surprised users. Each request item is independently actionable now.
   return DB.requestItems.filter(r=>!r.deleted && r.requestId===reqItem.requestId);
 }
 async function applyCirculationAction(reqItem, action, targetRole, comment){
-  const siblings = requestItemSiblings(reqItem); // same-tier bundle, moves together
   const actorName = (myStaffRecord()||{}).name || currentUserEmail;
-  siblings.forEach(r=>{
-    const fromRole = r.currentHolderRole;
-    if(action === 'approve'){
-      r.circulationLog.push({ id:nextId('circ'), fromRole, fromEmail:currentUserEmail, fromName:actorName, toRole:null, action:'approved', comment:comment||'', timestamp:new Date().toISOString() });
-      r.history.push({ stage:'Accountant Final Approval', action:'approved', actorEmail:currentUserEmail, actorName, remark:comment||'', timestamp:new Date().toISOString() });
-      r.status = 'purchase_pending';
-      if(!r.assignedPurchaserEmail){ r.assignedPurchaserEmail = r.requestedByEmail; r.assignedPurchaserName = r.requestedByName; }
-      generatePurchaseOrder(r);
-    } else if(action === 'decline'){
-      r.circulationLog.push({ id:nextId('circ'), fromRole, fromEmail:currentUserEmail, fromName:actorName, toRole:null, action:'declined', comment:comment, timestamp:new Date().toISOString() });
-      r.history.push({ stage:roleKeyLabel(fromRole)+' Decline', action:'declined', actorEmail:currentUserEmail, actorName, remark:comment, timestamp:new Date().toISOString() });
-      r.status = 'rejected';
-    } else if(action === 'forward'){
-      let finalTarget = targetRole;
-      if(finalTarget === 'accountant' && fromRole !== 'coordinator'){ finalTarget = 'coordinator'; } // safety net, UI shouldn't offer this anyway
-      r.circulationLog.push({ id:nextId('circ'), fromRole, fromEmail:currentUserEmail, fromName:actorName, toRole:finalTarget, action:'forwarded', comment:comment||'', timestamp:new Date().toISOString() });
-      r.history.push({ stage:roleKeyLabel(fromRole)+' → '+roleKeyLabel(finalTarget), action:'forwarded', actorEmail:currentUserEmail, actorName, remark:comment||'', timestamp:new Date().toISOString() });
-      r.currentHolderRole = finalTarget;
-      r.hasCirculated = true;
-    }
-  });
+  const r = reqItem;
+  const fromRole = r.currentHolderRole;
+  if(action === 'approve'){
+    r.circulationLog.push({ id:nextId('circ'), fromRole, fromEmail:currentUserEmail, fromName:actorName, toRole:null, action:'approved', comment:comment||'', timestamp:new Date().toISOString() });
+    r.history.push({ stage:'Accountant Final Approval', action:'approved', actorEmail:currentUserEmail, actorName, remark:comment||'', timestamp:new Date().toISOString() });
+    r.status = 'purchase_pending';
+    if(!r.assignedPurchaserEmail){ r.assignedPurchaserEmail = r.requestedByEmail; r.assignedPurchaserName = r.requestedByName; }
+    generatePurchaseOrder(r);
+  } else if(action === 'decline'){
+    r.circulationLog.push({ id:nextId('circ'), fromRole, fromEmail:currentUserEmail, fromName:actorName, toRole:null, action:'declined', comment:comment, timestamp:new Date().toISOString() });
+    r.history.push({ stage:roleKeyLabel(fromRole)+' Decline', action:'declined', actorEmail:currentUserEmail, actorName, remark:comment, timestamp:new Date().toISOString() });
+    r.status = 'rejected';
+  } else if(action === 'forward'){
+    let finalTarget = targetRole;
+    if(finalTarget === 'accountant' && fromRole !== 'coordinator'){ finalTarget = 'coordinator'; } // safety net, UI shouldn't offer this anyway
+    r.circulationLog.push({ id:nextId('circ'), fromRole, fromEmail:currentUserEmail, fromName:actorName, toRole:finalTarget, action:'forwarded', comment:comment||'', timestamp:new Date().toISOString() });
+    r.history.push({ stage:roleKeyLabel(fromRole)+' → '+roleKeyLabel(finalTarget), action:'forwarded', actorEmail:currentUserEmail, actorName, remark:comment||'', timestamp:new Date().toISOString() });
+    r.currentHolderRole = finalTarget;
+    r.hasCirculated = true;
+  }
   await saveDb();
 }
 function isMyPurchaseTask(reqItem){
@@ -1551,10 +1553,10 @@ function renderHomePage(){
     + '<div class="page-subtitle-inline">Overview of inventory, approvals and expenditure.</div>'
     + renderAlertsHtml()
     + '<div class="stat-row">'
-    +   '<div class="stat-card"><div class="stat-icon">'+iconPackage(17,'var(--color-primary-dark)')+'</div><div><div class="stat-num">'+totalItems+'</div><div class="stat-lbl">Inventory Items</div></div></div>'
-    +   '<div class="stat-card"><div class="stat-icon" style="background:var(--color-high-soft);">'+iconAlertTriangle(17,'var(--color-high)')+'</div><div><div class="stat-num">'+lowStock+'</div><div class="stat-lbl">Low Stock Alerts</div></div></div>'
-    +   '<div class="stat-card"><div class="stat-icon" style="background:var(--color-medium-soft);">'+iconFileText(17,'var(--color-medium)')+'</div><div><div class="stat-num">'+pendingAll+'</div><div class="stat-lbl">Requests Pending</div></div></div>'
-    +   (isSignedIn() ? '<div class="stat-card"><div class="stat-icon" style="background:var(--color-gold-soft);">'+iconClipboardCheck(17,'var(--color-gold-bright)')+'</div><div><div class="stat-num">'+myPending+'</div><div class="stat-lbl">Awaiting My Action</div></div></div>' : '')
+    +   '<a class="stat-card" href="#/inventory"><div class="stat-icon">'+iconPackage(17,'var(--color-primary-dark)')+'</div><div><div class="stat-num">'+totalItems+'</div><div class="stat-lbl">Inventory Items</div></div></a>'
+    +   '<a class="stat-card" href="#/inventory"><div class="stat-icon" style="background:var(--color-high-soft);">'+iconAlertTriangle(17,'var(--color-high)')+'</div><div><div class="stat-num">'+lowStock+'</div><div class="stat-lbl">Low Stock Alerts</div></div></a>'
+    +   '<a class="stat-card" href="#/procurement/all"><div class="stat-icon" style="background:var(--color-medium-soft);">'+iconFileText(17,'var(--color-medium)')+'</div><div><div class="stat-num">'+pendingAll+'</div><div class="stat-lbl">Requests Pending</div></div></a>'
+    +   (isSignedIn() ? '<a class="stat-card" href="'+myActionTargetHash()+'"><div class="stat-icon" style="background:var(--color-gold-soft);">'+iconClipboardCheck(17,'var(--color-gold-bright)')+'</div><div><div class="stat-num">'+myPending+'</div><div class="stat-lbl">Awaiting My Action</div></div></a>' : '')
     + '</div>'
     + '<div class="section-heading">Spending Overview (Purchased &amp; Received Only)</div>'
     + '<div class="kpi-row">'
@@ -1630,14 +1632,28 @@ function renderInventoryBrowseTab(){
   }).join('');
   panel.innerHTML = '<div class="card-grid">'+(cards || '<div class="empty-state"><div class="icon">🗂️</div><h3>No categories yet</h3></div>')+'</div>';
 }
+let consumptionCategoryFilter = '';
 function renderConsumptionTab(){
   const panel = document.getElementById('inv-page-panel');
-  const items = DB.inventoryItems.filter(i=>!i.deleted).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📉</div><h3>No stock to consume yet</h3></div>'; return; }
+  const allItems = DB.inventoryItems.filter(i=>!i.deleted);
+  if(!allItems.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📉</div><h3>No stock to consume yet</h3></div>'; return; }
+  const cats = DB.categories.filter(c=>!c.deleted);
+  const items = allItems.filter(i=>!consumptionCategoryFilter || i.categoryId===consumptionCategoryFilter).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const filterHtml = '<div class="field" style="max-width:280px; margin-bottom:12px;"><label>Filter by Category</label>'
+    + '<select id="consumption-cat-filter"><option value="">— All Categories —</option>'
+    + cats.map(c=>'<option value="'+c.id+'" '+(consumptionCategoryFilter===c.id?'selected':'')+'>'+escapeHtml(c.name)+'</option>').join('')
+    + '</select></div>';
   panel.innerHTML = '<div class="page-subtitle-inline">Record consumption directly against any item\'s stock, including where it actually went — independent of any specific purchase.</div>'
-    + '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Current Stock</th><th></th></tr></thead><tbody>'
-    + items.map(i=>'<tr><td>'+escapeHtml(i.name)+'</td><td>'+escapeHtml(catName(i.categoryId))+'</td><td><strong>'+escapeHtml(i.quantity)+'</strong> '+escapeHtml(i.unit||'')+'</td><td><button class="btn btn-outline btn-sm" data-consume-item="'+i.id+'">Consume</button></td></tr>').join('')
-    + '</tbody></table></div>';
+    + filterHtml
+    + (items.length
+      ? '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Current Stock</th><th></th></tr></thead><tbody>'
+        + items.map(i=>'<tr><td>'+escapeHtml(i.name)+'</td><td>'+escapeHtml(catName(i.categoryId))+'</td><td><strong>'+escapeHtml(i.quantity)+'</strong> '+escapeHtml(i.unit||'')+'</td><td><button class="btn btn-outline btn-sm" data-consume-item="'+i.id+'">Consume</button></td></tr>').join('')
+        + '</tbody></table></div>'
+      : '<div class="empty-state"><div class="icon">📉</div><h3>No items in this category</h3></div>');
+  document.getElementById('consumption-cat-filter').addEventListener('change', (e)=>{
+    consumptionCategoryFilter = e.target.value;
+    renderConsumptionTab();
+  });
   panel.querySelectorAll('[data-consume-item]').forEach(btn=>{
     btn.addEventListener('click', ()=>openConsumeModal(btn.getAttribute('data-consume-item')));
   });
@@ -1989,48 +2005,100 @@ function renderItemAttachmentsHtml(item, linkedRequest){
     + '</tbody></table></div>';
 }
 
+/* Shared by New Request and Add Item — keeps every place that lets someone
+   name stock tied to the locked catalog instead of free text, so quantities
+   never fragment across near-duplicate names (e.g. two different "Scotch
+   Brite" rows). */
+function catalogItemOptionsForCategory(categoryId, selectedId){
+  const items = DB.itemCatalog.filter(i=>!i.deleted && i.categoryId===categoryId).sort((a,b)=>a.code.localeCompare(b.code));
+  if(!items.length) return '<option value="">— No items in catalog for this category, ask Admin to add one —</option>';
+  return '<option value="">— Select an item —</option>' + items.map(i=>'<option value="'+i.id+'" '+(selectedId===i.id?'selected':'')+'>'+escapeHtml(i.code)+' — '+escapeHtml(i.name)+'</option>').join('');
+}
 function openItemModal(catId, item){
   const cats = DB.categories.filter(c=>!c.deleted);
-  const body =
-    '<div class="field"><label>Item Name</label><input type="text" id="it-name" value="'+escapeHtml(item?item.name:'')+'"></div>'
-    + '<div class="field"><label>Category</label><select id="it-cat">'+cats.map(c=>'<option value="'+c.id+'" '+(item?(item.categoryId===c.id?'selected':''):(c.id===catId?'selected':''))+'>'+escapeHtml(c.name)+'</option>').join('')+'</select></div>'
-    + '<div class="field-row"><div class="field"><label>Quantity</label><input type="number" id="it-qty" value="'+(item?item.quantity:0)+'"></div>'
-    +   '<div class="field"><label>Unit</label><input type="text" id="it-unit" placeholder="pcs, box, litre…" value="'+escapeHtml(item?item.unit:'')+'"></div></div>'
-    + '<div class="field-row"><div class="field"><label>Cost / Value (₹)</label><input type="number" id="it-cost" value="'+(item?item.cost:0)+'"></div>'
-    +   '<div class="field"><label>Reorder Threshold</label><input type="number" id="it-reorder" value="'+(item?item.reorderThreshold||0:0)+'"></div></div>'
-    + '<div class="field-row"><div class="field"><label>Purchase Date</label><input type="date" id="it-date" value="'+(item&&item.purchaseDate?item.purchaseDate:'')+'"></div>'
-    +   '<div class="field"><label>Condition / Status</label><select id="it-status"><option '+(item&&item.status==='Good'?'selected':'')+'>Good</option><option '+(item&&item.status==='Low Stock'?'selected':'')+'>Low Stock</option><option '+(item&&item.status==='Damaged'?'selected':'')+'>Damaged</option><option '+(item&&item.status==='Expired'?'selected':'')+'>Expired</option></select></div></div>'
-    + '<div class="field"><label>Remarks</label><textarea id="it-remarks">'+escapeHtml(item?item.remarks:'')+'</textarea></div>';
+  const defaultCatId = item ? item.categoryId : (catId || (cats[0]||{}).id);
+  let body;
+  if(!item){
+    // Adding new stock: must come from the locked catalog, same as the
+    // request form — free-text names caused naming drift and duplicates.
+    body = '<div class="field-hint" style="margin-bottom:10px;">Pick from the locked catalog so stock names stay consistent — add new catalog items via Manage Categories &amp; Items first if needed.</div>'
+      + '<div class="field-row">'
+      +   '<div class="field"><label>Category</label><select id="it-cat" data-add-cat-select>'+cats.map(c=>'<option value="'+c.id+'" '+(c.id===defaultCatId?'selected':'')+'>'+escapeHtml(c.name)+'</option>').join('')+'</select></div>'
+      +   '<div class="field"><label>Catalog Item</label><select id="it-catalog-item" data-add-item-select>'+catalogItemOptionsForCategory(defaultCatId,'')+'</select></div>'
+      + '</div>'
+      + '<div class="field-row"><div class="field"><label>Quantity</label><input type="number" id="it-qty" value="0"></div>'
+      +   '<div class="field"><label>Unit</label><input type="text" id="it-unit" placeholder="pcs, box, litre…" value=""></div></div>'
+      + '<div class="field-row"><div class="field"><label>Cost / Value (₹)</label><input type="number" id="it-cost" value="0"></div>'
+      +   '<div class="field"><label>Reorder Threshold</label><input type="number" id="it-reorder" value="0"></div></div>'
+      + '<div class="field-row"><div class="field"><label>Purchase Date</label><input type="date" id="it-date" value=""></div>'
+      +   '<div class="field"><label>Condition / Status</label><select id="it-status"><option>Good</option><option>Low Stock</option><option>Damaged</option><option>Expired</option></select></div></div>'
+      + '<div class="field"><label>Remarks</label><textarea id="it-remarks"></textarea></div>';
+  } else {
+    body =
+      '<div class="field"><label>Item Name</label><input type="text" id="it-name" value="'+escapeHtml(item.name)+'"></div>'
+      + '<div class="field"><label>Category</label><select id="it-cat">'+cats.map(c=>'<option value="'+c.id+'" '+(item.categoryId===c.id?'selected':'')+'>'+escapeHtml(c.name)+'</option>').join('')+'</select></div>'
+      + '<div class="field-row"><div class="field"><label>Quantity</label><input type="number" id="it-qty" value="'+item.quantity+'"></div>'
+      +   '<div class="field"><label>Unit</label><input type="text" id="it-unit" placeholder="pcs, box, litre…" value="'+escapeHtml(item.unit)+'"></div></div>'
+      + '<div class="field-row"><div class="field"><label>Cost / Value (₹)</label><input type="number" id="it-cost" value="'+item.cost+'"></div>'
+      +   '<div class="field"><label>Reorder Threshold</label><input type="number" id="it-reorder" value="'+(item.reorderThreshold||0)+'"></div></div>'
+      + '<div class="field-row"><div class="field"><label>Purchase Date</label><input type="date" id="it-date" value="'+(item.purchaseDate?item.purchaseDate:'')+'"></div>'
+      +   '<div class="field"><label>Condition / Status</label><select id="it-status"><option '+(item.status==='Good'?'selected':'')+'>Good</option><option '+(item.status==='Low Stock'?'selected':'')+'>Low Stock</option><option '+(item.status==='Damaged'?'selected':'')+'>Damaged</option><option '+(item.status==='Expired'?'selected':'')+'>Expired</option></select></div></div>'
+      + '<div class="field"><label>Remarks</label><textarea id="it-remarks">'+escapeHtml(item.remarks)+'</textarea></div>';
+  }
 
   openModal(item?'Edit Item':'Add Item', body,
     '<button class="btn btn-outline" id="cancel-item-btn">Cancel</button><button class="btn btn-primary" id="save-item-btn">Save</button>', 'module-inventory');
   document.getElementById('cancel-item-btn').addEventListener('click', closeModal);
+  if(!item){
+    const catSel = document.getElementById('it-cat');
+    catSel.addEventListener('change', ()=>{
+      document.getElementById('it-catalog-item').innerHTML = catalogItemOptionsForCategory(catSel.value, '');
+    });
+  }
   document.getElementById('save-item-btn').addEventListener('click', async ()=>{
-    const name = document.getElementById('it-name').value.trim();
-    if(!name){ toast('Item name is required','error'); return; }
     const selectedCatId = document.getElementById('it-cat').value;
-    const record = {
-      id: item ? item.id : nextId('item'),
-      name,
-      categoryId: selectedCatId,
-      quantity: Number(document.getElementById('it-qty').value)||0,
-      unit: document.getElementById('it-unit').value.trim(),
-      cost: Number(document.getElementById('it-cost').value)||0,
-      reorderThreshold: Number(document.getElementById('it-reorder').value)||0,
-      purchaseDate: document.getElementById('it-date').value,
-      status: document.getElementById('it-status').value,
-      remarks: document.getElementById('it-remarks').value.trim(),
-      updatedAt: new Date().toISOString()
-    };
-    if(item){
+    if(!item){
+      const catalogItemId = document.getElementById('it-catalog-item').value;
+      const catalogItem = DB.itemCatalog.find(i=>!i.deleted && i.id===catalogItemId);
+      if(!catalogItem){ toast('Choose a catalog item first','error'); return; }
+      const record = {
+        id: nextId('item'),
+        name: catalogItem.name,
+        catalogItemId: catalogItem.id,
+        itemCode: catalogItem.code,
+        categoryId: selectedCatId,
+        quantity: Number(document.getElementById('it-qty').value)||0,
+        unit: document.getElementById('it-unit').value.trim(),
+        cost: Number(document.getElementById('it-cost').value)||0,
+        reorderThreshold: Number(document.getElementById('it-reorder').value)||0,
+        purchaseDate: document.getElementById('it-date').value,
+        status: document.getElementById('it-status').value,
+        remarks: document.getElementById('it-remarks').value.trim(),
+        minStock: 0, preferredSupplier: '',
+        history: [], updatedAt: new Date().toISOString()
+      };
+      DB.inventoryItems.push(record);
+      itemHistoryPush(record, 'Created', 'Manually added — '+catalogItem.code+' '+catalogItem.name);
+      await saveDb(); closeModal(); toast('Item saved','success'); renderCategoryPage(selectedCatId);
+    } else {
+      const name = document.getElementById('it-name').value.trim();
+      if(!name){ toast('Item name is required','error'); return; }
+      const record = {
+        name,
+        categoryId: selectedCatId,
+        quantity: Number(document.getElementById('it-qty').value)||0,
+        unit: document.getElementById('it-unit').value.trim(),
+        cost: Number(document.getElementById('it-cost').value)||0,
+        reorderThreshold: Number(document.getElementById('it-reorder').value)||0,
+        purchaseDate: document.getElementById('it-date').value,
+        status: document.getElementById('it-status').value,
+        remarks: document.getElementById('it-remarks').value.trim(),
+        updatedAt: new Date().toISOString()
+      };
       Object.assign(item, record);
       itemHistoryPush(item, 'Edited', 'Updated via Manage Inventory');
-    } else {
-      record.history = []; record.minStock = 0; record.preferredSupplier = '';
-      DB.inventoryItems.push(record);
-      itemHistoryPush(record, 'Created', 'Manually added');
+      await saveDb(); closeModal(); toast('Item saved','success'); renderCategoryPage(selectedCatId);
     }
-    await saveDb(); closeModal(); toast('Item saved','success'); renderCategoryPage(selectedCatId);
   });
 }
 
@@ -2127,6 +2195,7 @@ function syncConsumableStock(r){
   } else {
     item = {
       id: nextId('item'), name: r.itemName, categoryId: r.categoryId,
+      catalogItemId: r.catalogItemId||null, itemCode: r.itemCode||'',
       quantity: 0, unit: '', cost: unitCost, reorderThreshold: 0, minStock: 0, preferredSupplier: r.purchase ? (r.purchase.supplier||'') : '',
       purchaseDate: r.purchase ? r.purchase.purchaseDate : '', status:'Good',
       remarks: 'Auto-added from Procurement · '+r.requestNumber, linkedRequestItemId: r.id,
@@ -2146,6 +2215,7 @@ function syncAssetToInventory(r, personEmail, personName){
   const qty = (r.purchase && r.purchase.quantityPurchased) || 1;
   const item = {
     id: nextId('item'), name: r.itemName, categoryId: r.categoryId,
+    catalogItemId: r.catalogItemId||null, itemCode: r.itemCode||'',
     quantity: 0, unit:'unit', cost: r.purchase ? r.purchase.totalAmount : 0, reorderThreshold: 0, minStock: 0,
     preferredSupplier: r.purchase ? (r.purchase.supplier||'') : '',
     purchaseDate: r.purchase ? r.purchase.purchaseDate : '', status:'Received — Awaiting Installation',
@@ -2163,6 +2233,35 @@ function myApprovalQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.st
 function myPurchaseQueue(){ return DB.requestItems.filter(r=> !r.deleted && (r.status==='purchase_pending'||r.status==='purchased') && isMyPurchaseTask(r)); }
 function myAssignmentQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='received' && (isMyPurchaseTask(r) || isApproverRole() || isAdmin())); }
 function myAccountantQueue(){ return DB.requestItems.filter(r=> !r.deleted && isTerminal(r) && !r.accountantClosed && isAccountant()); }
+/* Where the "Awaiting My Action" dashboard card should send someone —
+   whichever of their queues actually has something in it. */
+function myActionTargetHash(){
+  if(!isSignedIn()) return '#/procurement';
+  if(myApprovalQueue().length) return '#/procurement/approvals';
+  if(myPurchaseQueue().length) return '#/procurement/tasks';
+  if(myAssignmentQueue().length) return '#/procurement/assign';
+  if(myAccountantQueue().length) return '#/procurement/accountant';
+  return '#/procurement/approvals';
+}
+function isAccountantEmail(email){
+  if(!email) return false;
+  const e = String(email).toLowerCase();
+  return DB.staff.some(s=>s.active!==false && s.role==='accountant' && (s.email||'').toLowerCase()===e);
+}
+/* Auto-close: when the Accountant was also the person who physically
+   received the item, there's nothing left to reconcile — skip the manual
+   click. Only applies once the item has actually reached a terminal status;
+   if a different person received it, the normal manual Reconcile step
+   (rendered in openItemDetailModal) still applies. */
+function maybeAutoCloseAccountant(r, receiverEmail, receiverName){
+  if(!isTerminal(r) || r.accountantClosed) return;
+  if(!isAccountantEmail(receiverEmail)) return;
+  r.accountantClosed = true;
+  r.accountantClosedByEmail = receiverEmail;
+  r.accountantClosedAt = new Date().toISOString();
+  r.accountantRemark = 'Auto-closed — received directly by Accountant ('+(receiverName||receiverEmail)+').';
+  r.history.push({ stage:'Accountant Reconciliation', action:'auto-closed', actorEmail: receiverEmail, actorName: receiverName||receiverEmail, remark: r.accountantRemark, timestamp:new Date().toISOString() });
+}
 
 function renderProcurementPage(initialTab){
   const app = document.getElementById('app');
@@ -2403,7 +2502,7 @@ function renderApprovalCard(r){
   }
   return '<div class="approval-card" data-approval-card="'+r.id+'">'
     + '<div class="approval-card-top"><strong>'+escapeHtml(r.itemName)+'</strong>'+valueClassBadge(r.valueClass)+'</div>'
-    + '<div class="approval-card-meta">'+escapeHtml(r.requestNumber)+' · '+escapeHtml(catName(r.categoryId))+' · Qty '+r.quantityRequested+' · '+priorityBadge(r.priority)+(siblingCount>1?' · <span class="badge badge-status">Bundle of '+siblingCount+'</span>':'')+'</div>'
+    + '<div class="approval-card-meta">'+escapeHtml(r.requestNumber)+' · '+escapeHtml(catName(r.categoryId))+' · Qty '+r.quantityRequested+' · '+priorityBadge(r.priority)+(siblingCount>1?' · <span class="field-hint" style="display:inline;">1 of '+siblingCount+' items on this request — approved independently</span>':'')+'</div>'
     + '<div class="approval-card-meta">Requested by '+escapeHtml(r.requestedByName||r.requestedByEmail)+'</div>'
     + (r.reason ? '<div class="approval-card-reason">"'+escapeHtml(r.reason)+'"</div>' : '')
     + (r.circulationLog && r.circulationLog.length ? '<div class="field-hint" style="margin-top:6px;">Trail: '+r.circulationLog.map(c=>roleKeyLabel(c.fromRole)+(c.toRole?' → '+roleKeyLabel(c.toRole):' ('+c.action+')')).join(' · ')+'</div>' : '')
@@ -2801,6 +2900,7 @@ function renderItemActionBox(r){
       const remark = document.getElementById('svc-remarks').value.trim();
       r.history.push({ stage:'Rendered / Performed', action:'completed', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark, timestamp:new Date().toISOString() });
       r.status = 'completed';
+      maybeAutoCloseAccountant(r, currentUserEmail, r.assignedPurchaserName||currentUserEmail);
       await saveDb(); toast('Service marked completed','success'); openItemDetailModal(r.id);
     });
     return;
@@ -2822,6 +2922,7 @@ function renderItemActionBox(r){
         // Inventory > Stock Consumption, not tied to this specific purchase.
         syncConsumableStock(r);
         r.status = 'completed';
+        maybeAutoCloseAccountant(r, r.receipt.receivedByEmail, r.receipt.receivedByName);
       } else {
         // Assets/misc/repair/spare reflect in stock the moment they're received,
         // but without a location yet — Building/Room is only known at Install
@@ -2934,6 +3035,10 @@ function renderItemActionBox(r){
       r.disposal = { type, date, reason, approvedByEmail: currentUserEmail, approvedByName:(myStaffRecord()||{}).name||currentUserEmail, remarks:'', documentFileId, documentFileName, recordedAt:new Date().toISOString() };
       r.history.push({ stage:'Disposed', action:type, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark: reason, timestamp:new Date().toISOString() });
       r.status = 'archived';
+      // Reconciliation ties to whoever physically received the item originally,
+      // not whoever happened to process the disposal — fall back to the
+      // disposer only if no receipt was ever recorded.
+      maybeAutoCloseAccountant(r, r.receipt ? r.receipt.receivedByEmail : r.disposal.approvedByEmail, r.receipt ? r.receipt.receivedByName : r.disposal.approvedByName);
       const linkedStock = DB.inventoryItems.find(i=>i.linkedRequestItemId===r.id && !i.deleted);
       if(linkedStock){ linkedStock.status = type; archiveRecord('inventoryItem', linkedStock, linkedStock.name, 'Disposed via Procurement: '+type); }
       await saveDb(); toast('Item disposed and archived','success'); openItemDetailModal(r.id);
