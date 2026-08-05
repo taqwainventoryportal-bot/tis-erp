@@ -1299,6 +1299,10 @@ function logout(){
    Topbar / footer / search
    ============================================================ */
 function myRoleLabel(){
+  // While DB hasn't loaded yet (first paint, or mid-retry after a network
+  // blip), we genuinely don't know the person's role — showing "Viewer"
+  // here reads as a real demotion rather than a loading state.
+  if(!DB) return 'Loading…';
   const s = myStaffRecord();
   if(isAdmin() && !s) return 'Admin';
   if(isAdmin() && s) return 'Admin · '+roleKeyLabel(s.role);
@@ -3194,7 +3198,7 @@ function renderItemActionBox(r){
       + '<div class="field"><label>Purchaser Name</label><input type="text" value="'+escapeHtml(r.assignedPurchaserName||currentUserEmail)+'" disabled></div>'
       + '<div class="field-row"><div class="field"><label>Supplier / Shop</label><input type="text" id="pe-supplier"></div><div class="field"><label>Invoice Number (optional)</label><input type="text" id="pe-invoice"></div></div>'
       + '<div class="field-row"><div class="field"><label>Invoice Date</label><input type="date" id="pe-invoice-date"></div><div class="field"><label>Purchase Date</label><input type="date" id="pe-purchase-date" value="'+new Date().toISOString().slice(0,10)+'"></div></div>'
-      + '<div class="field-row"><div class="field"><label>Quantity Purchased</label><input type="number" id="pe-qty" value="'+r.quantityRequested+'"></div><div class="field"><label>Unit Price (₹)</label><input type="number" id="pe-unit-price" value="0"></div></div>'
+      + '<div class="field-row"><div class="field"><label>Quantity Purchased</label><input type="number" id="pe-qty" value="'+r.quantityRequested+'" disabled><div class="field-hint">Locked to the approved quantity ('+r.quantityRequested+')</div></div><div class="field"><label>Unit Price (₹)</label><input type="number" id="pe-unit-price" value="0"></div></div>'
       + '<div class="field-row"><div class="field"><label>Tax Amount (₹, optional)</label><input type="number" id="pe-tax" value="0"></div><div class="field"><label>Total Amount (₹, auto)</label><input type="number" id="pe-total" value="0" readonly></div></div>'
       + '<div class="field"><label>Bill / Receipt Photo or PDF (optional)</label><input type="file" id="pe-bill-file" accept="image/*,.pdf"></div>'
       + '<div class="field"><label>Remarks</label><textarea id="pe-remarks"></textarea></div>'
