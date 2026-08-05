@@ -37,22 +37,66 @@
   --color-gold-bright: #475569;
   --color-gold-soft: #F1F5F9;
 
-  /* Module accents */
-  --accent-inventory: #059669;
-  --accent-inventory-dark: #047857;
-  --accent-inventory-soft: #D1FAE5;
-  --accent-procurement: #F59E0B;
-  --accent-procurement-dark: #B45309;
-  --accent-procurement-soft: #FEF3C7;
-  --accent-reports: #8B5CF6;
-  --accent-reports-dark: #6D28D9;
-  --accent-reports-soft: #EDE9FE;
-  --accent-admin: #64748B;
-  --accent-admin-dark: #475569;
-  --accent-admin-soft: #F1F5F9;
+  /* ============================================================
+     MODULE COLOURS — identify *where* the user is (nav, active tab,
+     underline, icons, small accents). Applied via .module-* wrapper
+     classes further down, which override --color-primary locally.
+     These must never be reached for on an *action* — see ACTION
+     COLOURS below, which are deliberately separate tokens so an
+     Approve button is never "Procurement orange" just because the
+     page it's on is.
+     ============================================================ */
+  --module-dashboard: #2563EB;
+  --module-dashboard-dark: #1D4ED8;
+  --module-dashboard-soft: #DBEAFE;
+  --module-inventory: #059669;
+  --module-inventory-dark: #047857;
+  --module-inventory-soft: #D1FAE5;
+  --module-procurement: #C2410C;
+  --module-procurement-dark: #9A3412;
+  --module-procurement-soft: #FFEDD5;
+  --module-reports: #7C3AED;
+  --module-reports-dark: #6D28D9;
+  --module-reports-soft: #EDE9FE;
+  --module-admin: #475569;
+  --module-admin-dark: #334155;
+  --module-admin-soft: #F1F5F9;
+
+  /* Legacy aliases — kept so existing --accent-* references elsewhere
+     in this file keep working unchanged while everything transitions
+     onto the --module-* names above. */
+  --accent-inventory: var(--module-inventory);
+  --accent-inventory-dark: var(--module-inventory-dark);
+  --accent-inventory-soft: var(--module-inventory-soft);
+  --accent-procurement: var(--module-procurement);
+  --accent-procurement-dark: var(--module-procurement-dark);
+  --accent-procurement-soft: var(--module-procurement-soft);
+  --accent-reports: var(--module-reports);
+  --accent-reports-dark: var(--module-reports-dark);
+  --accent-reports-soft: var(--module-reports-soft);
+  --accent-admin: var(--module-admin);
+  --accent-admin-dark: var(--module-admin-dark);
+  --accent-admin-soft: var(--module-admin-soft);
+
+  /* ============================================================
+     ACTION COLOURS — what a control *does*, fixed everywhere in the
+     app regardless of which module it's rendered inside. Never
+     overridden by .module-* scoping.
+     ============================================================ */
+  --action-approve: #059669;
+  --action-approve-dark: #047857;
+  --action-approve-soft: #D1FAE5;
+  --action-decline: #DC2626;
+  --action-decline-soft: #FEE2E2;
+  --action-delete: #DC2626;
+  --action-edit: #2563EB;
+  --action-warning: #D97706;
+  --action-warning-soft: #FEF3C7;
+  --action-cancel: #475569;
+  --action-cancel-soft: #F1F5F9;
 
   /* Status — muted pastels only */
-  --color-danger: #B91C1C;
+  --color-danger: #DC2626;
   --color-danger-soft: #FEE2E2;
   --color-success: #166534;
   --color-success-soft: #DCFCE7;
@@ -63,6 +107,16 @@
   --color-info: #1D4ED8;
   --color-info-soft: #DBEAFE;
 
+  /* Spacing scale — new controls in dense areas (Approvals inbox,
+     New Request form) are built from these instead of one-off px
+     values; older parts of the file still use literal px and are
+     unaffected. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+
   --radius-sm: 6px;
   --radius: 8px;
   --radius-lg: 12px;
@@ -71,6 +125,7 @@
   --font-display: 'Inter', 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Inter', 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
   --motion: 150ms ease;
+  --motion-slow: 190ms ease;
 }
 *{ box-sizing: border-box; }
 html{ scroll-behavior: smooth; }
@@ -141,7 +196,7 @@ button{ font-family:inherit; cursor:pointer; }
 
 
 /* ---- Dashboard header subtitle ---- */
-.page-subtitle-inline{ font-size:13px; color:var(--color-ink-faint); margin-bottom:16px; }
+.page-subtitle-inline{ font-size:13px; color:var(--color-ink-faint); margin-bottom:10px; }
 
 /* ---- Signed-out banner landing page ---- */
 .landing-banner{ position:relative; width:100%; min-height:520px; background-size:cover; background-position:center; display:flex; align-items:center; }
@@ -246,12 +301,13 @@ button{ font-family:inherit; cursor:pointer; }
 /* Module scoping: overriding --color-primary locally lets every existing
    button, tab, icon, and focus ring automatically pick up the right module
    accent without touching each component individually. */
-.module-inventory{ --color-primary: var(--accent-inventory); --color-primary-dark: var(--accent-inventory-dark); --color-primary-light: var(--accent-inventory-soft); --color-ink: #0F172A; }
-.module-procurement{ --color-primary: var(--accent-procurement); --color-primary-dark: var(--accent-procurement-dark); --color-primary-light: var(--accent-procurement-soft); }
-.module-admin{ --color-primary: var(--accent-admin); --color-primary-dark: var(--accent-admin-dark); --color-primary-light: var(--accent-admin-soft); }
-.page-title{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+.module-inventory{ --color-primary: var(--module-inventory); --color-primary-dark: var(--module-inventory-dark); --color-primary-light: var(--module-inventory-soft); --color-ink: #0F172A; }
+.module-procurement{ --color-primary: var(--module-procurement); --color-primary-dark: var(--module-procurement-dark); --color-primary-light: var(--module-procurement-soft); }
+.module-reports{ --color-primary: var(--module-reports); --color-primary-dark: var(--module-reports-dark); --color-primary-light: var(--module-reports-soft); }
+.module-admin{ --color-primary: var(--module-admin); --color-primary-dark: var(--module-admin-dark); --color-primary-light: var(--module-admin-soft); }
+.page-title{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
 .page-title h2{ font-size:25px; font-weight:800; position:relative; display:inline-flex; align-items:center; gap:12px; letter-spacing:-.02em; }
-.page-title h2::after{ content:''; position:absolute; left:0; bottom:-8px; width:46px; height:3px; background:var(--color-primary); border-radius:2px; }
+.page-title h2::after{ content:''; position:absolute; left:0; bottom:-9px; width:38px; height:3px; background:var(--color-primary); border-radius:2px; }
 .page-title-icon{ width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex:none; }
 .page-subtitle{ color:var(--color-ink-faint); font-size:13.5px; margin:16px 0 4px; }
 .breadcrumb{ font-size:12.5px; color:var(--color-ink-faint); margin-bottom:10px; }
@@ -282,11 +338,11 @@ button{ font-family:inherit; cursor:pointer; }
 .nav-tile p{ font-size:13px; color:var(--color-ink-soft); margin:0; }
 
 /* ---- Tabs ---- */
-.tab-strip{ display:flex; gap:2px; border-bottom:1.5px solid var(--color-border); margin:18px 0 0; overflow-x:auto; }
-.tab-btn{ background:none; border:none; border-radius:6px 6px 0 0; padding:10px 16px; font-size:13.5px; font-weight:600; color:var(--color-ink-faint); border-bottom:2px solid transparent; margin-bottom:-1.5px; white-space:nowrap; transition:color 180ms ease, background-color 180ms ease, border-color 180ms ease; }
+.tab-strip{ display:flex; gap:2px; border-bottom:1.5px solid var(--color-border); margin:10px 0 0; overflow-x:auto; }
+.tab-btn{ background:none; border:none; border-radius:6px 6px 0 0; padding:10px 16px; font-size:13.5px; font-weight:600; color:var(--color-ink-soft); border-bottom:2px solid transparent; margin-bottom:-1.5px; white-space:nowrap; transition:color var(--motion-slow), background-color var(--motion-slow), border-color var(--motion-slow); }
 .tab-btn:hover{ color:var(--color-primary-dark); background:var(--color-surface-2); }
-.tab-btn.active{ color:var(--color-primary); border-bottom-color:var(--color-primary); font-weight:700; }
-.tab-panel{ padding-top:18px; }
+.tab-btn.active{ color:var(--color-ink); border-bottom-color:var(--color-primary); font-weight:700; }
+.tab-panel{ padding-top:14px; }
 
 /* ---- Tables ---- */
 .table-wrap{ overflow-x:auto; background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); max-height:70vh; overflow-y:auto; }
@@ -384,57 +440,66 @@ tbody tr:hover{ background:#F8FAFC; }
 .timeline .t-remark{ font-size:13px; color:var(--color-ink-soft); background:var(--color-surface-2); border-radius:8px; padding:8px 10px; }
 
 /* ---- Procurement: approval cards — compact inbox styling ---- */
-.approval-card-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:12px; }
+.approval-card-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(290px,1fr)); gap:var(--space-3); }
 .approval-card{
-  background:var(--color-surface); border:1px solid var(--color-border); border-radius:10px;
-  box-shadow:var(--shadow-sm); padding:12px 14px; transition:box-shadow 180ms ease, transform 180ms ease;
+  background:var(--color-surface); border:1px solid var(--color-border); border-radius:9px;
+  box-shadow:var(--shadow-sm); padding:var(--space-3); transition:box-shadow var(--motion-slow), transform var(--motion-slow);
 }
-.approval-card:hover{ box-shadow:0 4px 14px rgba(15,23,42,.08); transform:translateY(-1px); }
-.approval-card-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:3px; }
-.approval-card-name{ font-size:15.5px; font-weight:700; color:var(--color-ink); line-height:1.3; }
-.approval-card-tags{ display:flex; align-items:center; gap:6px; flex:none; padding-top:1px; }
-.approval-card-meta{ font-size:12px; color:var(--color-ink-soft); margin-bottom:2px; line-height:1.5; }
-.approval-card-reason{ font-size:12px; color:var(--color-ink-faint); font-style:italic; margin:3px 0 0; }
-.approval-card-hint{ font-size:11px; color:var(--color-ink-faint); margin-top:2px; }
-.approval-card-divider{ height:1px; background:var(--color-border); margin:9px 0; }
+.approval-card:hover{ box-shadow:0 3px 10px rgba(15,23,42,.07); transform:translateY(-1px); }
+.approval-card-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:2px; }
+.approval-card-name{ font-size:15px; font-weight:700; color:var(--color-ink); line-height:1.25; }
+.approval-card-tags{ display:flex; align-items:center; gap:5px; flex:none; padding-top:1px; }
+.approval-card-meta{ font-size:11.5px; color:var(--color-ink-soft); line-height:1.45; }
+.approval-card-reason{ font-size:11.5px; color:var(--color-ink-faint); font-style:italic; margin:2px 0 0; }
+.approval-card-hint{ font-size:10.5px; color:var(--color-ink-faint); margin-top:2px; }
+.approval-card-divider{ height:1px; background:var(--color-border); margin:var(--space-2) 0; }
 .chk-row{ display:flex; align-items:center; gap:7px; font-size:13.5px; }
 .chk-row input{ width:15px; height:15px; }
 
+/* Value badge (soft filled pill) vs Priority (outlined chip) — deliberately
+   different visual weight so the two are never mistaken for each other. */
 .priority-chip{
-  display:inline-flex; align-items:center; font-size:10.5px; font-weight:700; letter-spacing:.02em;
-  padding:2px 8px; border-radius:999px; border:1px solid currentColor; background:transparent; white-space:nowrap;
+  display:inline-flex; align-items:center; font-size:10px; font-weight:700; letter-spacing:.02em;
+  padding:1px 7px; border-radius:999px; border:1px solid currentColor; background:transparent; white-space:nowrap;
 }
 .priority-chip.chip-low{ color:var(--color-ink-faint); border-color:var(--color-border); }
 .priority-chip.chip-medium{ color:var(--color-medium); }
 .priority-chip.chip-high{ color:var(--color-high); }
 
-.approval-assign{ display:flex; align-items:center; gap:8px; }
-.approval-assign label{ font-size:10.5px; font-weight:600; color:var(--color-ink-faint); text-transform:uppercase; letter-spacing:.03em; flex:none; }
+.approval-assign{ display:flex; align-items:center; gap:7px; }
+.approval-assign label{ font-size:10px; font-weight:600; color:var(--color-ink-faint); text-transform:uppercase; letter-spacing:.03em; flex:none; }
 .approval-assign select{
-  flex:1; min-width:0; padding:6px 8px; font-size:12.5px; border:1.5px solid var(--color-border); border-radius:6px;
-  background:#fff; color:var(--color-ink-soft); transition:border-color 150ms ease, box-shadow 150ms ease;
+  flex:1; min-width:0; padding:5px 7px; font-size:12px; border:1.5px solid var(--color-border); border-radius:6px;
+  background:#fff; color:var(--color-ink-soft); transition:border-color var(--motion), box-shadow var(--motion);
 }
-.approval-assign select:focus{ outline:none; border-color:var(--color-primary); box-shadow:0 0 0 3px color-mix(in srgb, var(--color-primary) 15%, transparent); }
+.approval-assign select:focus{ outline:none; border-color:var(--action-edit); box-shadow:0 0 0 3px color-mix(in srgb, var(--action-edit) 15%, transparent); }
 
-.approval-card-actions{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.approval-card-actions{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
 .approval-card-actions .forward-target-select{
-  font-size:12px; padding:6px 8px; border:1.5px solid var(--color-border); border-radius:6px;
-  background:#fff; color:var(--color-ink-soft); transition:border-color 150ms ease;
+  font-size:11.5px; padding:5px 7px; border:1.5px solid var(--color-border); border-radius:6px;
+  background:#fff; color:var(--color-ink-soft); transition:border-color var(--motion);
 }
 .approval-card-actions .forward-target-select:focus{ outline:none; border-color:var(--color-primary); }
 
+/* Action colours — fixed regardless of module. Approve is never
+   "Procurement orange" just because the page underline is. */
+.btn-approve{ background:var(--action-approve); color:#fff; border-color:transparent; }
+.btn-approve:hover{ background:var(--action-approve-dark); }
+.btn-cancel{ background:transparent; border-color:var(--action-cancel); color:var(--action-cancel); }
+.btn-cancel:hover{ background:var(--action-cancel-soft); }
+
 /* Decline reason stays collapsed until Decline is clicked, per the
    "only show a control when it's needed" approval-inbox brief. */
-.approval-decline-panel{ max-height:0; opacity:0; overflow:hidden; transition:max-height 200ms ease, opacity 180ms ease, margin-top 200ms ease; }
+.approval-decline-panel{ max-height:0; opacity:0; overflow:hidden; transition:max-height var(--motion-slow), opacity var(--motion-slow), margin-top var(--motion-slow); }
 .approval-card.declining .approval-card-actions{ display:none; }
-.approval-card.declining .approval-decline-panel{ max-height:170px; opacity:1; margin-top:2px; }
-.approval-decline-panel label{ display:block; font-size:10.5px; font-weight:600; color:var(--color-ink-faint); text-transform:uppercase; letter-spacing:.03em; margin-bottom:4px; }
+.approval-card.declining .approval-decline-panel{ max-height:170px; opacity:1; margin-top:1px; }
+.approval-decline-panel label{ display:block; font-size:10px; font-weight:600; color:var(--color-ink-faint); text-transform:uppercase; letter-spacing:.03em; margin-bottom:3px; }
 .approval-decline-panel textarea{
-  width:100%; min-height:52px; padding:7px 9px; border:1.5px solid var(--color-danger); border-radius:6px;
-  font-family:inherit; font-size:13px; resize:vertical; box-sizing:border-box; background:#fff;
+  width:100%; min-height:44px; padding:6px 8px; border:1.5px solid var(--action-decline); border-radius:6px;
+  font-family:inherit; font-size:12.5px; resize:vertical; box-sizing:border-box; background:#fff;
 }
-.approval-decline-panel textarea:focus{ outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--color-danger) 15%, transparent); }
-.approval-decline-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:8px; }
+.approval-decline-panel textarea:focus{ outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--action-decline) 15%, transparent); }
+.approval-decline-actions{ display:flex; justify-content:flex-end; gap:7px; margin-top:7px; }
 
 /* ---- Procurement: new request line cards ---- */
 .req-line-card{ border:1px solid var(--color-border); border-radius:var(--radius); padding:14px; margin-bottom:12px; background:var(--color-surface-2); }
@@ -2747,7 +2812,7 @@ function renderApprovalCard(r){
     }
   }
   if(acts.canApprove){
-    actionsHtml += '<button class="btn btn-primary btn-sm" data-approve-one="'+r.id+'">Approve'+(!r.hasCirculated?'':' (Final)')+'</button>';
+    actionsHtml += '<button class="btn btn-approve btn-sm" data-approve-one="'+r.id+'">Approve'+(!r.hasCirculated?'':' (Final)')+'</button>';
   }
   if(acts.canDecline){
     actionsHtml += '<button class="btn btn-danger btn-sm" data-decline-toggle="'+r.id+'">Decline</button>';
@@ -2771,7 +2836,7 @@ function renderApprovalCard(r){
     +   '<label>Decline reason</label>'
     +   '<textarea id="comment-'+r.id+'" placeholder="Why is this being declined?"></textarea>'
     +   '<div class="approval-decline-actions">'
-    +     '<button class="btn btn-ghost-dark btn-sm" data-decline-cancel="'+r.id+'">Cancel</button>'
+    +     '<button class="btn btn-cancel btn-sm" data-decline-cancel="'+r.id+'">Cancel</button>'
     +     '<button class="btn btn-danger btn-sm" data-decline-confirm="'+r.id+'">Confirm Decline</button>'
     +   '</div>'
     + '</div>'
