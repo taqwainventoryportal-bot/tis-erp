@@ -576,7 +576,9 @@ tbody tr:hover{ background:#F8FAFC; }
 .toast{ background:var(--color-primary-dark); color:#fff; padding:11px 16px; border-radius:9px; font-size:13.5px; box-shadow:var(--shadow); border-left:3px solid var(--color-gold); animation:toastIn .2s ease; }
 .toast.error{ border-left-color:var(--color-danger); }
 .toast.success{ border-left-color:var(--color-success); }
+.toast.leaving{ animation:toastOut .18s ease forwards; }
 @keyframes toastIn{ from{ opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+@keyframes toastOut{ from{ opacity:1; transform:translateY(0);} to{ opacity:0; transform:translateY(6px);} }
 
 /* ---- Footer ---- */
 .footer{ border-top:1px solid var(--color-border); padding:16px 0; text-align:center; font-size:11.5px; color:var(--color-ink-faint); display:flex; justify-content:center; gap:6px; flex-wrap:wrap; }
@@ -808,7 +810,37 @@ function toast(message, type){
   el.className = 'toast' + (type ? ' '+type : '');
   el.textContent = message;
   wrap.appendChild(el);
-  setTimeout(()=>{ el.remove(); }, 3600);
+  setTimeout(()=>{
+    el.classList.add('leaving');
+    el.addEventListener('animationend', ()=>el.remove(), { once:true });
+  }, 3600);
+}
+/* Wraps a save-triggering button: disables it with a busy label while `fn`
+   runs (so a slow connection reads as "working", not "frozen" or ignoring
+   the click), restores it and shows an error toast if `fn` throws, and
+   returns whether it succeeded so the caller can bail out cleanly instead
+   of showing a success toast / closing a modal for a save that failed. */
+async function runSaveAction(btn, busyLabel, fn){
+  const origLabel = btn ? btn.textContent : null;
+  const origDisabled = btn ? btn.disabled : false;
+  if(btn){ btn.disabled = true; btn.textContent = busyLabel; }
+  try{
+    await fn();
+    return true;
+  }catch(e){
+    if(btn){ btn.disabled = origDisabled; btn.textContent = origLabel; }
+    toast(e.message || 'Something went wrong — please try again', 'error');
+    return false;
+  }
+}
+/* For the common "push one new record, then save" shape: if the save fails,
+   undoes the push so a retry (or the next unrelated save) can't silently
+   create a duplicate — same problem the New Request flow guards against,
+   just for a single record instead of a batch. */
+async function pushAndSave(array, record){
+  array.push(record);
+  try{ await saveDb(); }
+  catch(e){ const i = array.indexOf(record); if(i>-1) array.splice(i,1); throw e; }
 }
 /* ---- Outline icons (Lucide-style, stroke-based) ---- */
 function outlineIcon(paths, size, color){
@@ -1062,18 +1094,48 @@ function currentUserAnyRole(){
 /* ============================================================
    Google Drive helpers
    ============================================================ */
-async function driveFetchPublic(path, params){
+async function driveFetchPublic(path, params, allowRetry){
+  if(allowRetry === undefined) allowRetry = true;
   const url = new URL(DRIVE_FILES_URL + path);
   url.searchParams.set('key', CONFIG.DRIVE_API_KEY);
   Object.entries(params||{}).forEach(([k,v])=>url.searchParams.set(k,v));
-  const res = await fetch(url);
+  let res;
+  const maxAttempts = allowRetry ? 3 : 1;
+  for(let attempt=1; attempt<=maxAttempts; attempt++){
+    try{ res = await fetch(url); break; } // got a real response (even an error status) — stop retrying, handle it below
+    catch(networkErr){
+      // fetch() itself rejected — the request never reached a server at all
+      // (dropped connection, DNS hiccup, momentary offline). Retry a few
+      // times before giving up; a confirmed HTTP error status below is NOT
+      // retried here, since retrying won't fix a 403/404.
+      if(attempt===maxAttempts) throw new Error('Could not reach Google Drive after several attempts. Check your internet connection and try again.');
+      await new Promise(r=>setTimeout(r, 700*attempt));
+    }
+  }
   if(!res.ok) throw new Error('Drive read failed ('+res.status+')');
   return res;
 }
 async function driveFetchAuthed(url, options){
   options = options || {};
   options.headers = Object.assign({}, options.headers, { Authorization: 'Bearer '+accessToken });
-  const res = await fetch(url, options);
+  let res;
+  const maxAttempts = 3;
+  for(let attempt=1; attempt<=maxAttempts; attempt++){
+    try{ res = await fetch(url, options); break; }
+    catch(networkErr){
+      // Same "no response at all" case as above — but this is a WRITE, so
+      // it's worth telling the person a retry could double up their action
+      // if the first attempt actually landed before the reply was lost.
+      if(attempt===maxAttempts) throw new Error('Could not reach Google Drive after several attempts. Your connection may be unstable — please check it, then refresh this page before retrying to avoid creating a duplicate.');
+      await new Promise(r=>setTimeout(r, 700*attempt));
+    }
+  }
+  if(res.status === 401){
+    accessToken = null; currentUserEmail = null;
+    try{ sessionStorage.removeItem('taqwa_session'); }catch(e){}
+    renderTopbar();
+    throw new Error('Your session has expired. Please sign in again.');
+  }
   if(!res.ok){ const t = await res.text().catch(()=> ''); throw new Error('Drive request failed ('+res.status+'): '+t.slice(0,180)); }
   return res;
 }
@@ -1081,33 +1143,16 @@ async function driveGetJson(fileId){
   const res = await driveFetchPublic('/'+fileId, { alt:'media' });
   return res.json();
 }
-// A single momentary network blip (weak wifi, a DNS hiccup, a brief
-// firewall stall) shouldn't strand someone on a dead "could not load"
-// screen at boot — retry a couple of times with backoff before giving up.
-async function driveGetJsonWithRetry(fileId, attempts){
-  attempts = attempts || 3;
-  let lastErr;
-  for(let i=0; i<attempts; i++){
-    try{ return await driveGetJson(fileId); }
-    catch(e){ lastErr = e; if(i < attempts-1) await new Promise(r=>setTimeout(r, 700*(i+1))); }
-  }
-  throw lastErr;
-}
-async function driveSaveJsonAttempt(fileId, data){
+// Network-level retry now lives inside driveFetchAuthed itself, so it's
+// shared by every write (this save, uploads, folder/file creation) instead
+// of being special-cased just for the main DB save.
+async function driveSaveJson(fileId, data){
   const res = await driveFetchAuthed(DRIVE_UPLOAD_URL+'/'+fileId+'?uploadType=media', {
     method:'PATCH',
     headers:{ 'Content-Type':'application/json' },
     body: JSON.stringify(data)
   });
   return res.json();
-}
-async function driveSaveJson(fileId, data){
-  let lastErr;
-  for(let attempt=1; attempt<=3; attempt++){
-    try{ return await driveSaveJsonAttempt(fileId, data); }
-    catch(e){ lastErr = e; await new Promise(r=>setTimeout(r, 500*attempt)); }
-  }
-  throw lastErr;
 }
 async function driveCreateFolder(name){
   const res = await driveFetchAuthed(DRIVE_FILES_URL, {
@@ -1171,7 +1216,7 @@ function drivePreviewUrl(fileId){ return 'https://drive.google.com/file/d/'+file
    DB load / save
    ============================================================ */
 async function loadDb(){
-  const raw = await driveGetJsonWithRetry(CONFIG.DB_FILE_ID, 3);
+  const raw = await driveGetJson(CONFIG.DB_FILE_ID);
   const base = emptyDb();
   DB = Object.assign(base, raw);
   ['departments','categories','inventoryItems','dismissedAlerts','buildings','rooms','itemTypes','staff','requests','requestItems','archiveLog','stockLedger','itemCatalog','purchaseOrders'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
@@ -1454,8 +1499,13 @@ function renderAlertsHtml(){
 function wireAlertDismissButtons(){
   document.querySelectorAll('[data-dismiss-alert]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      DB.dismissedAlerts.push(btn.getAttribute('data-dismiss-alert'));
-      await saveDb(); renderRoute();
+      const key = btn.getAttribute('data-dismiss-alert');
+      const ok = await runSaveAction(btn, 'Dismissing…', async ()=>{
+        DB.dismissedAlerts.push(key);
+        await saveDb();
+      });
+      if(!ok) return;
+      renderRoute();
     });
   });
 }
@@ -1854,7 +1904,8 @@ function openConsumeModal(itemId){
   const cbSel = document.getElementById('consume-building');
   function refreshConsumeRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===cbSel.value); document.getElementById('consume-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
   cbSel.addEventListener('change', refreshConsumeRooms); refreshConsumeRooms();
-  document.getElementById('consume-submit-btn').addEventListener('click', async ()=>{
+  document.getElementById('consume-submit-btn').addEventListener('click', async function(){
+    const btn = this;
     const qty = Number(document.getElementById('consume-qty').value)||0;
     const date = document.getElementById('consume-date').value;
     const buildingId = cbSel.value, roomId = document.getElementById('consume-room').value;
@@ -1863,10 +1914,14 @@ function openConsumeModal(itemId){
     if(qty<=0){ toast('Enter a quantity greater than zero','error'); return; }
     if(qty > Number(item.quantity)){ toast('Cannot consume more than current stock','error'); return; }
     const fullRemark = (location ? '['+location+'] ' : '') + (remark || 'Stock consumption');
-    const balance = pushLedgerEntry(item.id, 'Issue', '', 0, qty, fullRemark, date);
-    item.quantity = balance; item.updatedAt = new Date().toISOString();
-    itemHistoryPush(item, 'Consumed', qty+' consumed'+(location?' at '+location:'')+(remark?' — '+remark:''));
-    await saveDb(); toast('Consumption recorded','success'); closeModal(); renderInventoryPage();
+    const ok = await runSaveAction(btn, 'Recording…', async ()=>{
+      const balance = pushLedgerEntry(item.id, 'Issue', '', 0, qty, fullRemark, date);
+      item.quantity = balance; item.updatedAt = new Date().toISOString();
+      itemHistoryPush(item, 'Consumed', qty+' consumed'+(location?' at '+location:'')+(remark?' — '+remark:''));
+      await saveDb();
+    });
+    if(!ok) return;
+    toast('Consumption recorded','success'); closeModal(); renderInventoryPage();
   });
 }
 
@@ -1918,22 +1973,30 @@ function renderManageDeptsModalBody(){
   if(resetBtn) resetBtn.addEventListener('click', async ()=>{
     if(!confirm('This will PERMANENTLY delete all current categories and catalog items — not archived, not recoverable — then replace them with the standard 9-category structure. Existing inventory items/requests keep their old category name as plain text for history, but the category record itself will be gone. Continue?')) return;
     if(!confirm('Are you absolutely sure? This cannot be undone.')) return;
-    DB.categories = [];
-    DB.itemCatalog = [];
-    const seedCats = seedCategories();
-    const catIdMap = {};
-    const newCats = seedCats.map(c=>{ const newId = nextId('cat'); catIdMap[c.id] = newId; return Object.assign({}, c, { id:newId }); });
-    const newItems = seedItemCatalog().map(i=> Object.assign({}, i, { id: nextId('ic'), categoryId: catIdMap[i.categoryId] }));
-    DB.categories.push(...newCats);
-    DB.itemCatalog.push(...newItems);
-    await saveDb(); toast('Old categories permanently removed, reset to new structure','success'); renderManageDeptsModalBody(); renderRoute();
+    const ok = await runSaveAction(resetBtn, 'Resetting…', async ()=>{
+      DB.categories = [];
+      DB.itemCatalog = [];
+      const seedCats = seedCategories();
+      const catIdMap = {};
+      const newCats = seedCats.map(c=>{ const newId = nextId('cat'); catIdMap[c.id] = newId; return Object.assign({}, c, { id:newId }); });
+      const newItems = seedItemCatalog().map(i=> Object.assign({}, i, { id: nextId('ic'), categoryId: catIdMap[i.categoryId] }));
+      DB.categories.push(...newCats);
+      DB.itemCatalog.push(...newItems);
+      await saveDb();
+    });
+    if(!ok) return;
+    toast('Old categories permanently removed, reset to new structure','success'); renderManageDeptsModalBody(); renderRoute();
   });
-  document.getElementById('add-cat-btn').addEventListener('click', async ()=>{
+  document.getElementById('add-cat-btn').addEventListener('click', async function(){
+    const btn = this;
     const input = document.getElementById('new-cat-name');
     const name = input.value.trim();
     if(!name) return;
-    DB.categories.push({ id:nextId('cat'), name, itemTypeId:'type_consumable', procurementPolicy:'required', valueClass:'low' });
-    await saveDb(); toast('Category added','success'); renderManageDeptsModalBody(); renderRoute();
+    const ok = await runSaveAction(btn, 'Adding…', async ()=>{
+      await pushAndSave(DB.categories, { id:nextId('cat'), name, itemTypeId:'type_consumable', procurementPolicy:'required', valueClass:'low' });
+    });
+    if(!ok) return;
+    toast('Category added','success'); renderManageDeptsModalBody(); renderRoute();
   });
   document.querySelectorAll('[data-add-item]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
@@ -1941,32 +2004,45 @@ function renderManageDeptsModalBody(){
       const input = document.querySelector('[data-newitem-name="'+categoryId+'"]');
       const name = input.value.trim();
       if(!name) return;
-      const cat = DB.categories.find(c=>c.id===categoryId);
-      DB.itemCatalog.push({
-        id:nextId('ic'), categoryId, code: nextItemCode(categoryId), name, description:'',
-        itemTypeId: cat ? cat.itemTypeId : 'type_consumable',
-        procurementPolicy: cat ? cat.procurementPolicy : 'required',
-        valueClass: cat ? cat.valueClass : 'low'
+      const ok = await runSaveAction(btn, 'Adding…', async ()=>{
+        const cat = DB.categories.find(c=>c.id===categoryId);
+        await pushAndSave(DB.itemCatalog, {
+          id:nextId('ic'), categoryId, code: nextItemCode(categoryId), name, description:'',
+          itemTypeId: cat ? cat.itemTypeId : 'type_consumable',
+          procurementPolicy: cat ? cat.procurementPolicy : 'required',
+          valueClass: cat ? cat.valueClass : 'low'
+        });
       });
-      await saveDb(); toast('Item added','success'); renderManageDeptsModalBody(); renderRoute();
+      if(!ok) return;
+      toast('Item added','success'); renderManageDeptsModalBody(); renderRoute();
     });
   });
   document.querySelectorAll('[data-item-type]').forEach(sel=>{
     sel.addEventListener('change', async ()=>{
       const i = DB.itemCatalog.find(x=>x.id===sel.getAttribute('data-item-type'));
-      if(i){ i.itemTypeId = sel.value; await saveDb(); toast('Item Type updated','success'); }
+      if(!i) return;
+      const ok = await runSaveAction(sel, '…', async ()=>{ i.itemTypeId = sel.value; await saveDb(); });
+      if(ok) toast('Item Type updated','success');
     });
   });
   document.querySelectorAll('[data-item-valueclass]').forEach(sel=>{
     sel.addEventListener('change', async ()=>{
       const i = DB.itemCatalog.find(x=>x.id===sel.getAttribute('data-item-valueclass'));
-      if(i){ i.valueClass = sel.value; await saveDb(); toast('Value Classification updated','success'); }
+      if(!i) return;
+      const ok = await runSaveAction(sel, '…', async ()=>{ i.valueClass = sel.value; await saveDb(); });
+      if(ok) toast('Value Classification updated','success');
     });
   });
   document.querySelectorAll('[data-item-policy-toggle]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const i = DB.itemCatalog.find(x=>x.id===btn.getAttribute('data-item-policy-toggle'));
-      if(i){ i.procurementPolicy = i.procurementPolicy==='required' ? 'not_required' : 'required'; await saveDb(); toast('Procurement Policy updated','success'); renderManageDeptsModalBody(); }
+      if(!i) return;
+      const ok = await runSaveAction(btn, '…', async ()=>{
+        i.procurementPolicy = i.procurementPolicy==='required' ? 'not_required' : 'required';
+        await saveDb();
+      });
+      if(!ok) return;
+      toast('Procurement Policy updated','success'); renderManageDeptsModalBody();
     });
   });
   document.querySelectorAll('[data-rename-cat]').forEach(btn=>{
@@ -1975,8 +2051,9 @@ function renderManageDeptsModalBody(){
       const c = DB.categories.find(x=>x.id===id);
       const name = prompt('Rename category:', c.name);
       if(!name || !name.trim()) return;
-      c.name = name.trim();
-      await saveDb(); toast('Renamed','success'); renderManageDeptsModalBody(); renderRoute();
+      const ok = await runSaveAction(btn, '…', async ()=>{ c.name = name.trim(); await saveDb(); });
+      if(!ok) return;
+      toast('Renamed','success'); renderManageDeptsModalBody(); renderRoute();
     });
   });
   document.querySelectorAll('[data-del-cat]').forEach(btn=>{
@@ -1984,8 +2061,12 @@ function renderManageDeptsModalBody(){
       const id = btn.getAttribute('data-del-cat');
       const c = DB.categories.find(x=>x.id===id);
       if(!promptAndArchive('category', c, c.name)) return;
-      DB.itemCatalog.filter(i=>i.categoryId===id && !i.deleted).forEach(i=>archiveRecord('itemCatalog', i, i.name, 'Parent category deleted'));
-      await saveDb(); toast('Category deleted (archived)','success'); renderManageDeptsModalBody(); renderRoute();
+      const ok = await runSaveAction(btn, 'Deleting…', async ()=>{
+        DB.itemCatalog.filter(i=>i.categoryId===id && !i.deleted).forEach(i=>archiveRecord('itemCatalog', i, i.name, 'Parent category deleted'));
+        await saveDb();
+      });
+      if(!ok) return;
+      toast('Category deleted (archived)','success'); renderManageDeptsModalBody(); renderRoute();
     });
   });
   document.querySelectorAll('[data-del-item]').forEach(btn=>{
@@ -1993,7 +2074,9 @@ function renderManageDeptsModalBody(){
       const id = btn.getAttribute('data-del-item');
       const i = DB.itemCatalog.find(x=>x.id===id);
       if(!promptAndArchive('itemCatalog', i, i.code+' '+i.name)) return;
-      await saveDb(); toast('Item deleted (archived)','success'); renderManageDeptsModalBody(); renderRoute();
+      const ok = await runSaveAction(btn, 'Deleting…', async ()=>{ await saveDb(); });
+      if(!ok) return;
+      toast('Item deleted (archived)','success'); renderManageDeptsModalBody(); renderRoute();
     });
   });
 }
@@ -2060,7 +2143,9 @@ function renderItemsTable(catId){
       ev.stopPropagation();
       const it = DB.inventoryItems.find(x=>x.id===btn.getAttribute('data-del-item'));
       if(!promptAndArchive('inventoryItem', it, it.name)) return;
-      await saveDb(); toast('Item deleted (archived)','success'); renderCategoryPage(catId);
+      const ok = await runSaveAction(btn, 'Deleting…', async ()=>{ await saveDb(); });
+      if(!ok) return;
+      toast('Item deleted (archived)','success'); renderCategoryPage(catId);
     });
   });
 }
@@ -2169,11 +2254,15 @@ function wireAdjustmentForm(item){
     const reason = document.getElementById('adj-reason').value.trim();
     if(!delta){ toast('Enter a non-zero quantity','error'); return; }
     if(!reason){ toast('A reason is required for stock adjustments','error'); return; }
-    const qtyIn = delta>0 ? delta : 0, qtyOut = delta<0 ? Math.abs(delta) : 0;
-    const balance = pushLedgerEntry(item.id, type, '', qtyIn, qtyOut, reason);
-    item.quantity = balance; item.updatedAt = new Date().toISOString();
-    itemHistoryPush(item, type, (delta>0?'+':'')+delta+' — '+reason);
-    await saveDb(); toast('Adjustment recorded','success'); renderInventoryItemDetailPage(item.id);
+    const ok = await runSaveAction(btn, 'Recording…', async ()=>{
+      const qtyIn = delta>0 ? delta : 0, qtyOut = delta<0 ? Math.abs(delta) : 0;
+      const balance = pushLedgerEntry(item.id, type, '', qtyIn, qtyOut, reason);
+      item.quantity = balance; item.updatedAt = new Date().toISOString();
+      itemHistoryPush(item, type, (delta>0?'+':'')+delta+' — '+reason);
+      await saveDb();
+    });
+    if(!ok) return;
+    toast('Adjustment recorded','success'); renderInventoryItemDetailPage(item.id);
   });
 }
 function renderItemAttachmentsHtml(item, linkedRequest){
@@ -2237,49 +2326,57 @@ function openItemModal(catId, item){
       document.getElementById('it-catalog-item').innerHTML = catalogItemOptionsForCategory(catSel.value, '');
     });
   }
-  document.getElementById('save-item-btn').addEventListener('click', async ()=>{
+  document.getElementById('save-item-btn').addEventListener('click', async function(){
+    const btn = this;
     const selectedCatId = document.getElementById('it-cat').value;
     if(!item){
       const catalogItemId = document.getElementById('it-catalog-item').value;
       const catalogItem = DB.itemCatalog.find(i=>!i.deleted && i.id===catalogItemId);
       if(!catalogItem){ toast('Choose a catalog item first','error'); return; }
-      const record = {
-        id: nextId('item'),
-        name: catalogItem.name,
-        catalogItemId: catalogItem.id,
-        itemCode: catalogItem.code,
-        categoryId: selectedCatId,
-        quantity: Number(document.getElementById('it-qty').value)||0,
-        unit: document.getElementById('it-unit').value.trim(),
-        cost: Number(document.getElementById('it-cost').value)||0,
-        reorderThreshold: Number(document.getElementById('it-reorder').value)||0,
-        purchaseDate: document.getElementById('it-date').value,
-        status: document.getElementById('it-status').value,
-        remarks: document.getElementById('it-remarks').value.trim(),
-        minStock: 0, preferredSupplier: '',
-        history: [], updatedAt: new Date().toISOString()
-      };
-      DB.inventoryItems.push(record);
-      itemHistoryPush(record, 'Created', 'Manually added — '+catalogItem.code+' '+catalogItem.name);
-      await saveDb(); closeModal(); toast('Item saved','success'); renderCategoryPage(selectedCatId);
+      const ok = await runSaveAction(btn, 'Saving…', async ()=>{
+        const record = {
+          id: nextId('item'),
+          name: catalogItem.name,
+          catalogItemId: catalogItem.id,
+          itemCode: catalogItem.code,
+          categoryId: selectedCatId,
+          quantity: Number(document.getElementById('it-qty').value)||0,
+          unit: document.getElementById('it-unit').value.trim(),
+          cost: Number(document.getElementById('it-cost').value)||0,
+          reorderThreshold: Number(document.getElementById('it-reorder').value)||0,
+          purchaseDate: document.getElementById('it-date').value,
+          status: document.getElementById('it-status').value,
+          remarks: document.getElementById('it-remarks').value.trim(),
+          minStock: 0, preferredSupplier: '',
+          history: [], updatedAt: new Date().toISOString()
+        };
+        itemHistoryPush(record, 'Created', 'Manually added — '+catalogItem.code+' '+catalogItem.name);
+        await pushAndSave(DB.inventoryItems, record);
+      });
+      if(!ok) return;
+      closeModal(); toast('Item saved','success'); renderCategoryPage(selectedCatId);
     } else {
       const name = document.getElementById('it-name').value.trim();
       if(!name){ toast('Item name is required','error'); return; }
-      const record = {
-        name,
-        categoryId: selectedCatId,
-        quantity: Number(document.getElementById('it-qty').value)||0,
-        unit: document.getElementById('it-unit').value.trim(),
-        cost: Number(document.getElementById('it-cost').value)||0,
-        reorderThreshold: Number(document.getElementById('it-reorder').value)||0,
-        purchaseDate: document.getElementById('it-date').value,
-        status: document.getElementById('it-status').value,
-        remarks: document.getElementById('it-remarks').value.trim(),
-        updatedAt: new Date().toISOString()
-      };
-      Object.assign(item, record);
-      itemHistoryPush(item, 'Edited', 'Updated via Manage Inventory');
-      await saveDb(); closeModal(); toast('Item saved','success'); renderCategoryPage(selectedCatId);
+      const ok = await runSaveAction(btn, 'Saving…', async ()=>{
+        const record = {
+          name,
+          categoryId: selectedCatId,
+          quantity: Number(document.getElementById('it-qty').value)||0,
+          unit: document.getElementById('it-unit').value.trim(),
+          cost: Number(document.getElementById('it-cost').value)||0,
+          reorderThreshold: Number(document.getElementById('it-reorder').value)||0,
+          purchaseDate: document.getElementById('it-date').value,
+          status: document.getElementById('it-status').value,
+          remarks: document.getElementById('it-remarks').value.trim(),
+          updatedAt: new Date().toISOString()
+        };
+        Object.assign(item, record);
+        itemHistoryPush(item, 'Edited', 'Updated via Manage Inventory');
+        await saveDb();
+      });
+      if(!ok) return;
+      closeModal(); toast('Item saved','success'); renderCategoryPage(selectedCatId);
     }
   });
 }
@@ -2698,7 +2795,8 @@ function renderNewRequestTab(){
     }catch(e){ toast('Could not save draft — storage unavailable','error'); }
   });
 
-  document.getElementById('submit-request-btn').addEventListener('click', async ()=>{
+  document.getElementById('submit-request-btn').addEventListener('click', async function(){
+    const btn = this;
     captureLineValues();
     const wrap = document.getElementById('req-lines');
     const lineData = newRequestLines.map(line=>{
@@ -2728,42 +2826,57 @@ function renderNewRequestTab(){
     if(lineData.some(l=>!l.itemName || !l.quantityRequested)){ toast('Every item needs a selected catalog item and quantity','error'); return; }
     const requestDate = document.getElementById('req-date').value;
 
-    // Auto-split: a request can only contain one Value Classification.
-    // Items of a different tier silently become their own separate request.
-    const groups = {};
-    lineData.forEach(l=>{ (groups[l.valueClass] = groups[l.valueClass] || []).push(l); });
-    const groupKeys = Object.keys(groups);
-    const createdNumbers = [];
-    groupKeys.forEach(tierKey=>{
-      const items = groups[tierKey];
-      const requestNumber = requestNumberNext();
-      const requestId = nextId('req');
-      const itemIds = [];
-      items.forEach(l=>{
-        const id = nextId('ri');
-        itemIds.push(id);
-        const record = {
-          id, requestId, requestNumber, requestDate,
-          requestedByEmail: currentUserEmail, requestedByName: (myStaffRecord()||{}).name || currentUserEmail,
-          categoryId: l.categoryId, itemTypeId: l.itemTypeId, itemName: l.itemName, itemCode: l.itemCode, catalogItemId: l.catalogItemId, quantityRequested: l.quantityRequested,
-          priority: l.priority, reason: l.reason, description: l.description,
-          valueClass: l.valueClass, procurementPolicy: l.procurementPolicy,
-          linkedAssetId: null,
-          status: 'pending_approval',
-          assignedPurchaserEmail: null, assignedPurchaserName: null,
-          purchase: null, receipt: null, assignments: [], maintenanceEvents: [], disposal: null,
-          accountantClosed: false, accountantClosedByEmail: null, accountantClosedAt: null, accountantRemark: null,
-          notes: [],
-          history: [{ stage:'Requested', action:'created', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:'', timestamp:new Date().toISOString() }],
-          createdAt: new Date().toISOString()
-        };
-        initCirculation(record);
-        DB.requestItems.push(record);
+    let createdNumbers = [];
+    const ok = await runSaveAction(btn, 'Submitting…', async ()=>{
+      // Auto-split: a request can only contain one Value Classification.
+      // Items of a different tier silently become their own separate request.
+      const groups = {};
+      lineData.forEach(l=>{ (groups[l.valueClass] = groups[l.valueClass] || []).push(l); });
+      const groupKeys = Object.keys(groups);
+      const newItemRecords = [], newRequestRecords = [];
+      groupKeys.forEach(tierKey=>{
+        const items = groups[tierKey];
+        const requestNumber = requestNumberNext();
+        const requestId = nextId('req');
+        const itemIds = [];
+        items.forEach(l=>{
+          const id = nextId('ri');
+          itemIds.push(id);
+          const record = {
+            id, requestId, requestNumber, requestDate,
+            requestedByEmail: currentUserEmail, requestedByName: (myStaffRecord()||{}).name || currentUserEmail,
+            categoryId: l.categoryId, itemTypeId: l.itemTypeId, itemName: l.itemName, itemCode: l.itemCode, catalogItemId: l.catalogItemId, quantityRequested: l.quantityRequested,
+            priority: l.priority, reason: l.reason, description: l.description,
+            valueClass: l.valueClass, procurementPolicy: l.procurementPolicy,
+            linkedAssetId: null,
+            status: 'pending_approval',
+            assignedPurchaserEmail: null, assignedPurchaserName: null,
+            purchase: null, receipt: null, assignments: [], maintenanceEvents: [], disposal: null,
+            accountantClosed: false, accountantClosedByEmail: null, accountantClosedAt: null, accountantRemark: null,
+            notes: [],
+            history: [{ stage:'Requested', action:'created', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:'', timestamp:new Date().toISOString() }],
+            createdAt: new Date().toISOString()
+          };
+          initCirculation(record);
+          newItemRecords.push(record);
+        });
+        newRequestRecords.push({ id: requestId, requestNumber, requestDate, requestedByEmail: currentUserEmail, createdAt: new Date().toISOString(), itemIds });
+        createdNumbers.push(requestNumber);
       });
-      DB.requests.push({ id: requestId, requestNumber, requestDate, requestedByEmail: currentUserEmail, createdAt: new Date().toISOString(), itemIds });
-      createdNumbers.push(requestNumber);
+      DB.requestItems.push(...newItemRecords);
+      DB.requests.push(...newRequestRecords);
+      try{
+        await saveDb();
+      }catch(e){
+        // Save failed — undo the in-memory push so a retry (or the next
+        // unrelated save) doesn't silently create duplicate requests.
+        newItemRecords.forEach(r=>{ const i=DB.requestItems.indexOf(r); if(i>-1) DB.requestItems.splice(i,1); });
+        newRequestRecords.forEach(r=>{ const i=DB.requests.indexOf(r); if(i>-1) DB.requests.splice(i,1); });
+        createdNumbers = [];
+        throw e;
+      }
     });
-    await saveDb();
+    if(!ok) return;
     newRequestLines = [];
     newReqExpandedId = null;
     newReqDraftBannerDismissed = false;
@@ -2786,9 +2899,9 @@ function renderApprovalsTab(){
   items.forEach(r=>{
     const card = panel.querySelector('[data-approval-card="'+r.id+'"]');
     const approveBtn = card.querySelector('[data-approve-one]');
-    if(approveBtn) approveBtn.addEventListener('click', ()=>submitCirculationAction(r, 'approve'));
+    if(approveBtn) approveBtn.addEventListener('click', ()=>submitCirculationAction(r, 'approve', approveBtn));
     const forwardBtn = card.querySelector('[data-forward-one]');
-    if(forwardBtn) forwardBtn.addEventListener('click', ()=>submitCirculationAction(r, 'forward'));
+    if(forwardBtn) forwardBtn.addEventListener('click', ()=>submitCirculationAction(r, 'forward', forwardBtn));
     const purchaserEl = card.querySelector('[data-purchaser="'+r.id+'"]');
     if(purchaserEl) purchaserEl.addEventListener('change', ()=>{
       if(purchaserEl.value){ const s = DB.staff.find(x=>x.email===purchaserEl.value); r.assignedPurchaserEmail = purchaserEl.value; r.assignedPurchaserName = s?s.name:purchaserEl.value; }
@@ -2806,7 +2919,7 @@ function renderApprovalsTab(){
       const t = document.getElementById('comment-'+r.id); if(t) t.value = '';
     });
     const declineConfirm = card.querySelector('[data-decline-confirm]');
-    if(declineConfirm) declineConfirm.addEventListener('click', ()=>submitCirculationAction(r, 'decline'));
+    if(declineConfirm) declineConfirm.addEventListener('click', ()=>submitCirculationAction(r, 'decline', declineConfirm));
   });
 }
 function renderApprovalCard(r){
@@ -2858,7 +2971,7 @@ function renderApprovalCard(r){
     + '</div>'
     + '</div>';
 }
-async function submitCirculationAction(r, action){
+async function submitCirculationAction(r, action, btn){
   const commentEl = document.getElementById('comment-'+r.id);
   const comment = commentEl ? commentEl.value.trim() : '';
   if(action === 'decline' && !comment){ toast('A comment is required to decline','error'); return; }
@@ -2870,7 +2983,11 @@ async function submitCirculationAction(r, action){
     else{ const sel = document.getElementById('forward-target-'+r.id); targetRole = sel ? sel.value : null; }
     if(!targetRole){ toast('Choose where to send this','error'); return; }
   }
-  await applyCirculationAction(r, action, targetRole, comment);
+  const busyLabel = action==='approve' ? 'Approving…' : action==='decline' ? 'Declining…' : 'Forwarding…';
+  const ok = await runSaveAction(btn, busyLabel, async ()=>{
+    await applyCirculationAction(r, action, targetRole, comment);
+  });
+  if(!ok) return;
   toast(action==='approve'?'Approved':action==='decline'?'Declined':'Forwarded to '+roleKeyLabel(targetRole), action==='decline'?'error':'success');
   renderProcurementPage();
 }
@@ -3128,14 +3245,20 @@ function renderItemDetailModalBody(r){
     const textEl = document.getElementById('notesheet-new-comment');
     const comment = textEl.value.trim();
     if(!comment){ toast('Write a comment first','error'); return; }
-    if(!Array.isArray(r.notes)) r.notes = [];
-    r.notes.push({ id: nextId('note'), authorEmail: currentUserEmail, authorName: (myStaffRecord()||{}).name||currentUserEmail, designation: myRoleLabel(), comment, timestamp: new Date().toISOString() });
-    await saveDb(); toast('Comment added','success'); openItemDetailModal(r.id);
+    const ok = await runSaveAction(noteBtn, 'Posting…', async ()=>{
+      if(!Array.isArray(r.notes)) r.notes = [];
+      r.notes.push({ id: nextId('note'), authorEmail: currentUserEmail, authorName: (myStaffRecord()||{}).name||currentUserEmail, designation: myRoleLabel(), comment, timestamp: new Date().toISOString() });
+      await saveDb();
+    });
+    if(!ok) return;
+    toast('Comment added','success'); openItemDetailModal(r.id);
   });
   const delBtn = document.getElementById('modal-delete-item-btn');
   if(delBtn) delBtn.addEventListener('click', async ()=>{
     if(!promptAndArchive('requestItem', r, r.itemName+' ('+r.requestNumber+')')) return;
-    await saveDb(); toast('Request deleted (archived)','success'); closeModal(); renderProcurementPage();
+    const ok = await runSaveAction(delBtn, 'Deleting…', async ()=>{ await saveDb(); });
+    if(!ok) return;
+    toast('Request deleted (archived)','success'); closeModal(); renderProcurementPage();
   });
   if(!r.deleted) renderItemActionBox(r);
 }
@@ -3170,14 +3293,16 @@ function renderItemActionBox(r){
       const sel = document.getElementById('modal-purchaser');
       if(sel && sel.value){ const s = DB.staff.find(x=>x.email===sel.value); r.assignedPurchaserEmail = sel.value; r.assignedPurchaserName = s?s.name:sel.value; }
       const comment = document.getElementById('modal-remark').value.trim();
-      await applyCirculationAction(r, 'approve', null, comment);
+      const ok = await runSaveAction(approveBtn, 'Approving…', async ()=>{ await applyCirculationAction(r, 'approve', null, comment); });
+      if(!ok) return;
       toast('Approved','success'); openItemDetailModal(r.id);
     });
     const declineBtn = document.getElementById('modal-decline-btn');
     if(declineBtn) declineBtn.addEventListener('click', async ()=>{
       const comment = document.getElementById('modal-remark').value.trim();
       if(!comment){ toast('A comment is required to decline','error'); return; }
-      await applyCirculationAction(r, 'decline', null, comment);
+      const ok = await runSaveAction(declineBtn, 'Declining…', async ()=>{ await applyCirculationAction(r, 'decline', null, comment); });
+      if(!ok) return;
       toast('Declined','error'); openItemDetailModal(r.id);
     });
     const forwardBtn = document.getElementById('modal-forward-btn');
@@ -3187,7 +3312,8 @@ function renderItemActionBox(r){
       const targetRole = fixedTarget || (targetSel ? targetSel.value : null);
       if(!targetRole){ toast('Choose where to send this','error'); return; }
       const comment = document.getElementById('modal-remark').value.trim();
-      await applyCirculationAction(r, 'forward', targetRole, comment);
+      const ok = await runSaveAction(forwardBtn, 'Forwarding…', async ()=>{ await applyCirculationAction(r, 'forward', targetRole, comment); });
+      if(!ok) return;
       toast('Forwarded to '+roleKeyLabel(targetRole),'success'); openItemDetailModal(r.id);
     });
     return;
@@ -3216,24 +3342,28 @@ function renderItemActionBox(r){
         try{ billFileId = await driveUploadBinary(file, CONFIG.UPLOADS_FOLDER_ID); billFileName = file.name; }
         catch(e){ toast('Bill upload failed: '+e.message, 'error'); submitBtn.disabled = false; submitBtn.textContent = 'Record Purchase'; return; }
       }
-      r.purchase = {
-        purchaserEmail: currentUserEmail, purchaserName: r.assignedPurchaserName||currentUserEmail,
-        supplier: document.getElementById('pe-supplier').value.trim(),
-        invoiceNumber: document.getElementById('pe-invoice').value.trim(),
-        invoiceDate: document.getElementById('pe-invoice-date').value,
-        purchaseDate: document.getElementById('pe-purchase-date').value,
-        quantityPurchased: Number(qtyEl.value)||0,
-        unitPrice: Number(priceEl.value)||0,
-        taxAmount: Number(taxEl.value)||0,
-        totalAmount: Number(totalEl.value)||0,
-        billFileId, billFileName,
-        remarks: document.getElementById('pe-remarks').value.trim(),
-        recordedAt: new Date().toISOString()
-      };
-      r.history.push({ stage:'Purchase Recorded', action:'recorded', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark: r.purchase.remarks, timestamp:new Date().toISOString() });
-      r.status = (pattern==='service') ? 'purchased' : 'purchased';
-      updatePurchaseOrderFromPurchase(r);
-      await saveDb(); toast('Purchase recorded','success'); openItemDetailModal(r.id);
+      const ok = await runSaveAction(submitBtn, 'Recording…', async ()=>{
+        r.purchase = {
+          purchaserEmail: currentUserEmail, purchaserName: r.assignedPurchaserName||currentUserEmail,
+          supplier: document.getElementById('pe-supplier').value.trim(),
+          invoiceNumber: document.getElementById('pe-invoice').value.trim(),
+          invoiceDate: document.getElementById('pe-invoice-date').value,
+          purchaseDate: document.getElementById('pe-purchase-date').value,
+          quantityPurchased: Number(qtyEl.value)||0,
+          unitPrice: Number(priceEl.value)||0,
+          taxAmount: Number(taxEl.value)||0,
+          totalAmount: Number(totalEl.value)||0,
+          billFileId, billFileName,
+          remarks: document.getElementById('pe-remarks').value.trim(),
+          recordedAt: new Date().toISOString()
+        };
+        r.history.push({ stage:'Purchase Recorded', action:'recorded', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark: r.purchase.remarks, timestamp:new Date().toISOString() });
+        r.status = (pattern==='service') ? 'purchased' : 'purchased';
+        updatePurchaseOrderFromPurchase(r);
+        await saveDb();
+      });
+      if(!ok) return;
+      toast('Purchase recorded','success'); openItemDetailModal(r.id);
     });
     return;
   }
@@ -3243,12 +3373,17 @@ function renderItemActionBox(r){
       + '<div class="field"><label>Date</label><input type="date" id="svc-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
       + '<div class="field"><label>Remarks</label><textarea id="svc-remarks"></textarea></div>'
       + '<button class="btn btn-primary" id="svc-submit-btn">Mark Completed</button>';
-    document.getElementById('svc-submit-btn').addEventListener('click', async ()=>{
+    document.getElementById('svc-submit-btn').addEventListener('click', async function(){
+      const btn = this;
       const remark = document.getElementById('svc-remarks').value.trim();
-      r.history.push({ stage:'Rendered / Performed', action:'completed', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark, timestamp:new Date().toISOString() });
-      r.status = 'completed';
-      maybeAutoCloseAccountant(r, currentUserEmail, r.assignedPurchaserName||currentUserEmail);
-      await saveDb(); toast('Service marked completed','success'); openItemDetailModal(r.id);
+      const ok = await runSaveAction(btn, 'Saving…', async ()=>{
+        r.history.push({ stage:'Rendered / Performed', action:'completed', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark, timestamp:new Date().toISOString() });
+        r.status = 'completed';
+        maybeAutoCloseAccountant(r, currentUserEmail, r.assignedPurchaserName||currentUserEmail);
+        await saveDb();
+      });
+      if(!ok) return;
+      toast('Service marked completed','success'); openItemDetailModal(r.id);
     });
     return;
   }
@@ -3259,26 +3394,31 @@ function renderItemActionBox(r){
       + '<div class="field"><label>Received By</label><input type="text" value="'+escapeHtml(r.assignedPurchaserName||currentUserEmail)+'" disabled></div>'
       + '<div class="field"><label>Remarks</label><textarea id="rc-remarks"></textarea></div>'
       + '<button class="btn btn-primary" id="rc-submit-btn">Confirm Received</button>';
-    document.getElementById('rc-submit-btn').addEventListener('click', async ()=>{
+    document.getElementById('rc-submit-btn').addEventListener('click', async function(){
+      const btn = this;
       const remark = document.getElementById('rc-remarks').value.trim();
-      r.receipt = { receivedDate: document.getElementById('rc-date').value, receivedByEmail: currentUserEmail, receivedByName: r.assignedPurchaserName||currentUserEmail, remarks: remark, recordedAt: new Date().toISOString() };
-      r.history.push({ stage:'Item Received', action:'received', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark, timestamp:new Date().toISOString() });
-      if(pattern==='consumable'){
-        // Receipt completes the purchase process immediately — it reflects in
-        // stock straightaway. Consumption is tracked separately, later, via
-        // Inventory > Stock Consumption, not tied to this specific purchase.
-        syncConsumableStock(r);
-        r.status = 'completed';
-        maybeAutoCloseAccountant(r, r.receipt.receivedByEmail, r.receipt.receivedByName);
-      } else {
-        // Assets/misc/repair/spare reflect in stock the moment they're received,
-        // but without a location yet — Building/Room is only known at Install
-        // time (Consumption/Installation is where an item's actual destination
-        // gets captured, not at request time).
-        syncAssetToInventory(r, r.receipt.receivedByEmail, r.receipt.receivedByName);
-        r.status = 'received';
-      }
-      await saveDb(); toast(pattern==='consumable' ? 'Marked as received and added to Stock Overview' : 'Marked as received — ready to install','success'); openItemDetailModal(r.id);
+      const ok = await runSaveAction(btn, 'Saving…', async ()=>{
+        r.receipt = { receivedDate: document.getElementById('rc-date').value, receivedByEmail: currentUserEmail, receivedByName: r.assignedPurchaserName||currentUserEmail, remarks: remark, recordedAt: new Date().toISOString() };
+        r.history.push({ stage:'Item Received', action:'received', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark, timestamp:new Date().toISOString() });
+        if(pattern==='consumable'){
+          // Receipt completes the purchase process immediately — it reflects in
+          // stock straightaway. Consumption is tracked separately, later, via
+          // Inventory > Stock Consumption, not tied to this specific purchase.
+          syncConsumableStock(r);
+          r.status = 'completed';
+          maybeAutoCloseAccountant(r, r.receipt.receivedByEmail, r.receipt.receivedByName);
+        } else {
+          // Assets/misc/repair/spare reflect in stock the moment they're received,
+          // but without a location yet — Building/Room is only known at Install
+          // time (Consumption/Installation is where an item's actual destination
+          // gets captured, not at request time).
+          syncAssetToInventory(r, r.receipt.receivedByEmail, r.receipt.receivedByName);
+          r.status = 'received';
+        }
+        await saveDb();
+      });
+      if(!ok) return;
+      toast(pattern==='consumable' ? 'Marked as received and added to Stock Overview' : 'Marked as received — ready to install','success'); openItemDetailModal(r.id);
     });
     return;
   }
@@ -3295,24 +3435,29 @@ function renderItemActionBox(r){
     const ibSel = document.getElementById('install-building');
     function refreshInstallRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===ibSel.value); document.getElementById('install-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
     ibSel.addEventListener('change', refreshInstallRooms); refreshInstallRooms();
-    document.getElementById('install-submit-btn').addEventListener('click', async ()=>{
+    document.getElementById('install-submit-btn').addEventListener('click', async function(){
+      const btn = this;
       const personEmail = document.getElementById('install-person').value;
       const staffRec = DB.staff.find(s=>s.email===personEmail);
       const personName = staffRec ? staffRec.name : (personEmail===r.receipt.receivedByEmail ? r.receipt.receivedByName : personEmail);
       const buildingId = ibSel.value, roomId = document.getElementById('install-room').value||null;
       if(!buildingId){ toast('Choose a building','error'); return; }
       const remark = document.getElementById('install-remarks').value.trim();
-      const item = DB.inventoryItems.find(i=>i.linkedRequestItemId===r.id);
-      r.assignments.push({ responsiblePersonEmail:personEmail, responsiblePersonName:personName, buildingId, roomId, categoryId:r.categoryId, remarks:remark, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
-      r.history.push({ stage:'Installed', action:'installed, assigned to '+personName, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
-      r.status = 'active';
-      if(item){
-        item.status = 'Assets Installed';
-        item.remarks = 'Responsible: '+personName+' ('+buildingName(buildingId)+(roomId?' / '+roomName(roomId):'')+')';
-        item.updatedAt = new Date().toISOString();
-        itemHistoryPush(item, 'Installed', 'Assigned to '+personName+' at '+buildingName(buildingId)+(roomId?' / '+roomName(roomId):''));
-      }
-      await saveDb(); toast('Installed','success'); openItemDetailModal(r.id);
+      const ok = await runSaveAction(btn, 'Saving…', async ()=>{
+        const item = DB.inventoryItems.find(i=>i.linkedRequestItemId===r.id);
+        r.assignments.push({ responsiblePersonEmail:personEmail, responsiblePersonName:personName, buildingId, roomId, categoryId:r.categoryId, remarks:remark, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
+        r.history.push({ stage:'Installed', action:'installed, assigned to '+personName, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
+        r.status = 'active';
+        if(item){
+          item.status = 'Assets Installed';
+          item.remarks = 'Responsible: '+personName+' ('+buildingName(buildingId)+(roomId?' / '+roomName(roomId):'')+')';
+          item.updatedAt = new Date().toISOString();
+          itemHistoryPush(item, 'Installed', 'Assigned to '+personName+' at '+buildingName(buildingId)+(roomId?' / '+roomName(roomId):''));
+        }
+        await saveDb();
+      });
+      if(!ok) return;
+      toast('Installed','success'); openItemDetailModal(r.id);
     });
     return;
   }
@@ -3333,15 +3478,20 @@ function renderItemActionBox(r){
       const rbSel = document.getElementById('reassign-building');
       function refreshReassignRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===rbSel.value); document.getElementById('reassign-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
       rbSel.addEventListener('change', refreshReassignRooms); refreshReassignRooms();
-      document.getElementById('reassign-submit-btn').addEventListener('click', async ()=>{
+      document.getElementById('reassign-submit-btn').addEventListener('click', async function(){
+        const btn = this;
         const personEmail = document.getElementById('reassign-person').value;
         const staffRec = DB.staff.find(s=>s.email===personEmail);
         const personName = staffRec ? staffRec.name : personEmail;
         const buildingId = rbSel.value, roomId = document.getElementById('reassign-room').value||null;
         const remark = document.getElementById('reassign-remarks').value.trim();
-        r.assignments.push({ responsiblePersonEmail:personEmail, responsiblePersonName:personName, buildingId, roomId, categoryId:r.categoryId, remarks:remark, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
-        r.history.push({ stage:'Reassigned', action:'reassigned to '+personName, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
-        await saveDb(); toast('Reassigned','success'); openItemDetailModal(r.id);
+        const ok = await runSaveAction(btn, 'Saving…', async ()=>{
+          r.assignments.push({ responsiblePersonEmail:personEmail, responsiblePersonName:personName, buildingId, roomId, categoryId:r.categoryId, remarks:remark, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
+          r.history.push({ stage:'Reassigned', action:'reassigned to '+personName, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
+          await saveDb();
+        });
+        if(!ok) return;
+        toast('Reassigned','success'); openItemDetailModal(r.id);
       });
     }
     if(isResponsible || isApproverRole() || isAdmin()){
@@ -3364,9 +3514,13 @@ function renderItemActionBox(r){
     if(mntBtn) mntBtn.addEventListener('click', async ()=>{
       const date = document.getElementById('mnt-date').value, desc = document.getElementById('mnt-desc').value.trim();
       if(!desc){ toast('Description required','error'); return; }
-      r.maintenanceEvents.push({ date, description: desc, recordedByEmail: currentUserEmail, recordedByName:(myStaffRecord()||{}).name||currentUserEmail, recordedAt:new Date().toISOString() });
-      r.history.push({ stage:'Maintenance Event', action:'logged', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark: desc, timestamp:new Date().toISOString() });
-      await saveDb(); toast('Maintenance event logged','success'); openItemDetailModal(r.id);
+      const ok = await runSaveAction(mntBtn, 'Saving…', async ()=>{
+        r.maintenanceEvents.push({ date, description: desc, recordedByEmail: currentUserEmail, recordedByName:(myStaffRecord()||{}).name||currentUserEmail, recordedAt:new Date().toISOString() });
+        r.history.push({ stage:'Maintenance Event', action:'logged', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark: desc, timestamp:new Date().toISOString() });
+        await saveDb();
+      });
+      if(!ok) return;
+      toast('Maintenance event logged','success'); openItemDetailModal(r.id);
     });
     const dispBtn = document.getElementById('disp-submit-btn');
     if(dispBtn) dispBtn.addEventListener('click', async ()=>{
@@ -3379,16 +3533,20 @@ function renderItemActionBox(r){
         try{ documentFileId = await driveUploadBinary(file, CONFIG.UPLOADS_FOLDER_ID); documentFileName = file.name; }
         catch(e){ toast('Document upload failed: '+e.message, 'error'); dispBtn.disabled = false; dispBtn.textContent = 'Dispose & Archive'; return; }
       }
-      r.disposal = { type, date, reason, approvedByEmail: currentUserEmail, approvedByName:(myStaffRecord()||{}).name||currentUserEmail, remarks:'', documentFileId, documentFileName, recordedAt:new Date().toISOString() };
-      r.history.push({ stage:'Disposed', action:type, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark: reason, timestamp:new Date().toISOString() });
-      r.status = 'archived';
-      // Reconciliation ties to whoever physically received the item originally,
-      // not whoever happened to process the disposal — fall back to the
-      // disposer only if no receipt was ever recorded.
-      maybeAutoCloseAccountant(r, r.receipt ? r.receipt.receivedByEmail : r.disposal.approvedByEmail, r.receipt ? r.receipt.receivedByName : r.disposal.approvedByName);
-      const linkedStock = DB.inventoryItems.find(i=>i.linkedRequestItemId===r.id && !i.deleted);
-      if(linkedStock){ linkedStock.status = type; archiveRecord('inventoryItem', linkedStock, linkedStock.name, 'Disposed via Procurement: '+type); }
-      await saveDb(); toast('Item disposed and archived','success'); openItemDetailModal(r.id);
+      const ok = await runSaveAction(dispBtn, 'Saving…', async ()=>{
+        r.disposal = { type, date, reason, approvedByEmail: currentUserEmail, approvedByName:(myStaffRecord()||{}).name||currentUserEmail, remarks:'', documentFileId, documentFileName, recordedAt:new Date().toISOString() };
+        r.history.push({ stage:'Disposed', action:type, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark: reason, timestamp:new Date().toISOString() });
+        r.status = 'archived';
+        // Reconciliation ties to whoever physically received the item originally,
+        // not whoever happened to process the disposal — fall back to the
+        // disposer only if no receipt was ever recorded.
+        maybeAutoCloseAccountant(r, r.receipt ? r.receipt.receivedByEmail : r.disposal.approvedByEmail, r.receipt ? r.receipt.receivedByName : r.disposal.approvedByName);
+        const linkedStock = DB.inventoryItems.find(i=>i.linkedRequestItemId===r.id && !i.deleted);
+        if(linkedStock){ linkedStock.status = type; archiveRecord('inventoryItem', linkedStock, linkedStock.name, 'Disposed via Procurement: '+type); }
+        await saveDb();
+      });
+      if(!ok) return;
+      toast('Item disposed and archived','success'); openItemDetailModal(r.id);
     });
     return;
   }
@@ -3397,11 +3555,16 @@ function renderItemActionBox(r){
     box.innerHTML = '<div class="plain-divider"></div><h4>Accountant Reconciliation</h4>'
       + '<div class="field"><label>Remarks</label><textarea id="acc-remarks"></textarea></div>'
       + '<button class="btn btn-primary" id="acc-submit-btn">Mark Fully Closed</button>';
-    document.getElementById('acc-submit-btn').addEventListener('click', async ()=>{
+    document.getElementById('acc-submit-btn').addEventListener('click', async function(){
+      const btn = this;
       const remark = document.getElementById('acc-remarks').value.trim();
-      r.accountantClosed = true; r.accountantClosedByEmail = currentUserEmail; r.accountantClosedAt = new Date().toISOString(); r.accountantRemark = remark;
-      r.history.push({ stage:'Accountant Reconciliation', action:'closed', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
-      await saveDb(); toast('Fully closed','success'); openItemDetailModal(r.id);
+      const ok = await runSaveAction(btn, 'Saving…', async ()=>{
+        r.accountantClosed = true; r.accountantClosedByEmail = currentUserEmail; r.accountantClosedAt = new Date().toISOString(); r.accountantRemark = remark;
+        r.history.push({ stage:'Accountant Reconciliation', action:'closed', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
+        await saveDb();
+      });
+      if(!ok) return;
+      toast('Fully closed','success'); openItemDetailModal(r.id);
     });
     return;
   }
@@ -3442,35 +3605,49 @@ function renderManageStaffModalBody(){
 
   openModal('Manage Staff', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-admin');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
-  document.getElementById('add-staff-btn').addEventListener('click', async ()=>{
+  document.getElementById('add-staff-btn').addEventListener('click', async function(){
+    const btn = this;
     const name = document.getElementById('new-staff-name').value.trim();
     const email = document.getElementById('new-staff-email').value.trim();
     const role = document.getElementById('new-staff-role').value;
     if(!name || !email){ toast('Name and Gmail are required','error'); return; }
-    DB.staff.push({ id: nextId('staff'), name, email, role, active:true, createdAt:new Date().toISOString(), createdByEmail: currentUserEmail });
-    await saveDb(); toast('Staff added','success'); renderManageStaffModalBody(); renderTopbar();
+    const ok = await runSaveAction(btn, 'Adding…', async ()=>{
+      await pushAndSave(DB.staff, { id: nextId('staff'), name, email, role, active:true, createdAt:new Date().toISOString(), createdByEmail: currentUserEmail });
+    });
+    if(!ok) return;
+    toast('Staff added','success'); renderManageStaffModalBody(); renderTopbar();
   });
   document.querySelectorAll('[data-edit-staff]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const s = DB.staff.find(x=>x.id===btn.getAttribute('data-edit-staff'));
       const name = prompt('Name:', s.name); if(name===null) return;
       const email = prompt('Gmail address:', s.email||''); if(email===null) return;
-      s.name = name.trim() || s.name; s.email = email.trim();
-      await saveDb(); toast('Updated','success'); renderManageStaffModalBody(); renderTopbar();
+      const ok = await runSaveAction(btn, '…', async ()=>{
+        s.name = name.trim() || s.name; s.email = email.trim();
+        await saveDb();
+      });
+      if(!ok) return;
+      toast('Updated','success'); renderManageStaffModalBody(); renderTopbar();
     });
   });
   document.querySelectorAll('[data-toggle-staff]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const s = DB.staff.find(x=>x.id===btn.getAttribute('data-toggle-staff'));
-      s.active = s.active===false ? true : false;
-      await saveDb(); toast('Updated','success'); renderManageStaffModalBody();
+      const ok = await runSaveAction(btn, '…', async ()=>{
+        s.active = s.active===false ? true : false;
+        await saveDb();
+      });
+      if(ok){ toast('Updated','success'); renderManageStaffModalBody(); }
     });
   });
   document.querySelectorAll('[data-toggle-consume]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const s = DB.staff.find(x=>x.id===btn.getAttribute('data-toggle-consume'));
-      s.canConsume = !s.canConsume;
-      await saveDb(); toast('Updated','success'); renderManageStaffModalBody();
+      const ok = await runSaveAction(btn, '…', async ()=>{
+        s.canConsume = !s.canConsume;
+        await saveDb();
+      });
+      if(ok){ toast('Updated','success'); renderManageStaffModalBody(); }
     });
   });
 }
@@ -3694,8 +3871,12 @@ function renderArchiveModalBody(){
       const entry = DB.archiveLog.find(x=>x.id===btn.getAttribute('data-restore'));
       const record = entry ? findEntityRecord(entry.entityType, entry.entityId) : null;
       if(!record){ toast('Could not find the original record','error'); return; }
-      restoreRecord(entry.entityType, record);
-      await saveDb(); toast('Restored','success'); renderArchiveModalBody(); renderRoute();
+      const ok = await runSaveAction(btn, 'Restoring…', async ()=>{
+        restoreRecord(entry.entityType, record);
+        await saveDb();
+      });
+      if(!ok) return;
+      toast('Restored','success'); renderArchiveModalBody(); renderRoute();
     });
   });
 }
@@ -3720,19 +3901,26 @@ function renderManageBuildingsModalBody(){
     + '<button class="btn btn-primary btn-sm" id="add-bldg-btn">+ Add Building</button>';
   openModal('Manage Buildings &amp; Rooms', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-admin');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
-  document.getElementById('add-bldg-btn').addEventListener('click', async ()=>{
+  document.getElementById('add-bldg-btn').addEventListener('click', async function(){
+    const btn = this;
     const name = document.getElementById('new-bldg-name').value.trim();
     if(!name) return;
-    DB.buildings.push({ id:nextId('bldg'), name, sortOrder: DB.buildings.length });
-    await saveDb(); toast('Building added','success'); renderManageBuildingsModalBody();
+    const ok = await runSaveAction(btn, 'Adding…', async ()=>{
+      await pushAndSave(DB.buildings, { id:nextId('bldg'), name, sortOrder: DB.buildings.length });
+    });
+    if(!ok) return;
+    toast('Building added','success'); renderManageBuildingsModalBody();
   });
   document.querySelectorAll('[data-add-room]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const buildingId = btn.getAttribute('data-add-room');
       const input = document.querySelector('[data-newroom-input="'+buildingId+'"]');
       const name = input.value.trim(); if(!name) return;
-      DB.rooms.push({ id:nextId('room'), buildingId, name });
-      await saveDb(); toast('Room added','success'); renderManageBuildingsModalBody();
+      const ok = await runSaveAction(btn, '…', async ()=>{
+        await pushAndSave(DB.rooms, { id:nextId('room'), buildingId, name });
+      });
+      if(!ok) return;
+      toast('Room added','success'); renderManageBuildingsModalBody();
     });
   });
   document.querySelectorAll('[data-del-bldg]').forEach(btn=>{
@@ -3740,15 +3928,21 @@ function renderManageBuildingsModalBody(){
       const id = btn.getAttribute('data-del-bldg');
       const b = DB.buildings.find(x=>x.id===id);
       if(!promptAndArchive('building', b, b.name)) return;
-      DB.rooms.filter(r=>r.buildingId===id && !r.deleted).forEach(r=>archiveRecord('room', r, r.name, 'Parent building deleted'));
-      await saveDb(); toast('Building deleted (archived)','success'); renderManageBuildingsModalBody();
+      const ok = await runSaveAction(btn, 'Deleting…', async ()=>{
+        DB.rooms.filter(r=>r.buildingId===id && !r.deleted).forEach(r=>archiveRecord('room', r, r.name, 'Parent building deleted'));
+        await saveDb();
+      });
+      if(!ok) return;
+      toast('Building deleted (archived)','success'); renderManageBuildingsModalBody();
     });
   });
   document.querySelectorAll('[data-del-room]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const room = DB.rooms.find(x=>x.id===btn.getAttribute('data-del-room'));
       if(!promptAndArchive('room', room, room.name)) return;
-      await saveDb(); toast('Room deleted (archived)','success'); renderManageBuildingsModalBody();
+      const ok = await runSaveAction(btn, 'Deleting…', async ()=>{ await saveDb(); });
+      if(!ok) return;
+      toast('Room deleted (archived)','success'); renderManageBuildingsModalBody();
     });
   });
 }
