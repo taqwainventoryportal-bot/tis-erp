@@ -1139,8 +1139,8 @@ async function driveFetchAuthed(url, options){
   if(!res.ok){ const t = await res.text().catch(()=> ''); throw new Error('Drive request failed ('+res.status+'): '+t.slice(0,180)); }
   return res;
 }
-async function driveGetJson(fileId){
-  const res = await driveFetchPublic('/'+fileId, { alt:'media' });
+async function driveGetJson(fileId, allowRetry){
+  const res = await driveFetchPublic('/'+fileId, { alt:'media' }, allowRetry);
   return res.json();
 }
 // Network-level retry now lives inside driveFetchAuthed itself, so it's
@@ -1215,8 +1215,8 @@ function drivePreviewUrl(fileId){ return 'https://drive.google.com/file/d/'+file
 /* ============================================================
    DB load / save
    ============================================================ */
-async function loadDb(){
-  const raw = await driveGetJson(CONFIG.DB_FILE_ID);
+async function loadDb(allowRetry){
+  const raw = await driveGetJson(CONFIG.DB_FILE_ID, allowRetry);
   const base = emptyDb();
   DB = Object.assign(base, raw);
   ['departments','categories','inventoryItems','dismissedAlerts','buildings','rooms','itemTypes','staff','requests','requestItems','archiveLog','stockLedger','itemCatalog','purchaseOrders'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
@@ -1451,8 +1451,14 @@ document.getElementById('modal-overlay').addEventListener('click', (e)=>{ if(e.t
 /* ============================================================
    Router
    ============================================================ */
-window.addEventListener('hashchange', async ()=>{
-  try{ await loadDb(); }catch(e){ /* fall back to whatever is already in memory */ }
+// Deliberately does NOT reload the DB on every navigation click — that was
+// firing a full Drive read on every single tab/link click, which (stacked
+// with multiple open tabs, multiple accounts, and the 30s background poll)
+// was heavy enough to trip Google's Drive API throttling on this key.
+// The initial boot() load plus the 30s background auto-refresh (which keeps
+// running regardless of which tab is open) already keep data acceptably
+// fresh without re-fetching on every click.
+window.addEventListener('hashchange', ()=>{
   renderRoute();
 });
 function renderRoute(){
@@ -4040,7 +4046,7 @@ async function autoRefreshTick(){
   if(!isSafeToAutoRefresh()) return;
   try{
     const before = JSON.stringify(DB);
-    await loadDb();
+    await loadDb(false); // no internal retry here — the next tick in 30s IS the retry; tripling requests on every failed tick is what helped trip the throttling in the first place
     const after = JSON.stringify(DB);
     if(before !== after){ renderTopbar(); renderRoute(); }
   }catch(e){ /* silent — keep showing existing data, try again next tick */ }
