@@ -464,6 +464,9 @@ tbody tr:hover{ background:#F8FAFC; }
 .approval-card-divider{ height:1px; background:var(--color-border); margin:var(--space-2) 0; }
 .chk-row{ display:flex; align-items:center; gap:7px; font-size:13.5px; }
 .chk-row input{ width:15px; height:15px; }
+.radio-row{ display:flex; align-items:center; gap:18px; }
+.radio-row label{ display:flex; align-items:center; gap:6px; font-size:13.5px; font-weight:400; color:var(--color-ink); cursor:pointer; }
+.radio-row input[type="radio"]{ width:15px; height:15px; }
 
 /* Value badge (soft filled pill) vs Priority (outlined chip) — deliberately
    different visual weight so the two are never mistaken for each other. */
@@ -624,9 +627,6 @@ const CONFIG = {
   // Sign-in gate + full control over everything
   ADMIN_EMAILS: ["Taqwainventoryportal@gmail.com","ahharis1710@gmail.com","aiman12ali@gmail.com"],
 
-  // Direct approve/reject on Low-cost notesheets (all departments)
-  ACCOUNTANT_EMAILS: ["anhafatmi@gmail.com"],
-
   // First-stage reviewer on Medium & High notesheets.
   // Map each email to the department id(s) they can act on, or "*" for all departments.
   // Department ids are visible in Admin > Manage Departments once seeded.
@@ -741,7 +741,7 @@ function seedStaff(){
     { id:"staff_chairman", name:"Zeya Us Shams", email:"", role:"chairman", active:true, createdAt:new Date().toISOString() },
     { id:"staff_principal", name:"Asma Shams", email:"", role:"principal", active:true, createdAt:new Date().toISOString() },
     { id:"staff_coordinator", name:"Ahmad Haris", email:"ahharis1710@gmail.com", role:"coordinator", active:true, createdAt:new Date().toISOString() },
-    { id:"staff_accountant", name:"Accountant", email:"anhafatmi@gmail.com", role:"accountant", active:true, createdAt:new Date().toISOString() }
+    { id:"staff_portal_1", name:"Anha Fatmi", email:"anhafatmi@gmail.com", role:"staff_portal", active:true, createdAt:new Date().toISOString() }
   ];
 }
 function emptyDb(){
@@ -936,10 +936,9 @@ function priorityChip(p){
   return '<span class="priority-chip '+cls+'">Priority: '+escapeHtml(p)+'</span>';
 }
 function itemStatusLabel(status, pattern){
-  if(status==='active' && pattern==='asset') return 'Assets Installed';
   return {
     pending_approval:'Pending Approval', rejected:'Rejected', purchase_pending:'Purchase Pending',
-    purchased:'Purchased', received: (pattern && pattern!=='consumable') ? 'Received — Awaiting Installation' : 'Received', assigned:'Assigned', active:'Active',
+    purchased:'Purchased — Awaiting Receipt', received:'Received — Awaiting Issue',
     completed:'Completed', archived:'Archived'
   }[status] || status;
 }
@@ -985,12 +984,12 @@ function hasRole(roleKey){
 function isChairman(){ return hasRole('chairman'); }
 function isPrincipal(){ return hasRole('principal'); }
 function isCoordinator(){ return hasRole('coordinator'); }
-function isAccountant(){ return hasRole('accountant'); }
+function isStaffPortalUser(){ return hasRole('staff_portal'); }
 function isApproverRole(){ return isChairman() || isPrincipal() || isCoordinator(); }
 function canManageStaff(){ return isAdmin() || isApproverRole(); }
-function canManageTopRoles(){ return isAdmin(); } // only Admin edits Chairman/Principal/Coordinator/Accountant themselves
+function canManageTopRoles(){ return isAdmin(); } // only Admin edits Chairman/Principal/Coordinator/Staff cum Portal User themselves
 function roleKeyLabel(key){
-  return { admin:'Admin', chairman:'Chairman', principal:'Principal', coordinator:'Coordinator', accountant:'Accountant', staff:'Staff' }[key] || key;
+  return { admin:'Admin', chairman:'Chairman', principal:'Principal', coordinator:'Coordinator', staff_portal:'Staff cum Portal User', staff:'Staff' }[key] || key;
 }
 /* ============================================================
    Approval engine (v2) — policy-driven, role-based, no fixed
@@ -1058,10 +1057,14 @@ function isMyPurchaseTask(reqItem){
   // already, so this only needs to cover the purchasing/receiving crew.
   return canPurchaseAction() || canReceiveAction();
 }
-function canPurchaseAction(){ return isAdmin() || isApproverRole() || Boolean((myStaffRecord()||{}).canPurchase); }
-function canReceiveAction(){ return isAdmin() || isApproverRole() || Boolean((myStaffRecord()||{}).canReceive); }
+// Staff cum Portal User is the one role explicitly meant to handle routine
+// (no-approval) procurement independently — Coordinator/Principal/Chairman
+// can also act here since they already have standing authority over
+// requests, and Admin always can.
+function canPurchaseAction(){ return isAdmin() || isApproverRole() || isStaffPortalUser(); }
+function canReceiveAction(){ return isAdmin() || isApproverRole() || isStaffPortalUser(); }
 function currentUserAnyRole(){
-  return isAdmin() || isApproverRole() || isAccountant();
+  return isAdmin() || isApproverRole() || isStaffPortalUser();
 }
 
 /* ============================================================
@@ -1211,8 +1214,6 @@ async function loadDb(allowRetry){
   });
   DB.staff.forEach(s=>{
     if(s.canConsume===undefined) s.canConsume = false;
-    if(s.canPurchase===undefined) s.canPurchase = false;
-    if(s.canReceive===undefined) s.canReceive = false;
   });
   // Backfill new category fields for DBs saved before this feature existed
   DB.categories.forEach(c=>{
@@ -1407,7 +1408,7 @@ function renderStaticInfoPage(title, bodyHtml){
 function renderAboutPage(){
   renderStaticInfoPage('About the Portal',
     '<p>The Taqwa Islamic School Inventory &amp; Notesheet Portal brings inventory management, procurement, notesheet approvals and reporting into one place for school staff.</p>'
-    + '<p>Purchase requests move through a proper approval circulation — Accountant, Coordinator, Principal and Chairman — with a full, permanent record of every decision. Once approved, purchases are tracked from Purchase Order through Receiving, and stock updates automatically.</p>'
+    + '<p>Purchase requests move through a proper approval workflow — Coordinator, with escalation to Principal or Chairman when needed — with a full, permanent record of every decision. Once approved, purchases are tracked from Purchase Order through Item Receipt and Item Issue, and stock updates automatically.</p>'
     + '<p>Access is limited to authorised school staff, signing in with their Google account.</p>');
 }
 function renderHelpPage(){
@@ -1520,7 +1521,6 @@ function pendingForMe(){
     if(r.status==='pending_approval' && canActOnApproval(r)) out.push(r);
     else if(r.status==='purchase_pending' && canPurchaseAction()) out.push(r);
     else if((r.status==='purchased' || r.status==='received') && canReceiveAction()) out.push(r);
-    else if((r.status==='completed' || r.status==='archived') && !r.accountantClosed && isAccountant()) out.push(r);
   });
   return out;
 }
@@ -1820,7 +1820,7 @@ function renderHomePage(){
    Inventory — department list
    ============================================================ */
 function canManageConsumption(){
-  if(isAdmin() || isAccountant() || isCoordinator()) return true;
+  if(isAdmin() || isCoordinator()) return true;
   const s = myStaffRecord();
   return Boolean(s && s.canConsume);
 }
@@ -2507,37 +2507,28 @@ function syncAssetToInventory(r, personEmail, personName){
 }
 
 function myPurchaseQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='purchase_pending' && canPurchaseAction()); }
-function myAssignmentQueue(){ return DB.requestItems.filter(r=> !r.deleted && (r.status==='purchased' || r.status==='received') && canReceiveAction()); }
-function myAccountantQueue(){ return DB.requestItems.filter(r=> !r.deleted && isTerminal(r) && !r.accountantClosed && isAccountant()); }
+// Item Receipt: purchased, physically arrived stock not yet confirmed.
+function myReceiptQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='purchased' && canReceiveAction()); }
+// Item Issue / Return: receipt confirmed, stock sitting as "available" until
+// someone decides what happens to it (installed / consumed / kept spare).
+// A request can sit here across multiple visits if only part of the
+// received quantity is processed at a time.
+function myItemIssueQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='received' && canReceiveAction()); }
 /* Where the "Awaiting My Action" dashboard card should send someone —
    whichever of their queues actually has something in it. */
 function myActionTargetHash(){
   if(!isSignedIn()) return '#/procurement';
   if(myApprovalQueue().length) return '#/procurement/approvals';
   if(myPurchaseQueue().length) return '#/procurement/tasks';
-  if(myAssignmentQueue().length) return '#/procurement/assign';
-  if(myAccountantQueue().length) return '#/procurement/accountant';
+  if(myReceiptQueue().length) return '#/procurement/receipt';
+  if(myItemIssueQueue().length) return '#/procurement/issue';
   return '#/procurement/approvals';
 }
-function isAccountantEmail(email){
-  if(!email) return false;
-  const e = String(email).toLowerCase();
-  return DB.staff.some(s=>s.active!==false && s.role==='accountant' && (s.email||'').toLowerCase()===e);
-}
-/* Auto-close: when the Accountant was also the person who physically
-   received the item, there's nothing left to reconcile — skip the manual
-   click. Only applies once the item has actually reached a terminal status;
-   if a different person received it, the normal manual Reconcile step
-   (rendered in openItemDetailModal) still applies. */
-function maybeAutoCloseAccountant(r, receiverEmail, receiverName){
-  if(!isTerminal(r) || r.accountantClosed) return;
-  if(!isAccountantEmail(receiverEmail)) return;
-  r.accountantClosed = true;
-  r.accountantClosedByEmail = receiverEmail;
-  r.accountantClosedAt = new Date().toISOString();
-  r.accountantRemark = 'Auto-closed — received directly by Accountant ('+(receiverName||receiverEmail)+').';
-  r.history.push({ stage:'Accountant Reconciliation', action:'auto-closed', actorEmail: receiverEmail, actorName: receiverName||receiverEmail, remark: r.accountantRemark, timestamp:new Date().toISOString() });
-}
+/* The inventory record a request item is tied to, and by extension its live
+   available quantity — the SAME record used by Inventory Management → Stock
+   Consumption. Item Issue always reads/writes through here, never a separate
+   procurement-side count, so there is exactly one source of truth. */
+function linkedInventoryItem(r){ return DB.inventoryItems.find(i=>i.linkedRequestItemId===r.id && !i.deleted) || null; }
 
 function renderProcurementPage(initialTab){
   const app = document.getElementById('app');
@@ -2546,14 +2537,13 @@ function renderProcurementPage(initialTab){
   const canApproveAny = isSignedIn() && isApproverRole();
   const canPurchaseAny = isSignedIn() && canPurchaseAction();
   const canReceiveAny = isSignedIn() && canReceiveAction();
-  const canAccountant = isSignedIn() && isAccountant();
 
   const tabs = [];
   if(isSignedIn()) tabs.push(['new','New Request']);
   if(canApproveAny) tabs.push(['approvals','Approvals'+(myApprovalQueue().length?' ('+myApprovalQueue().length+')':'')]);
   if(canPurchaseAny) tabs.push(['tasks','Purchase Assignment'+(myPurchaseQueue().length?' ('+myPurchaseQueue().length+')':'')]);
-  if(canReceiveAny) tabs.push(['assign','Receiving &amp; Assignment'+(myAssignmentQueue().length?' ('+myAssignmentQueue().length+')':'')]);
-  if(canAccountant) tabs.push(['accountant','Accountant Closure'+(myAccountantQueue().length?' ('+myAccountantQueue().length+')':'')]);
+  if(canReceiveAny) tabs.push(['receipt','Item Receipt'+(myReceiptQueue().length?' ('+myReceiptQueue().length+')':'')]);
+  if(canReceiveAny) tabs.push(['issue','Item Issue / Return'+(myItemIssueQueue().length?' ('+myItemIssueQueue().length+')':'')]);
   tabs.push(['pos','Purchase Orders']);
   tabs.push(['all','All Requests']);
 
@@ -2562,7 +2552,7 @@ function renderProcurementPage(initialTab){
     + '<div class="page-title"><h2>Procurement</h2>'
     +   (canManageStaff() ? '<span style="display:flex; gap:8px;"><button class="btn btn-outline btn-sm" id="manage-staff-btn">Manage Staff</button><button class="btn btn-outline btn-sm" id="manage-buildings-btn">Manage Buildings</button>'+(isAdmin()?'<button class="btn btn-outline btn-sm" id="view-archive-btn">Archive</button>':'')+'</span>' : '')
     + '</div>'
-    + '<div class="page-subtitle-inline">Purchase requests, approvals, purchasing, receiving, assignment and closure — permanently tracked.</div>'
+    + '<div class="page-subtitle-inline">Purchase requests, approvals, purchasing, receipt and issue — permanently tracked.</div>'
     + '<div class="tab-strip">' + tabs.map(t=>'<button class="tab-btn '+(procTab===t[0]?'active':'')+'" data-proc-tab="'+t[0]+'">'+t[1]+'</button>').join('') + '</div>'
     + '<div class="tab-panel" id="proc-panel"></div>'
     + '</div>';
@@ -2578,8 +2568,8 @@ function renderProcurementPage(initialTab){
   if(procTab==='new') renderNewRequestTab();
   else if(procTab==='approvals') renderApprovalsTab();
   else if(procTab==='tasks') renderTasksTab();
-  else if(procTab==='assign') renderAssignmentTab();
-  else if(procTab==='accountant') renderAccountantTab();
+  else if(procTab==='receipt') renderReceiptTab();
+  else if(procTab==='issue') renderItemIssueTab();
   else if(procTab==='pos') renderPurchaseOrdersTab();
   else renderAllRequestsTab();
 }
@@ -2882,7 +2872,6 @@ function renderNewRequestTab(){
             escalatedByEmail: null, escalatedByName: null, escalatedAt: null, escalationComment: null,
             assignedPurchaserEmail: null, assignedPurchaserName: null,
             purchase: null, receipt: null, assignments: [], maintenanceEvents: [], disposal: null,
-            accountantClosed: false, accountantClosedByEmail: null, accountantClosedAt: null, accountantRemark: null,
             notes: [],
             history: [{ stage:'Requested', action:'created', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:'', timestamp:new Date().toISOString() }],
             createdAt: new Date().toISOString()
@@ -3013,29 +3002,38 @@ function renderTasksTab(){
   });
 }
 
-/* ---------------- Receiving & Assignment ---------------- */
-function renderAssignmentTab(){
+/* ---------------- Item Receipt ---------------- */
+/* Confirming receipt is ONLY about "did the goods arrive" — it deliberately
+   does not decide what happens to the stock next (that's Item Issue). */
+function renderReceiptTab(){
   const panel = document.getElementById('proc-panel');
-  const items = myAssignmentQueue();
-  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📦</div><h3>Nothing waiting for receiving or assignment</h3></div>'; return; }
+  const items = myReceiptQueue();
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📦</div><h3>Nothing waiting for receipt</h3></div>'; return; }
   panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Type</th><th>Qty</th><th></th></tr></thead><tbody>'
-    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+escapeHtml(itemTypeName(r.itemTypeId))+'</td><td>'+(r.purchase?r.purchase.quantityPurchased:r.quantityRequested)+'</td><td><button class="btn btn-primary btn-sm" data-open-task="'+r.id+'">'+(r.status==='purchased'?'Confirm Receipt':'Assign / Complete')+'</button></td></tr>').join('')
+    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+escapeHtml(itemTypeName(r.itemTypeId))+'</td><td>'+(r.purchase?r.purchase.quantityPurchased:r.quantityRequested)+'</td><td><button class="btn btn-primary btn-sm" data-confirm-receipt="'+r.id+'">Confirm Receipt</button></td></tr>').join('')
     + '</tbody></table></div>';
-  panel.querySelectorAll('[data-open-task]').forEach(btn=>{
-    btn.addEventListener('click', ()=>openItemDetailModal(btn.getAttribute('data-open-task')));
+  panel.querySelectorAll('[data-confirm-receipt]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openConfirmReceiptModal(btn.getAttribute('data-confirm-receipt')));
   });
 }
 
-/* ---------------- Accountant Closure ---------------- */
-function renderAccountantTab(){
+/* ---------------- Item Issue / Return ---------------- */
+/* What happens to stock after it's been received: installed, consumed, or
+   kept as spare. Reads/writes the SAME inventory record + stock ledger that
+   Inventory Management → Stock Consumption uses — never a separate count. */
+function renderItemIssueTab(){
   const panel = document.getElementById('proc-panel');
-  const items = myAccountantQueue();
-  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🧾</div><h3>Nothing awaiting reconciliation</h3></div>'; return; }
-  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>'
-    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+(r.purchase?formatMoney(r.purchase.totalAmount):'—')+'</td><td>'+itemStatusBadge(r.status, itemPattern(r))+'</td><td><button class="btn btn-primary btn-sm" data-open-task="'+r.id+'">Reconcile</button></td></tr>').join('')
+  const items = myItemIssueQueue();
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📋</div><h3>Nothing waiting to be issued</h3></div>'; return; }
+  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Type</th><th>Available Qty</th><th></th></tr></thead><tbody>'
+    + items.map(r=>{
+        const inv = linkedInventoryItem(r);
+        const avail = inv ? inv.quantity : (r.purchase?r.purchase.quantityPurchased:r.quantityRequested);
+        return '<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+escapeHtml(itemTypeName(r.itemTypeId))+'</td><td>'+avail+'</td><td><button class="btn btn-primary btn-sm" data-item-issue="'+r.id+'">Issue / Return</button></td></tr>';
+      }).join('')
     + '</tbody></table></div>';
-  panel.querySelectorAll('[data-open-task]').forEach(btn=>{
-    btn.addEventListener('click', ()=>openItemDetailModal(btn.getAttribute('data-open-task')));
+  panel.querySelectorAll('[data-item-issue]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openItemIssueModal(btn.getAttribute('data-item-issue')));
   });
 }
 
@@ -3108,17 +3106,181 @@ function renderAllRequestsTab(){
   const panel = document.getElementById('proc-panel');
   const list = DB.requestItems.filter(r=>!r.deleted).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   if(!list.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🗒️</div><h3>No purchase requests yet</h3></div>'; return; }
-  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Category</th><th>Value</th><th>Status</th><th>Raised</th></tr></thead><tbody>'
-    + list.map(r=>'<tr class="row-clickable" data-open-task="'+r.id+'"><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+escapeHtml(catName(r.categoryId))+'</td><td>'+valueClassBadge(r.valueClass)+'</td><td>'+itemStatusBadge(r.status, itemPattern(r))+(r.accountantClosed?' <span class="badge badge-approved">Closed</span>':'')+'</td><td>'+formatDate(r.createdAt)+'</td></tr>').join('')
+  // Delete/Archive lives ONLY here, and only for Admin — every operational
+  // screen (Purchase Entry, Item Receipt, Item Issue) deliberately has no
+  // delete action once a request has entered the controlled workflow.
+  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Category</th><th>Value</th><th>Status</th><th>Raised</th>'+(isAdmin()?'<th></th>':'')+'</tr></thead><tbody>'
+    + list.map(r=>'<tr class="row-clickable" data-open-task="'+r.id+'"><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+escapeHtml(catName(r.categoryId))+'</td><td>'+valueClassBadge(r.valueClass)+'</td><td>'+itemStatusBadge(r.status, itemPattern(r))+'</td><td>'+formatDate(r.createdAt)+'</td>'+(isAdmin()?'<td><button class="btn btn-danger btn-sm" data-delete-request="'+r.id+'">Archive / Delete</button></td>':'')+'</tr>').join('')
     + '</tbody></table></div>';
   panel.querySelectorAll('[data-open-task]').forEach(row=>{
     row.addEventListener('click', ()=>openItemDetailModal(row.getAttribute('data-open-task')));
+  });
+  panel.querySelectorAll('[data-delete-request]').forEach(btn=>{
+    btn.addEventListener('click', async (ev)=>{
+      ev.stopPropagation();
+      const r = DB.requestItems.find(x=>x.id===btn.getAttribute('data-delete-request'));
+      if(!r) return;
+      if(!promptAndArchive('requestItem', r, r.itemName+' ('+r.requestNumber+')')) return;
+      const ok = await runSaveAction(btn, 'Deleting…', async ()=>{ await saveDb(); });
+      if(!ok) return;
+      toast('Request deleted (archived)','success'); renderAllRequestsTab();
+    });
   });
 }
 
 /* ============================================================
    Item Detail Modal — spec + permanent timeline + contextual actions
    ============================================================ */
+/* ============================================================
+   Confirm Receipt — a small, single-purpose modal, deliberately NOT the
+   big item-detail view. Confirming receipt only answers "did the goods
+   arrive and in what condition" — it does not decide what happens to the
+   stock next (that's Item Issue / Return).
+   ============================================================ */
+function openConfirmReceiptModal(reqItemId){
+  const r = DB.requestItems.find(x=>x.id===reqItemId);
+  if(!r){ toast('Item not found','error'); return; }
+  const staffOptions = DB.staff.filter(s=>!s.deleted && s.active!==false).map(s=>'<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>').join('');
+  const mine = myStaffRecord();
+  const body = '<div class="field"><label>Received By</label><select id="cr-received-by">'+staffOptions+'</select></div>'
+    + '<div class="field"><label>Condition</label>'
+    +   '<div class="radio-row"><label><input type="radio" name="cr-condition" value="OK" checked> Item OK</label><label><input type="radio" name="cr-condition" value="Not OK"> Not OK</label></div>'
+    + '</div>'
+    + '<div class="field"><label id="cr-remarks-label">Remarks (optional)</label><textarea id="cr-remarks"></textarea></div>';
+  openModal(escapeHtml(r.itemName), body,
+    '<button class="btn btn-outline" id="cr-close-btn">Close</button>'
+    + '<button class="btn btn-outline" id="cr-print-btn">Print</button>'
+    + '<button class="btn btn-primary" id="cr-confirm-btn">Confirm Receipt</button>',
+    'module-procurement');
+  const bySel = document.getElementById('cr-received-by');
+  if(mine) bySel.value = mine.id;
+  document.querySelectorAll('input[name="cr-condition"]').forEach(radio=>{
+    radio.addEventListener('change', ()=>{
+      const notOk = document.querySelector('input[name="cr-condition"]:checked').value === 'Not OK';
+      document.getElementById('cr-remarks-label').textContent = 'Remarks ' + (notOk ? '(required)' : '(optional)');
+    });
+  });
+  document.getElementById('cr-close-btn').addEventListener('click', closeModal);
+  const linkedPo = poForRequestItem(r.id);
+  document.getElementById('cr-print-btn').addEventListener('click', ()=>{ if(linkedPo) openPurchaseOrderReportModal(linkedPo); else toast('No Purchase Order to print yet','error'); });
+  document.getElementById('cr-confirm-btn').addEventListener('click', async function(){
+    const btn = this;
+    const condition = document.querySelector('input[name="cr-condition"]:checked').value;
+    const remarks = document.getElementById('cr-remarks').value.trim();
+    if(condition==='Not OK' && !remarks){ toast('Remarks are required when condition is Not OK','error'); return; }
+    const staffRec = staffById(bySel.value);
+    const receivedByName = staffRec ? staffRec.name : currentUserEmail;
+    const receivedByEmail = staffRec ? staffRec.email : currentUserEmail;
+    const pattern = itemPattern(r);
+    const ok = await runSaveAction(btn, 'Saving…', async ()=>{
+      r.receipt = { receivedDate: new Date().toISOString().slice(0,10), receivedByEmail, receivedByName, condition, remarks, recordedAt: new Date().toISOString() };
+      r.history.push({ stage:'Item Received', action:'received ('+condition+')', actorEmail: currentUserEmail, actorName: receivedByName, remark: remarks, timestamp:new Date().toISOString() });
+      // Confirming receipt only records that stock arrived — it becomes
+      // "available" inventory. What happens to it next is a separate
+      // decision made in Item Issue / Return, never assumed here.
+      if(pattern==='consumable') syncConsumableStock(r);
+      else syncAssetToInventory(r, receivedByEmail, receivedByName);
+      r.status = 'received';
+      await saveDb();
+    });
+    if(!ok) return;
+    toast('Receipt confirmed','success');
+    closeModal();
+    renderProcurementPage();
+  });
+}
+
+/* ============================================================
+   Item Issue / Return — the one-time triage decision for newly-received
+   stock: installed, consumed, or kept as spare. Always reads/writes the
+   linked inventory item's live quantity via the SAME pushLedgerEntry()
+   used by Inventory Management → Stock Consumption, so there is exactly
+   one source of truth for how much stock actually exists.
+   ============================================================ */
+function openItemIssueModal(reqItemId){
+  const r = DB.requestItems.find(x=>x.id===reqItemId);
+  if(!r){ toast('Item not found','error'); return; }
+  const inv = linkedInventoryItem(r);
+  const available = inv ? Number(inv.quantity)||0 : 0;
+  if(available<=0){ toast('Nothing available to issue for this item','error'); return; }
+  const pattern = itemPattern(r);
+  const isAsset = pattern!=='consumable';
+  const buildings = DB.buildings.filter(b=>!b.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
+  const primaryLabel = isAsset ? 'Install' : 'Mark as Consumed';
+
+  const body = '<div class="field-hint" style="margin-bottom:10px;">Available: <strong>'+available+'</strong></div>'
+    + '<div class="field"><label>Action</label>'
+    +   '<div class="radio-row"><label><input type="radio" name="ii-action" value="issue" checked> '+primaryLabel+'</label><label><input type="radio" name="ii-action" value="spare"> Spare Inventory</label></div>'
+    + '</div>'
+    + '<div class="field"><label>Quantity</label><input type="number" id="ii-qty" min="1" max="'+available+'" value="'+available+'"></div>'
+    + '<div id="ii-issue-fields">'
+    +   '<div class="field-row"><div class="field"><label>Building'+(isAsset?'':' (optional)')+'</label><select id="ii-building"><option value="">— Select —</option>'+buildings.map(b=>'<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('')+'</select></div>'
+    +   '<div class="field"><label>Room (optional)</label><select id="ii-room"><option value="">— None —</option></select></div></div>'
+    +   (isAsset ? '' : '<div class="field"><label>Purpose</label><select id="ii-purpose"><option value="">— Select a purpose —</option>'+REASON_OPTIONS.map(opt=>'<option value="'+opt+'">'+opt+'</option>').join('')+'</select></div>')
+    + '</div>'
+    + '<div class="field"><label>Remarks (optional)</label><textarea id="ii-remarks"></textarea></div>';
+
+  openModal(escapeHtml(r.itemName), body,
+    '<button class="btn btn-outline" id="ii-close-btn">Close</button><button class="btn btn-primary" id="ii-submit-btn">Save</button>',
+    'module-procurement');
+  const bSel = document.getElementById('ii-building');
+  function refreshRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===bSel.value); document.getElementById('ii-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
+  bSel.addEventListener('change', refreshRooms); refreshRooms();
+  document.querySelectorAll('input[name="ii-action"]').forEach(radio=>{
+    radio.addEventListener('change', ()=>{
+      const isSpare = document.querySelector('input[name="ii-action"]:checked').value === 'spare';
+      document.getElementById('ii-issue-fields').style.display = isSpare ? 'none' : '';
+    });
+  });
+  document.getElementById('ii-close-btn').addEventListener('click', closeModal);
+  document.getElementById('ii-submit-btn').addEventListener('click', async function(){
+    const btn = this;
+    const action = document.querySelector('input[name="ii-action"]:checked').value;
+    const qty = Number(document.getElementById('ii-qty').value)||0;
+    // Re-check live availability at save time, not just the render-time cap
+    // — the authoritative check happens here, not merely by disabling a field.
+    const liveInv = linkedInventoryItem(r);
+    const liveAvailable = liveInv ? Number(liveInv.quantity)||0 : 0;
+    if(qty<=0 || qty>liveAvailable){ toast('Quantity must be between 1 and '+liveAvailable+' (currently available)','error'); return; }
+    const buildingId = document.getElementById('ii-building') ? document.getElementById('ii-building').value : '';
+    const roomId = document.getElementById('ii-room') ? document.getElementById('ii-room').value : '';
+    const purposeSel = document.getElementById('ii-purpose');
+    const purpose = purposeSel ? purposeSel.value : '';
+    if(action==='issue' && isAsset && !buildingId){ toast('Choose a building for Install','error'); return; }
+    if(action==='issue' && !isAsset && !purpose){ toast('Choose a purpose for Mark as Consumed','error'); return; }
+    const remarks = document.getElementById('ii-remarks').value.trim();
+    const actorName = (myStaffRecord()||{}).name || currentUserEmail;
+
+    const ok = await runSaveAction(btn, 'Saving…', async ()=>{
+      if(action==='issue'){
+        const destLabel = buildingId ? (buildingName(buildingId)+(roomId?' / '+roomName(roomId):'')) : '';
+        const remark = (isAsset ? 'Installed' : 'Consumed')+(destLabel?' at '+destLabel:'')+(purpose?' — '+purpose:'')+(remarks?' — '+remarks:'');
+        const balance = pushLedgerEntry(liveInv.id, 'Issue', r.requestNumber, 0, qty, remark);
+        liveInv.quantity = balance;
+        liveInv.updatedAt = new Date().toISOString();
+        itemHistoryPush(liveInv, isAsset?'Installed':'Consumed', qty+' — '+remark);
+        if(isAsset){
+          r.assignments.push({ responsiblePersonEmail: currentUserEmail, responsiblePersonName: actorName, buildingId, roomId, categoryId:r.categoryId, quantity: qty, remarks, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
+          liveInv.status = 'Assets Installed';
+        }
+        r.history.push({ stage:'Item Issue', action: (isAsset?'installed':'consumed')+' '+qty, actorEmail: currentUserEmail, actorName, remark, timestamp:new Date().toISOString() });
+      } else {
+        r.history.push({ stage:'Item Issue', action:'kept as spare inventory '+qty, actorEmail: currentUserEmail, actorName, remark: remarks, timestamp:new Date().toISOString() });
+      }
+      // The Item Issue decision is procurement's one-time triage — whatever
+      // isn't installed/consumed right now simply remains as ordinary
+      // available inventory stock, manageable from then on through
+      // Inventory Management → Stock Consumption like any other item.
+      r.status = 'completed';
+      await saveDb();
+    });
+    if(!ok) return;
+    toast('Recorded','success');
+    closeModal();
+    renderProcurementPage();
+  });
+}
+
 function openItemDetailModal(id){
   const r = DB.requestItems.find(x=>x.id===id);
   if(!r){ toast('Item not found','error'); return; }
@@ -3139,18 +3301,18 @@ function renderProcurementStepper(r){
     const withWhom = r.approvalStatus==='pending_principal' ? 'Principal' : 'Coordinator';
     return '<div class="circ-status circ-status-current">● Pending — currently with <strong>'+withWhom+'</strong></div>';
   }
-  // Post-approval lifecycle as a simple linear strip: Purchase → Receiving → (Assignment) → Closed
+  // Post-approval lifecycle: Purchase → Item Receipt → Item Issue → Closed.
+  // "Assignment" is deliberately not a stage name here — Item Issue covers
+  // install/consume/spare for both consumables and assets alike now.
   const pattern = itemPattern(r);
   const steps = [{ key:'purchase', label:'Purchase' }];
-  if(pattern!=='service') steps.push({ key:'receive', label:'Receiving' });
-  if(pattern==='asset') steps.push({ key:'assign', label:'Assignment' });
+  if(pattern!=='service'){ steps.push({ key:'receive', label:'Item Receipt' }); steps.push({ key:'issue', label:'Item Issue' }); }
   steps.push({ key:'closed', label:'Closed' });
   let curIdx = 0;
   if(r.status==='purchase_pending') curIdx = 0;
-  else if(r.status==='purchased') curIdx = steps.findIndex(s=>s.key==='purchase')+1;
-  else if(r.status==='received') curIdx = steps.findIndex(s=>s.key==='receive')>=0 ? steps.findIndex(s=>s.key==='receive')+1 : 1;
-  else if(r.status==='assigned' || r.status==='active') curIdx = steps.length-1;
-  else if(r.status==='completed' || r.status==='archived') curIdx = r.accountantClosed ? steps.length : steps.length-1;
+  else if(r.status==='purchased') curIdx = 1;
+  else if(r.status==='received') curIdx = 2;
+  else if(r.status==='completed' || r.status==='archived') curIdx = steps.length;
   return '<div class="proc-stepper">' + steps.map((s,i)=>{
     const state = i<curIdx ? 'done' : (i===curIdx ? 'current' : 'todo');
     const icon = state==='done' ? '✓' : (state==='current' ? '●' : '○');
@@ -3161,7 +3323,7 @@ function renderItemDetailModalBody(r){
   const pattern = itemPattern(r);
   let body =
     renderProcurementStepper(r)
-    + '<div class="card-badge-row" style="margin-bottom:10px;">'+itemStatusBadge(r.status, itemPattern(r))+valueClassBadge(r.valueClass)+priorityBadge(r.priority)+(r.accountantClosed?'<span class="badge badge-approved">Accountant Closed</span>':'')+'</div>'
+    + '<div class="card-badge-row" style="margin-bottom:10px;">'+itemStatusBadge(r.status, itemPattern(r))+valueClassBadge(r.valueClass)+priorityBadge(r.priority)+'</div>'
     + '<div class="spec-grid" style="margin-bottom:16px;">'
     +   '<div class="spec-item"><label>Request Number</label><div class="val">'+escapeHtml(r.requestNumber)+'</div></div>'
     +   '<div class="spec-item"><label>Category</label><div class="val">'+escapeHtml(catName(r.categoryId))+'</div></div>'
@@ -3225,24 +3387,19 @@ function renderItemDetailModalBody(r){
   // Print/PO options don't exist before a purchase is actually recorded —
   // enforced by real state (r.purchase), not just hidden in the UI, so
   // there's nothing to print prematurely for a still-pending request.
+  // No Delete/Archive here by design — once a request is in the controlled
+  // workflow, that's Admin-only from All Requests, never from an
+  // operational screen.
   const linkedPo = poForRequestItem(r.id);
   const footerBtns = '<button class="btn btn-outline" id="modal-done-btn">Close</button>'
     + (r.purchase ? '<button class="btn btn-outline" id="modal-print-btn">Print / Export Report</button>' : '')
-    + (r.purchase && linkedPo ? '<button class="btn btn-outline" id="modal-print-po-btn">Print PO ('+escapeHtml(linkedPo.poNumber)+')</button>' : '')
-    + (isAdmin() && !r.deleted ? '<button class="btn btn-danger" id="modal-delete-item-btn">Delete Request</button>' : '');
+    + (r.purchase && linkedPo ? '<button class="btn btn-outline" id="modal-print-po-btn">Print PO ('+escapeHtml(linkedPo.poNumber)+')</button>' : '');
   openModal(escapeHtml(r.itemName), body, footerBtns, 'module-procurement');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   const printBtn = document.getElementById('modal-print-btn');
   if(printBtn) printBtn.addEventListener('click', ()=>openRequestItemReportModal(r));
   const poBtn = document.getElementById('modal-print-po-btn');
   if(poBtn) poBtn.addEventListener('click', ()=>openPurchaseOrderReportModal(linkedPo));
-  const delBtn = document.getElementById('modal-delete-item-btn');
-  if(delBtn) delBtn.addEventListener('click', async ()=>{
-    if(!promptAndArchive('requestItem', r, r.itemName+' ('+r.requestNumber+')')) return;
-    const ok = await runSaveAction(delBtn, 'Deleting…', async ()=>{ await saveDb(); });
-    if(!ok) return;
-    toast('Request deleted (archived)','success'); closeModal(); renderProcurementPage();
-  });
   if(!r.deleted) renderItemActionBox(r);
 }
 function renderItemActionBox(r){
@@ -3267,7 +3424,7 @@ function renderItemActionBox(r){
       const comment = document.getElementById('modal-remark').value.trim();
       const ok = await runSaveAction(approveBtn, 'Approving…', async ()=>{ await applyApprovalAction(r, 'approve', comment); });
       if(!ok) return;
-      toast('Approved','success'); openItemDetailModal(r.id);
+      toast('Approved','success'); renderProcurementPage(); openItemDetailModal(r.id);
     });
     const declineBtn = document.getElementById('modal-decline-btn');
     if(declineBtn) declineBtn.addEventListener('click', async ()=>{
@@ -3275,7 +3432,7 @@ function renderItemActionBox(r){
       if(!comment){ toast('A comment is required to decline','error'); return; }
       const ok = await runSaveAction(declineBtn, 'Declining…', async ()=>{ await applyApprovalAction(r, 'decline', comment); });
       if(!ok) return;
-      toast('Declined','error'); openItemDetailModal(r.id);
+      toast('Declined','error'); renderProcurementPage(); openItemDetailModal(r.id);
     });
     const escalateBtn = document.getElementById('modal-escalate-btn');
     if(escalateBtn) escalateBtn.addEventListener('click', async ()=>{
@@ -3283,7 +3440,7 @@ function renderItemActionBox(r){
       if(!comment){ toast('A comment is required to escalate','error'); return; }
       const ok = await runSaveAction(escalateBtn, 'Escalating…', async ()=>{ await applyApprovalAction(r, 'escalate', comment); });
       if(!ok) return;
-      toast('Escalated to Principal','success'); openItemDetailModal(r.id);
+      toast('Escalated to Principal','success'); renderProcurementPage(); openItemDetailModal(r.id);
     });
     return;
   }
@@ -3300,9 +3457,7 @@ function renderItemActionBox(r){
       + '<div class="field"><label>Total Amount (₹, auto)</label><input type="number" id="pe-total" value="0" readonly></div>'
       + '<div class="field"><label>Bill / Receipt Photo or PDF (optional)</label><input type="file" id="pe-bill-file" accept="image/*,.pdf"></div>'
       + '<div class="field"><label>Remarks (optional)</label><textarea id="pe-remarks"></textarea></div>'
-      + '<div class="req-action-bar" style="position:static;"><button class="btn btn-primary" id="pe-submit-btn">Record Purchase</button>'
-      +   (isAdmin() ? '<button class="btn btn-danger" id="pe-delete-btn">Delete Request</button>' : '')
-      + '</div>';
+      + '<div class="req-action-bar" style="position:static;"><button class="btn btn-primary" id="pe-submit-btn">Record Purchase</button></div>';
     const sameAsReqChk = document.getElementById('pe-same-as-req');
     const purchaserWrap = document.getElementById('pe-purchaser-wrap');
     sameAsReqChk.addEventListener('change', ()=>{ purchaserWrap.style.display = sameAsReqChk.checked ? 'none' : ''; });
@@ -3351,14 +3506,14 @@ function renderItemActionBox(r){
         await saveDb();
       });
       if(!ok) return;
-      toast('Purchase recorded','success'); openItemDetailModal(r.id);
-    });
-    const peDeleteBtn = document.getElementById('pe-delete-btn');
-    if(peDeleteBtn) peDeleteBtn.addEventListener('click', async ()=>{
-      if(!promptAndArchive('requestItem', r, r.itemName+' ('+r.requestNumber+')')) return;
-      const ok = await runSaveAction(peDeleteBtn, 'Deleting…', async ()=>{ await saveDb(); });
-      if(!ok) return;
-      toast('Request deleted (archived)','success'); closeModal(); renderProcurementPage();
+      toast('Purchase recorded — moved to Item Receipt','success');
+      // Fixes the "have to click another tab and back" refresh bug: this is
+      // a cheap, local re-render of the already-in-memory DB (saveDb already
+      // persisted it), not a network reload — Purchase Assignment updates
+      // immediately and the item shows up in Item Receipt without any
+      // manual refresh.
+      renderProcurementPage();
+      openItemDetailModal(r.id);
     });
     return;
   }
@@ -3374,223 +3529,46 @@ function renderItemActionBox(r){
       const ok = await runSaveAction(btn, 'Saving…', async ()=>{
         r.history.push({ stage:'Rendered / Performed', action:'completed', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark, timestamp:new Date().toISOString() });
         r.status = 'completed';
-        maybeAutoCloseAccountant(r, currentUserEmail, r.assignedPurchaserName||currentUserEmail);
         await saveDb();
       });
       if(!ok) return;
-      toast('Service marked completed','success'); openItemDetailModal(r.id);
+      toast('Service marked completed','success'); renderProcurementPage(); openItemDetailModal(r.id);
     });
     return;
   }
 
-  if(r.status==='purchased' && pattern!=='service' && canReceiveAction()){
-    const myName = (myStaffRecord()||{}).name || currentUserEmail;
-    box.innerHTML = '<div class="plain-divider"></div><h4>Confirm Item Received</h4>'
-      + '<div class="field"><label>Received Date</label><input type="date" id="rc-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
-      + '<div class="field"><label>Received By</label><input type="text" value="'+escapeHtml(myName)+'" disabled></div>'
-      + '<div class="field"><label>Remarks</label><textarea id="rc-remarks"></textarea></div>'
-      + '<button class="btn btn-primary" id="rc-submit-btn">Confirm Received</button>';
-    document.getElementById('rc-submit-btn').addEventListener('click', async function(){
-      const btn = this;
-      const remark = document.getElementById('rc-remarks').value.trim();
-      const ok = await runSaveAction(btn, 'Saving…', async ()=>{
-        r.receipt = { receivedDate: document.getElementById('rc-date').value, receivedByEmail: currentUserEmail, receivedByName: myName, remarks: remark, recordedAt: new Date().toISOString() };
-        r.history.push({ stage:'Item Received', action:'received', actorEmail: currentUserEmail, actorName: myName, remark, timestamp:new Date().toISOString() });
-        if(pattern==='consumable'){
-          // Receipt completes the purchase process immediately — it reflects in
-          // stock straightaway. Consumption is tracked separately, later, via
-          // Inventory > Stock Consumption, not tied to this specific purchase.
-          syncConsumableStock(r);
-          r.status = 'completed';
-          maybeAutoCloseAccountant(r, r.receipt.receivedByEmail, r.receipt.receivedByName);
-        } else {
-          // Assets/misc/repair/spare reflect in stock the moment they're received,
-          // but without a location yet — Building/Room is only known at Install
-          // time (Consumption/Installation is where an item's actual destination
-          // gets captured, not at request time).
-          syncAssetToInventory(r, r.receipt.receivedByEmail, r.receipt.receivedByName);
-          r.status = 'received';
-        }
-        await saveDb();
-      });
-      if(!ok) return;
-      toast(pattern==='consumable' ? 'Marked as received and added to Stock Overview' : 'Marked as received — ready to install','success'); openItemDetailModal(r.id);
-    });
-    return;
-  }
-
-  if(r.status==='received' && pattern!=='consumable' && (isMyPurchaseTask(r) || isApproverRole() || isAdmin())){
-    const staffOptions = DB.staff.filter(s=>s.active!==false).map(s=>'<option value="'+s.email+'">'+escapeHtml(s.name)+'</option>').join('');
-    const buildings = DB.buildings.filter(b=>!b.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
-    box.innerHTML = '<div class="plain-divider"></div><h4>Install</h4>'
-      + '<div class="field-hint" style="margin-bottom:8px;">This is where the asset actually goes — captured now, not guessed at request time.</div>'
-      + '<div class="field"><label>Responsible Person</label><select id="install-person"><option value="'+r.receipt.receivedByEmail+'">'+escapeHtml(r.receipt.receivedByName)+' (Receiver)</option>'+staffOptions+'</select></div>'
-      + '<div class="field-row"><div class="field"><label>Building</label><select id="install-building"><option value="">— Select —</option>'+buildings.map(b=>'<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('')+'</select></div><div class="field"><label>Room (optional)</label><select id="install-room"><option value="">— None —</option></select></div></div>'
-      + '<div class="field"><label>Remarks</label><textarea id="install-remarks"></textarea></div>'
-      + '<button class="btn btn-primary" id="install-submit-btn">Install &amp; Activate</button>';
-    const ibSel = document.getElementById('install-building');
-    function refreshInstallRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===ibSel.value); document.getElementById('install-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
-    ibSel.addEventListener('change', refreshInstallRooms); refreshInstallRooms();
-    document.getElementById('install-submit-btn').addEventListener('click', async function(){
-      const btn = this;
-      const personEmail = document.getElementById('install-person').value;
-      const staffRec = DB.staff.find(s=>s.email===personEmail);
-      const personName = staffRec ? staffRec.name : (personEmail===r.receipt.receivedByEmail ? r.receipt.receivedByName : personEmail);
-      const buildingId = ibSel.value, roomId = document.getElementById('install-room').value||null;
-      if(!buildingId){ toast('Choose a building','error'); return; }
-      const remark = document.getElementById('install-remarks').value.trim();
-      const ok = await runSaveAction(btn, 'Saving…', async ()=>{
-        const item = DB.inventoryItems.find(i=>i.linkedRequestItemId===r.id);
-        r.assignments.push({ responsiblePersonEmail:personEmail, responsiblePersonName:personName, buildingId, roomId, categoryId:r.categoryId, remarks:remark, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
-        r.history.push({ stage:'Installed', action:'installed, assigned to '+personName, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
-        r.status = 'active';
-        if(item){
-          item.status = 'Assets Installed';
-          item.remarks = 'Responsible: '+personName+' ('+buildingName(buildingId)+(roomId?' / '+roomName(roomId):'')+')';
-          item.updatedAt = new Date().toISOString();
-          itemHistoryPush(item, 'Installed', 'Assigned to '+personName+' at '+buildingName(buildingId)+(roomId?' / '+roomName(roomId):''));
-        }
-        await saveDb();
-      });
-      if(!ok) return;
-      toast('Installed','success'); openItemDetailModal(r.id);
-    });
-    return;
-  }
-
-  if(r.status==='active' && pattern==='asset'){
-    const isResponsible = r.assignments.length && r.assignments[r.assignments.length-1].responsiblePersonEmail===currentUserEmail;
-    if(isApproverRole() || isAdmin()){
-      const staffOptions = DB.staff.filter(s=>s.active!==false).map(s=>'<option value="'+s.email+'">'+escapeHtml(s.name)+'</option>').join('');
-      const buildings = DB.buildings.filter(b=>!b.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
-      const cur = r.assignments[r.assignments.length-1];
-      box.innerHTML = '<div class="plain-divider"></div>'
-        + '<h4>Reassign Responsible Person</h4>'
-        + '<div class="field-hint" style="margin-bottom:8px;">Currently: '+escapeHtml(cur?cur.responsiblePersonName:'—')+'</div>'
-        + '<div class="field"><label>New Responsible Person</label><select id="reassign-person">'+staffOptions+'</select></div>'
-        + '<div class="field-row"><div class="field"><label>Building</label><select id="reassign-building">'+buildings.map(b=>'<option value="'+b.id+'" '+(cur && b.id===cur.buildingId?'selected':'')+'>'+escapeHtml(b.name)+'</option>').join('')+'</select></div><div class="field"><label>Room (optional)</label><select id="reassign-room"><option value="">— None —</option></select></div></div>'
-        + '<div class="field"><label>Remarks</label><textarea id="reassign-remarks"></textarea></div>'
-        + '<button class="btn btn-outline btn-sm" id="reassign-submit-btn">Reassign</button>';
-      const rbSel = document.getElementById('reassign-building');
-      function refreshReassignRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===rbSel.value); document.getElementById('reassign-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
-      rbSel.addEventListener('change', refreshReassignRooms); refreshReassignRooms();
-      document.getElementById('reassign-submit-btn').addEventListener('click', async function(){
-        const btn = this;
-        const personEmail = document.getElementById('reassign-person').value;
-        const staffRec = DB.staff.find(s=>s.email===personEmail);
-        const personName = staffRec ? staffRec.name : personEmail;
-        const buildingId = rbSel.value, roomId = document.getElementById('reassign-room').value||null;
-        const remark = document.getElementById('reassign-remarks').value.trim();
-        const ok = await runSaveAction(btn, 'Saving…', async ()=>{
-          r.assignments.push({ responsiblePersonEmail:personEmail, responsiblePersonName:personName, buildingId, roomId, categoryId:r.categoryId, remarks:remark, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
-          r.history.push({ stage:'Reassigned', action:'reassigned to '+personName, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
-          await saveDb();
-        });
-        if(!ok) return;
-        toast('Reassigned','success'); openItemDetailModal(r.id);
-      });
-    }
-    if(isResponsible || isApproverRole() || isAdmin()){
-      box.innerHTML += '<div class="plain-divider"></div>'
-        + '<h4>Log Maintenance / Repair Event</h4>'
-        + '<div class="field"><label>Date</label><input type="date" id="mnt-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
-        + '<div class="field"><label>Description</label><textarea id="mnt-desc"></textarea></div>'
-        + '<button class="btn btn-outline btn-sm" id="mnt-submit-btn">Add Event</button>';
-    }
-    if(isApproverRole() || isAdmin()){
-      box.innerHTML += '<div class="plain-divider"></div>'
-        + '<h4>Dispose</h4>'
-        + '<div class="field"><label>Disposal Type</label><select id="disp-type"><option>Disposed</option><option>Scrapped</option><option>Sold</option><option>Donated</option><option>Lost</option><option>Written Off</option><option>Future Transfer</option></select></div>'
-        + '<div class="field"><label>Date</label><input type="date" id="disp-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
-        + '<div class="field"><label>Reason</label><textarea id="disp-reason"></textarea></div>'
-        + '<div class="field"><label>Supporting Document (optional)</label><input type="file" id="disp-doc-file" accept="image/*,.pdf"></div>'
-        + '<button class="btn btn-danger btn-sm" id="disp-submit-btn">Dispose &amp; Archive</button>';
-    }
-    const mntBtn = document.getElementById('mnt-submit-btn');
-    if(mntBtn) mntBtn.addEventListener('click', async ()=>{
-      const date = document.getElementById('mnt-date').value, desc = document.getElementById('mnt-desc').value.trim();
-      if(!desc){ toast('Description required','error'); return; }
-      const ok = await runSaveAction(mntBtn, 'Saving…', async ()=>{
-        r.maintenanceEvents.push({ date, description: desc, recordedByEmail: currentUserEmail, recordedByName:(myStaffRecord()||{}).name||currentUserEmail, recordedAt:new Date().toISOString() });
-        r.history.push({ stage:'Maintenance Event', action:'logged', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark: desc, timestamp:new Date().toISOString() });
-        await saveDb();
-      });
-      if(!ok) return;
-      toast('Maintenance event logged','success'); openItemDetailModal(r.id);
-    });
-    const dispBtn = document.getElementById('disp-submit-btn');
-    if(dispBtn) dispBtn.addEventListener('click', async ()=>{
-      const type = document.getElementById('disp-type').value, date = document.getElementById('disp-date').value, reason = document.getElementById('disp-reason').value.trim();
-      const fileInput = document.getElementById('disp-doc-file');
-      const file = fileInput.files && fileInput.files[0];
-      let documentFileId = null, documentFileName = null;
-      if(file){
-        dispBtn.disabled = true; dispBtn.textContent = 'Uploading…';
-        try{ documentFileId = await driveUploadBinary(file, CONFIG.UPLOADS_FOLDER_ID); documentFileName = file.name; }
-        catch(e){ toast('Document upload failed: '+e.message, 'error'); dispBtn.disabled = false; dispBtn.textContent = 'Dispose & Archive'; return; }
-      }
-      const ok = await runSaveAction(dispBtn, 'Saving…', async ()=>{
-        r.disposal = { type, date, reason, approvedByEmail: currentUserEmail, approvedByName:(myStaffRecord()||{}).name||currentUserEmail, remarks:'', documentFileId, documentFileName, recordedAt:new Date().toISOString() };
-        r.history.push({ stage:'Disposed', action:type, actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark: reason, timestamp:new Date().toISOString() });
-        r.status = 'archived';
-        // Reconciliation ties to whoever physically received the item originally,
-        // not whoever happened to process the disposal — fall back to the
-        // disposer only if no receipt was ever recorded.
-        maybeAutoCloseAccountant(r, r.receipt ? r.receipt.receivedByEmail : r.disposal.approvedByEmail, r.receipt ? r.receipt.receivedByName : r.disposal.approvedByName);
-        const linkedStock = DB.inventoryItems.find(i=>i.linkedRequestItemId===r.id && !i.deleted);
-        if(linkedStock){ linkedStock.status = type; archiveRecord('inventoryItem', linkedStock, linkedStock.name, 'Disposed via Procurement: '+type); }
-        await saveDb();
-      });
-      if(!ok) return;
-      toast('Item disposed and archived','success'); openItemDetailModal(r.id);
-    });
-    return;
-  }
-
-  if(isTerminal(r) && !r.accountantClosed && isAccountant()){
-    box.innerHTML = '<div class="plain-divider"></div><h4>Accountant Reconciliation</h4>'
-      + '<div class="field"><label>Remarks</label><textarea id="acc-remarks"></textarea></div>'
-      + '<button class="btn btn-primary" id="acc-submit-btn">Mark Fully Closed</button>';
-    document.getElementById('acc-submit-btn').addEventListener('click', async function(){
-      const btn = this;
-      const remark = document.getElementById('acc-remarks').value.trim();
-      const ok = await runSaveAction(btn, 'Saving…', async ()=>{
-        r.accountantClosed = true; r.accountantClosedByEmail = currentUserEmail; r.accountantClosedAt = new Date().toISOString(); r.accountantRemark = remark;
-        r.history.push({ stage:'Accountant Reconciliation', action:'closed', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark, timestamp:new Date().toISOString() });
-        await saveDb();
-      });
-      if(!ok) return;
-      toast('Fully closed','success'); openItemDetailModal(r.id);
-    });
-    return;
-  }
+  // Confirm Receipt and Item Issue / Return are handled by their own
+  // dedicated lightweight modals (openConfirmReceiptModal / openItemIssueModal),
+  // triggered straight from their tabs — not folded into this general view,
+  // so there is only one place each of those actions can happen.
 }
 /* ============================================================
    Manage Staff (Admin, Chairman, Principal, Coordinator)
    ============================================================ */
 function openManageStaffModal(){ renderManageStaffModalBody(); }
 function renderManageStaffModalBody(){
-  const topRoles = ['admin','chairman','principal','coordinator','accountant'];
+  const topRoles = ['admin','chairman','principal','coordinator','staff_portal'];
   const rows = DB.staff.filter(s=>!s.deleted).slice().sort((a,b)=>{
-    const order = { admin:0, chairman:1, principal:2, coordinator:3, accountant:4, staff:5 };
+    const order = { admin:0, chairman:1, principal:2, coordinator:3, staff_portal:4, staff:5 };
     return (order[a.role]-order[b.role]) || a.name.localeCompare(b.name);
   }).map(s=>{
     const isTop = topRoles.includes(s.role);
     const canEdit = isTop ? canManageTopRoles() : canManageStaff();
     return '<div class="cat-policy-row">'
-      + '<div class="cat-policy-name">'+escapeHtml(s.name)+' <span class="badge badge-status">'+roleKeyLabel(s.role)+'</span>'+(s.canConsume?' <span class="badge badge-approved">Can Consume</span>':'')+(s.canPurchase?' <span class="badge badge-approved">Can Purchase</span>':'')+(s.canReceive?' <span class="badge badge-approved">Can Receive</span>':'')+(s.active===false?' <span class="badge badge-rejected">Inactive</span>':'')+'<br><small style="color:var(--color-ink-faint);">'+escapeHtml(s.email||'no email set')+'</small></div>'
+      + '<div class="cat-policy-name">'+escapeHtml(s.name)+' <span class="badge badge-status">'+roleKeyLabel(s.role)+'</span>'+(s.canConsume?' <span class="badge badge-approved">Can Consume</span>':'')+(s.active===false?' <span class="badge badge-rejected">Inactive</span>':'')+'<br><small style="color:var(--color-ink-faint);">'+escapeHtml(s.email||'no email set')+'</small></div>'
       + (canEdit ? ('<div class="cat-policy-controls">'
           + '<button class="btn btn-outline btn-sm" data-edit-staff="'+s.id+'">Edit</button>'
           + (isAdmin() ? '<button class="btn btn-outline btn-sm" data-toggle-consume="'+s.id+'">'+(s.canConsume?'Revoke Consume':'Allow Consume')+'</button>' : '')
-          + (isAdmin() ? '<button class="btn btn-outline btn-sm" data-toggle-purchase="'+s.id+'">'+(s.canPurchase?'Revoke Purchase':'Allow Purchase')+'</button>' : '')
-          + (isAdmin() ? '<button class="btn btn-outline btn-sm" data-toggle-receive="'+s.id+'">'+(s.canReceive?'Revoke Receive':'Allow Receive')+'</button>' : '')
           + '<button class="btn btn-danger btn-sm" data-toggle-staff="'+s.id+'">'+(s.active===false?'Reactivate':'Deactivate')+'</button>'
         + '</div>') : '')
       + '</div>';
   }).join('');
 
+  // Purchase/Receipt/Issue authority now comes purely from role — Staff cum
+  // Portal User (plus Coordinator/Principal/Chairman/Admin) — not a separate
+  // permission flag, so there's only one place to look to know who can do what.
   const roleOptions = canManageTopRoles()
-    ? '<option value="staff">Staff</option><option value="coordinator">Coordinator</option><option value="principal">Principal</option><option value="chairman">Chairman</option><option value="accountant">Accountant</option><option value="admin">Admin</option>'
+    ? '<option value="staff">Staff</option><option value="staff_portal">Staff cum Portal User</option><option value="coordinator">Coordinator</option><option value="principal">Principal</option><option value="chairman">Chairman</option><option value="admin">Admin</option>'
     : '<option value="staff">Staff</option>';
 
   const body = rows
@@ -3643,26 +3621,6 @@ function renderManageStaffModalBody(){
       const s = DB.staff.find(x=>x.id===btn.getAttribute('data-toggle-consume'));
       const ok = await runSaveAction(btn, '…', async ()=>{
         s.canConsume = !s.canConsume;
-        await saveDb();
-      });
-      if(ok){ toast('Updated','success'); renderManageStaffModalBody(); }
-    });
-  });
-  document.querySelectorAll('[data-toggle-purchase]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const s = DB.staff.find(x=>x.id===btn.getAttribute('data-toggle-purchase'));
-      const ok = await runSaveAction(btn, '…', async ()=>{
-        s.canPurchase = !s.canPurchase;
-        await saveDb();
-      });
-      if(ok){ toast('Updated','success'); renderManageStaffModalBody(); }
-    });
-  });
-  document.querySelectorAll('[data-toggle-receive]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const s = DB.staff.find(x=>x.id===btn.getAttribute('data-toggle-receive'));
-      const ok = await runSaveAction(btn, '…', async ()=>{
-        s.canReceive = !s.canReceive;
         await saveDb();
       });
       if(ok){ toast('Updated','success'); renderManageStaffModalBody(); }
@@ -3781,7 +3739,7 @@ async function buildRequestItemReportPdf(r){
   section('Procurement Policy:', r.procurementPolicy==='required'?'Requires Approval':'No Approval Required');
   section('Reason:', r.reason);
   if(r.description) section('Description:', r.description);
-  section('Current Status:', itemStatusLabel(r.status) + (r.accountantClosed ? ' (Accountant Closed)' : ''));
+  section('Current Status:', itemStatusLabel(r.status));
 
   if(r.purchase){
     heading('Purchase Record');
