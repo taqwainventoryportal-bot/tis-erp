@@ -2109,18 +2109,29 @@ function renderItemsTable(catId){
     return;
   }
   panel.innerHTML = '<div class="table-wrap"><table><thead><tr>'
-    + '<th>Item</th><th>Qty</th><th>Unit</th><th>Cost/Value</th><th>Purchase Date</th><th>Status</th><th>Remarks</th>'
+    + '<th>Item</th><th>Qty</th><th>Unit</th><th>Cost/Value</th><th>Purchase Date</th><th>Status</th><th>Location</th><th>Remarks</th>'
     + (isAdmin() ? '<th></th>' : '')
     + '</tr></thead><tbody>'
     + items.map(i=>{
         const low = Number(i.reorderThreshold)>0 && Number(i.quantity) <= Number(i.reorderThreshold);
+        // Location is derived from the item's own recorded install transaction
+        // (installedBuildingId/installedRoomId, set at Item Issue → Install
+        // time) — never hardcoded — so it only ever shows what actually
+        // happened, and stays blank for anything never installed.
+        const statusLabel = (i.status==='Assets Installed' && i.installedQty)
+          ? 'Assets Installed: '+i.installedQty
+          : (i.status||'—');
+        const locationLabel = i.installedBuildingId
+          ? buildingName(i.installedBuildingId)+(i.installedRoomId?' → '+roomName(i.installedRoomId):'')
+          : '—';
         return '<tr class="row-clickable" data-open-item="'+i.id+'">'
           + '<td>'+escapeHtml(i.name)+(low?' <span class="badge badge-high">low</span>':'')+'</td>'
           + '<td>'+escapeHtml(i.quantity)+'</td>'
           + '<td>'+escapeHtml(i.unit||'—')+'</td>'
           + '<td>'+formatMoney(i.cost)+'</td>'
           + '<td>'+formatDate(i.purchaseDate)+'</td>'
-          + '<td>'+escapeHtml(i.status||'—')+'</td>'
+          + '<td>'+escapeHtml(statusLabel)+'</td>'
+          + '<td>'+escapeHtml(locationLabel)+'</td>'
           + '<td>'+escapeHtml(i.remarks||'—')+'</td>'
           + (isAdmin() ? '<td style="white-space:nowrap;"><button class="btn btn-outline btn-sm" data-edit-item="'+i.id+'">Edit</button> <button class="btn btn-danger btn-sm" data-del-item="'+i.id+'">Delete</button></td>' : '')
           + '</tr>';
@@ -2178,7 +2189,8 @@ function renderInventoryItemDetailPage(itemId){
     +   '<div class="spec-item"><label>Average Purchase Cost</label><div class="val">'+formatMoney(avgCost)+'</div></div>'
     +   '<div class="spec-item"><label>Last Purchase Date</label><div class="val">'+formatDate(lastPurchase)+'</div></div>'
     +   '<div class="spec-item"><label>Preferred Supplier</label><div class="val">'+escapeHtml(item.preferredSupplier||'—')+'</div></div>'
-    +   '<div class="spec-item"><label>Status</label><div class="val">'+escapeHtml(item.status||'—')+'</div></div>'
+    +   '<div class="spec-item"><label>Status</label><div class="val">'+escapeHtml((item.status==='Assets Installed' && item.installedQty) ? 'Assets Installed: '+item.installedQty : (item.status||'—'))+'</div></div>'
+    +   (item.installedBuildingId ? '<div class="spec-item"><label>Location</label><div class="val">'+escapeHtml(buildingName(item.installedBuildingId)+(item.installedRoomId?' → '+roomName(item.installedRoomId):''))+'</div></div>' : '')
     + '</div>'
     + (item.remarks ? '<div class="field"><label>Remarks</label><div class="val">'+escapeHtml(item.remarks)+'</div></div>' : '')
 
@@ -3255,13 +3267,24 @@ function openItemIssueModal(reqItemId){
       if(action==='issue'){
         const destLabel = buildingId ? (buildingName(buildingId)+(roomId?' / '+roomName(roomId):'')) : '';
         const remark = (isAsset ? 'Installed' : 'Consumed')+(destLabel?' at '+destLabel:'')+(purpose?' — '+purpose:'')+(remarks?' — '+remarks:'');
-        const balance = pushLedgerEntry(liveInv.id, 'Issue', r.requestNumber, 0, qty, remark);
+        // Asset install and consumable consumption are NOT the same kind of
+        // stock movement, so they get distinct ledger transaction types.
+        // 'Issue' is what the Consumption dashboard cards and Stock
+        // Consumption totals actually filter on — an install must never be
+        // tagged that way, or it silently gets counted as consumed stock.
+        const balance = pushLedgerEntry(liveInv.id, isAsset ? 'Install' : 'Issue', r.requestNumber, 0, qty, remark);
         liveInv.quantity = balance;
         liveInv.updatedAt = new Date().toISOString();
         itemHistoryPush(liveInv, isAsset?'Installed':'Consumed', qty+' — '+remark);
         if(isAsset){
           r.assignments.push({ responsiblePersonEmail: currentUserEmail, responsiblePersonName: actorName, buildingId, roomId, categoryId:r.categoryId, quantity: qty, remarks, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
           liveInv.status = 'Assets Installed';
+          // Derived-from-transaction location fields, read by Browse by
+          // Category — never hardcoded, always sourced from the actual
+          // building/room picked in this Install action.
+          liveInv.installedQty = (Number(liveInv.installedQty)||0) + qty;
+          liveInv.installedBuildingId = buildingId;
+          liveInv.installedRoomId = roomId || null;
         }
         r.history.push({ stage:'Item Issue', action: (isAsset?'installed':'consumed')+' '+qty, actorEmail: currentUserEmail, actorName, remark, timestamp:new Date().toISOString() });
       } else {
