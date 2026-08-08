@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Taqwa Islamic School — Inventory &amp; Notesheet Portal</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230097d7'/%3E%3Ctext x='32' y='44' font-family='Arial,sans-serif' font-size='34' font-weight='700' text-anchor='middle' fill='%23ffffff'%3ET%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0097d7">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Taqwa Portal">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -1368,6 +1374,7 @@ function renderTopbar(){
     + '<div class="header-right">'
     +   (isSignedIn() ? ('<div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
     +     '<input id="global-search" placeholder="Search…" autocomplete="off"><div id="search-results-slot"></div></div>') : '')
+    +   (showInstallButton() ? '<button class="btn btn-outline btn-sm" id="install-app-btn">Install App</button>' : '')
     +   (isSignedIn()
           ? '<div class="auth-box"><span class="role-chip">'+escapeHtml(myRoleLabel())+'</span><button class="btn btn-ghost-dark btn-sm" id="logout-btn">Sign out</button></div>'
           : '')
@@ -1378,6 +1385,17 @@ function renderTopbar(){
     + '</div></div>';
   const loginBtn = document.getElementById('login-btn'); if(loginBtn) loginBtn.addEventListener('click', login);
   const logoutBtn = document.getElementById('logout-btn'); if(logoutBtn) logoutBtn.addEventListener('click', logout);
+  const installBtn = document.getElementById('install-app-btn');
+  if(installBtn) installBtn.addEventListener('click', async ()=>{
+    if(deferredInstallPrompt){
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      renderTopbar();
+    } else if(isIOSInstallCandidate()){
+      toast('On iPhone/iPad: tap the Share icon, then "Add to Home Screen"', 'success');
+    }
+  });
   const search = document.getElementById('global-search');
   if(search){
     search.addEventListener('input', ()=>renderSearchResults(search.value));
@@ -4055,6 +4073,37 @@ function startAutoRefresh(){
   if(autoRefreshTimer) return;
   autoRefreshTimer = setInterval(autoRefreshTick, AUTO_REFRESH_MS);
 }
+
+/* ============================================================
+   PWA install — "Add to Home Screen" / desktop install
+   ============================================================ */
+let deferredInstallPrompt = null;
+function isIOSInstallCandidate(){
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const alreadyInstalled = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+  return isIOS && !alreadyInstalled;
+}
+function showInstallButton(){
+  return !!deferredInstallPrompt || isIOSInstallCandidate();
+}
+// Chrome/Edge/Android fire this instead of showing their own install UI
+// automatically — capturing it lets our own "Install App" button trigger
+// the native prompt on demand.
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  renderTopbar();
+});
+window.addEventListener('appinstalled', ()=>{
+  deferredInstallPrompt = null;
+  renderTopbar();
+});
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(err=>console.warn('Service worker registration failed:', err));
+  });
+}
+
 boot();
 </script>
 </body>
