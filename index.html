@@ -452,10 +452,13 @@ tbody tr:hover{ background:#F8FAFC; }
   box-shadow:var(--shadow-sm); padding:var(--space-3); transition:box-shadow var(--motion-slow), transform var(--motion-slow);
 }
 .approval-card:hover{ box-shadow:0 3px 10px rgba(15,23,42,.07); transform:translateY(-1px); }
-.approval-card-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:2px; }
+.approval-card-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:6px; }
 .approval-card-name{ font-size:15px; font-weight:700; color:var(--color-ink); line-height:1.25; }
 .approval-card-tags{ display:flex; align-items:center; gap:5px; flex:none; padding-top:1px; }
-.approval-card-meta{ font-size:11.5px; color:var(--color-ink-soft); line-height:1.45; }
+.approval-card-rows{ display:flex; flex-direction:column; gap:3px; margin-bottom:4px; }
+.approval-card-row{ display:flex; gap:6px; font-size:12px; line-height:1.4; }
+.approval-card-row label{ flex:none; font-weight:600; color:var(--color-ink-faint); }
+.approval-card-row span{ color:var(--color-ink-soft); }
 .approval-card-reason{ font-size:11.5px; color:var(--color-ink-faint); font-style:italic; margin:2px 0 0; }
 .approval-card-hint{ font-size:10.5px; color:var(--color-ink-faint); margin-top:2px; }
 .approval-card-divider{ height:1px; background:var(--color-border); margin:var(--space-2) 0; }
@@ -472,20 +475,7 @@ tbody tr:hover{ background:#F8FAFC; }
 .priority-chip.chip-medium{ color:var(--color-medium); }
 .priority-chip.chip-high{ color:var(--color-high); }
 
-.approval-assign{ display:flex; align-items:center; gap:7px; }
-.approval-assign label{ font-size:10px; font-weight:600; color:var(--color-ink-faint); text-transform:uppercase; letter-spacing:.03em; flex:none; }
-.approval-assign select{
-  flex:1; min-width:0; padding:5px 7px; font-size:12px; border:1.5px solid var(--color-border); border-radius:6px;
-  background:#fff; color:var(--color-ink-soft); transition:border-color var(--motion), box-shadow var(--motion);
-}
-.approval-assign select:focus{ outline:none; border-color:var(--action-edit); box-shadow:0 0 0 3px color-mix(in srgb, var(--action-edit) 15%, transparent); }
-
 .approval-card-actions{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
-.approval-card-actions .forward-target-select{
-  font-size:11.5px; padding:5px 7px; border:1.5px solid var(--color-border); border-radius:6px;
-  background:#fff; color:var(--color-ink-soft); transition:border-color var(--motion);
-}
-.approval-card-actions .forward-target-select:focus{ outline:none; border-color:var(--color-primary); }
 
 /* Action colours — fixed regardless of module. Approve is never
    "Procurement orange" just because the page underline is. */
@@ -494,17 +484,17 @@ tbody tr:hover{ background:#F8FAFC; }
 .btn-cancel{ background:transparent; border-color:var(--action-cancel); color:var(--action-cancel); }
 .btn-cancel:hover{ background:var(--action-cancel-soft); }
 
-/* Decline reason stays collapsed until Decline is clicked, per the
-   "only show a control when it's needed" approval-inbox brief. */
-.approval-decline-panel{ max-height:0; opacity:0; overflow:hidden; transition:max-height var(--motion-slow), opacity var(--motion-slow), margin-top var(--motion-slow); }
+/* Decline/Escalate share one reveal panel, collapsed until one is clicked,
+   per the "only show a control when it's needed" approval-inbox brief. */
+.approval-action-panel{ max-height:0; opacity:0; overflow:hidden; transition:max-height var(--motion-slow), opacity var(--motion-slow), margin-top var(--motion-slow); }
 .approval-card.declining .approval-card-actions{ display:none; }
-.approval-card.declining .approval-decline-panel{ max-height:170px; opacity:1; margin-top:1px; }
-.approval-decline-panel label{ display:block; font-size:10px; font-weight:600; color:var(--color-ink-faint); text-transform:uppercase; letter-spacing:.03em; margin-bottom:3px; }
-.approval-decline-panel textarea{
+.approval-card.declining .approval-action-panel{ max-height:170px; opacity:1; margin-top:1px; }
+.approval-action-panel-label{ display:block; font-size:10px; font-weight:600; color:var(--color-ink-faint); text-transform:uppercase; letter-spacing:.03em; margin-bottom:3px; }
+.approval-action-panel textarea{
   width:100%; min-height:44px; padding:6px 8px; border:1.5px solid var(--action-decline); border-radius:6px;
   font-family:inherit; font-size:12.5px; resize:vertical; box-sizing:border-box; background:#fff;
 }
-.approval-decline-panel textarea:focus{ outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--action-decline) 15%, transparent); }
+.approval-action-panel textarea:focus{ outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--action-decline) 15%, transparent); }
 .approval-decline-actions{ display:flex; justify-content:flex-end; gap:7px; margin-top:7px; }
 
 /* ---- Procurement: new request line cards ---- */
@@ -937,13 +927,13 @@ function valueClassBadgeClass(v){ return { low:'badge-low', medium:'badge-medium
 function valueClassBadge(v){ return '<span class="badge '+valueClassBadgeClass(v)+'">'+valueClassLabel(v)+'</span>'; }
 function priorityBadge(p){
   const cls = { Low:'badge-low', Medium:'badge-medium', High:'badge-high', Urgent:'badge-high' }[p] || 'badge-status';
-  return '<span class="badge '+cls+'">'+escapeHtml(p)+'</span>';
+  return '<span class="badge '+cls+'">Priority: '+escapeHtml(p)+'</span>';
 }
 // Outlined, lower-weight companion to priorityBadge() — used only on the
 // Approvals inbox so Priority never visually competes with the Value badge.
 function priorityChip(p){
   const cls = { Low:'chip-low', Medium:'chip-medium', High:'chip-high', Urgent:'chip-high' }[p] || 'chip-low';
-  return '<span class="priority-chip '+cls+'">'+escapeHtml(p)+'</span>';
+  return '<span class="priority-chip '+cls+'">Priority: '+escapeHtml(p)+'</span>';
 }
 function itemStatusLabel(status, pattern){
   if(status==='active' && pattern==='asset') return 'Assets Installed';
@@ -1003,96 +993,73 @@ function roleKeyLabel(key){
   return { admin:'Admin', chairman:'Chairman', principal:'Principal', coordinator:'Coordinator', accountant:'Accountant', staff:'Staff' }[key] || key;
 }
 /* ============================================================
-   Circulation engine — replaces the old fixed linear approval chain.
-   Items now genuinely circulate: any current holder can forward to
-   another authority, approve (Accountant only), or decline (always
-   with a mandatory comment). No matter how far up it travels, the
-   trip back down always passes through Coordinator before it can
-   reach Accountant for final acceptance.
+   Approval engine (v2) — policy-driven, role-based, no fixed
+   linear chain and no hardcoded emails.
+
+   A request's approvalStatus is the authoritative state:
+     not_required      — bypassed approval entirely per Admin policy
+     pending_coordinator — sitting with whoever holds the Coordinator role
+     pending_principal   — escalated, sitting with Principal
+     approved / declined — terminal
    ============================================================ */
-function initCirculation(reqItem){
-  reqItem.currentHolderRole = 'accountant';
-  reqItem.hasCirculated = false;
-  reqItem.circulationLog = [];
-}
-function isFastTrack(reqItem){ return reqItem.procurementPolicy === 'not_required'; }
-function canDirectApproveAtEntry(reqItem){
-  return isFastTrack(reqItem) || reqItem.valueClass === 'low';
-}
-function initialForwardTarget(reqItem){
-  if(reqItem.valueClass === 'medium') return 'coordinator';
-  if(reqItem.valueClass === 'high' || reqItem.valueClass === 'emergency') return 'principal';
-  return 'coordinator';
-}
-/* Valid forward destinations for whoever currently holds the item.
-   Accountant is only ever reachable from Coordinator — this single
-   rule is what enforces "always back through Coordinator first". */
-function forwardTargetsFor(role){
-  if(role === 'coordinator') return ['accountant','principal','chairman'];
-  if(role === 'principal') return ['coordinator','chairman'];
-  if(role === 'chairman') return ['coordinator','principal'];
-  return [];
-}
-function circulationActionsFor(reqItem){
-  if(reqItem.status !== 'pending_approval') return { canApprove:false, canDecline:false, canForward:false, forwardTargets:[] };
-  const role = reqItem.currentHolderRole;
-  if(role === 'accountant'){
-    if(!reqItem.hasCirculated){
-      // Entry point
-      const isLow = reqItem.valueClass === 'low' && !isFastTrack(reqItem);
-      const isMedHigh = !isFastTrack(reqItem) && reqItem.valueClass !== 'low';
-      return {
-        canApprove: canDirectApproveAtEntry(reqItem),
-        canDecline: true,
-        canForward: isLow || isMedHigh,
-        forwardFixedTarget: isMedHigh ? initialForwardTarget(reqItem) : null,
-        forwardTargets: isLow ? ['coordinator'] : []
-      };
-    }
-    // Returned to Accountant — final acceptance only
-    return { canApprove:true, canDecline:true, canForward:false, forwardTargets:[] };
+function initApproval(reqItem){
+  if(reqItem.procurementPolicy === 'not_required'){
+    // Policy says no approval needed — go straight to Purchase Assignment.
+    // Never touch a fake approval step just to make history look complete.
+    reqItem.approvalStatus = 'not_required';
+    reqItem.status = 'purchase_pending';
+  } else {
+    reqItem.approvalStatus = 'pending_coordinator';
+    reqItem.status = 'pending_approval';
   }
-  // Coordinator / Principal / Chairman holding it
-  return { canApprove:false, canDecline:true, canForward:true, forwardTargets: forwardTargetsFor(role) };
 }
-function canActOnCirculation(reqItem){
+function approvalStageLabel(approvalStatus){
+  return { pending_coordinator:'Coordinator', pending_principal:'Principal', approved:'Approved', declined:'Declined', not_required:'Not Required' }[approvalStatus] || approvalStatus;
+}
+// Who currently holds approval authority for this request — role-based via
+// Manage Staff, never a specific hardcoded email.
+function canActOnApproval(reqItem){
   if(reqItem.status !== 'pending_approval') return false;
-  return hasRole(reqItem.currentHolderRole);
+  if(reqItem.approvalStatus === 'pending_coordinator') return hasRole('coordinator');
+  if(reqItem.approvalStatus === 'pending_principal') return hasRole('principal');
+  return false;
+}
+function myApprovalQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='pending_approval' && canActOnApproval(r)); }
+async function applyApprovalAction(r, action, comment){
+  const actorName = (myStaffRecord()||{}).name || currentUserEmail;
+  const stage = approvalStageLabel(r.approvalStatus);
+  if(action === 'approve'){
+    r.approvalStatus = 'approved';
+    r.status = 'purchase_pending';
+    r.history.push({ stage: stage+' Approval', action:'approved', actorEmail:currentUserEmail, actorName, remark: comment||'', timestamp:new Date().toISOString() });
+  } else if(action === 'decline'){
+    r.approvalStatus = 'declined';
+    r.status = 'rejected';
+    r.history.push({ stage: stage+' Decline', action:'declined', actorEmail:currentUserEmail, actorName, remark: comment, timestamp:new Date().toISOString() });
+  } else if(action === 'escalate'){
+    r.approvalStatus = 'pending_principal';
+    r.escalatedByEmail = currentUserEmail; r.escalatedByName = actorName;
+    r.escalatedAt = new Date().toISOString(); r.escalationComment = comment;
+    r.history.push({ stage:'Escalated to Principal', action:'escalated', actorEmail:currentUserEmail, actorName, remark: comment, timestamp:new Date().toISOString() });
+  }
+  await saveDb();
 }
 function requestItemSiblings(reqItem){
   // Informational only (e.g. "3 items in this request") — items no longer
-  // move together. See applyCirculationAction: bundling was removed because
+  // move together. See applyApprovalAction: bundling was removed because
   // approving one item silently approved every item sharing its request,
   // which surprised users. Each request item is independently actionable now.
   return DB.requestItems.filter(r=>!r.deleted && r.requestId===reqItem.requestId);
 }
-async function applyCirculationAction(reqItem, action, targetRole, comment){
-  const actorName = (myStaffRecord()||{}).name || currentUserEmail;
-  const r = reqItem;
-  const fromRole = r.currentHolderRole;
-  if(action === 'approve'){
-    r.circulationLog.push({ id:nextId('circ'), fromRole, fromEmail:currentUserEmail, fromName:actorName, toRole:null, action:'approved', comment:comment||'', timestamp:new Date().toISOString() });
-    r.history.push({ stage:'Accountant Final Approval', action:'approved', actorEmail:currentUserEmail, actorName, remark:comment||'', timestamp:new Date().toISOString() });
-    r.status = 'purchase_pending';
-    if(!r.assignedPurchaserEmail){ r.assignedPurchaserEmail = r.requestedByEmail; r.assignedPurchaserName = r.requestedByName; }
-    generatePurchaseOrder(r);
-  } else if(action === 'decline'){
-    r.circulationLog.push({ id:nextId('circ'), fromRole, fromEmail:currentUserEmail, fromName:actorName, toRole:null, action:'declined', comment:comment, timestamp:new Date().toISOString() });
-    r.history.push({ stage:roleKeyLabel(fromRole)+' Decline', action:'declined', actorEmail:currentUserEmail, actorName, remark:comment, timestamp:new Date().toISOString() });
-    r.status = 'rejected';
-  } else if(action === 'forward'){
-    let finalTarget = targetRole;
-    if(finalTarget === 'accountant' && fromRole !== 'coordinator'){ finalTarget = 'coordinator'; } // safety net, UI shouldn't offer this anyway
-    r.circulationLog.push({ id:nextId('circ'), fromRole, fromEmail:currentUserEmail, fromName:actorName, toRole:finalTarget, action:'forwarded', comment:comment||'', timestamp:new Date().toISOString() });
-    r.history.push({ stage:roleKeyLabel(fromRole)+' → '+roleKeyLabel(finalTarget), action:'forwarded', actorEmail:currentUserEmail, actorName, remark:comment||'', timestamp:new Date().toISOString() });
-    r.currentHolderRole = finalTarget;
-    r.hasCirculated = true;
-  }
-  await saveDb();
-}
 function isMyPurchaseTask(reqItem){
-  return isSignedIn() && reqItem.assignedPurchaserEmail && reqItem.assignedPurchaserEmail.toLowerCase()===emailLower();
+  // Kept as a permission-based check (not pre-assignment) for compatibility
+  // with the downstream install/reassign/dispose steps, which are out of
+  // scope for this pass — those screens OR this with isApproverRole()/isAdmin()
+  // already, so this only needs to cover the purchasing/receiving crew.
+  return canPurchaseAction() || canReceiveAction();
 }
+function canPurchaseAction(){ return isAdmin() || isApproverRole() || Boolean((myStaffRecord()||{}).canPurchase); }
+function canReceiveAction(){ return isAdmin() || isApproverRole() || Boolean((myStaffRecord()||{}).canReceive); }
 function currentUserAnyRole(){
   return isAdmin() || isApproverRole() || isAccountant();
 }
@@ -1233,11 +1200,19 @@ async function loadDb(allowRetry){
   });
   DB.requestItems.forEach(r=>{
     if(!Array.isArray(r.notes)) r.notes = [];
-    if(!r.currentHolderRole && r.status==='pending_approval') initCirculation(r);
-    if(!Array.isArray(r.circulationLog)) r.circulationLog = [];
+    if(!r.approvalStatus){
+      // Defensive default for any record from before this workflow existed —
+      // not a full migration, just enough to avoid an undefined state.
+      if(r.status==='pending_approval') r.approvalStatus = 'pending_coordinator';
+      else if(r.status==='rejected') r.approvalStatus = 'declined';
+      else if(r.procurementPolicy==='not_required') r.approvalStatus = 'not_required';
+      else r.approvalStatus = 'approved';
+    }
   });
   DB.staff.forEach(s=>{
     if(s.canConsume===undefined) s.canConsume = false;
+    if(s.canPurchase===undefined) s.canPurchase = false;
+    if(s.canReceive===undefined) s.canReceive = false;
   });
   // Backfill new category fields for DBs saved before this feature existed
   DB.categories.forEach(c=>{
@@ -1542,10 +1517,9 @@ function pendingForMe(){
   const out = [];
   DB.requestItems.forEach(r=>{
     if(r.deleted) return;
-    if(r.status==='pending_approval' && canActOnCirculation(r)) out.push(r);
-    else if(r.status==='purchase_pending' && isMyPurchaseTask(r)) out.push(r);
-    else if(r.status==='purchased' && isMyPurchaseTask(r)) out.push(r);
-    else if(r.status==='received' && (isMyPurchaseTask(r) || isApproverRole() || isAdmin())) out.push(r);
+    if(r.status==='pending_approval' && canActOnApproval(r)) out.push(r);
+    else if(r.status==='purchase_pending' && canPurchaseAction()) out.push(r);
+    else if((r.status==='purchased' || r.status==='received') && canReceiveAction()) out.push(r);
     else if((r.status==='completed' || r.status==='archived') && !r.accountantClosed && isAccountant()) out.push(r);
   });
   return out;
@@ -2532,9 +2506,8 @@ function syncAssetToInventory(r, personEmail, personName){
   item.quantity = bal;
 }
 
-function myApprovalQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='pending_approval' && canActOnCirculation(r)); }
-function myPurchaseQueue(){ return DB.requestItems.filter(r=> !r.deleted && (r.status==='purchase_pending'||r.status==='purchased') && isMyPurchaseTask(r)); }
-function myAssignmentQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='received' && (isMyPurchaseTask(r) || isApproverRole() || isAdmin())); }
+function myPurchaseQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='purchase_pending' && canPurchaseAction()); }
+function myAssignmentQueue(){ return DB.requestItems.filter(r=> !r.deleted && (r.status==='purchased' || r.status==='received') && canReceiveAction()); }
 function myAccountantQueue(){ return DB.requestItems.filter(r=> !r.deleted && isTerminal(r) && !r.accountantClosed && isAccountant()); }
 /* Where the "Awaiting My Action" dashboard card should send someone —
    whichever of their queues actually has something in it. */
@@ -2571,15 +2544,15 @@ function renderProcurementPage(initialTab){
   if(initialTab) procTab = initialTab;
   if(!procTab) procTab = 'new';
   const canApproveAny = isSignedIn() && isApproverRole();
-  const hasPurchaseTasks = isSignedIn() && myPurchaseQueue().length>0;
-  const canAssign = isSignedIn() && (isApproverRole() || isAdmin());
+  const canPurchaseAny = isSignedIn() && canPurchaseAction();
+  const canReceiveAny = isSignedIn() && canReceiveAction();
   const canAccountant = isSignedIn() && isAccountant();
 
   const tabs = [];
   if(isSignedIn()) tabs.push(['new','New Request']);
   if(canApproveAny) tabs.push(['approvals','Approvals'+(myApprovalQueue().length?' ('+myApprovalQueue().length+')':'')]);
-  if(isSignedIn()) tabs.push(['tasks','My Purchase Tasks'+(myPurchaseQueue().length?' ('+myPurchaseQueue().length+')':'')]);
-  if(canAssign) tabs.push(['assign','Receiving &amp; Assignment'+(myAssignmentQueue().length?' ('+myAssignmentQueue().length+')':'')]);
+  if(canPurchaseAny) tabs.push(['tasks','Purchase Assignment'+(myPurchaseQueue().length?' ('+myPurchaseQueue().length+')':'')]);
+  if(canReceiveAny) tabs.push(['assign','Receiving &amp; Assignment'+(myAssignmentQueue().length?' ('+myAssignmentQueue().length+')':'')]);
   if(canAccountant) tabs.push(['accountant','Accountant Closure'+(myAccountantQueue().length?' ('+myAccountantQueue().length+')':'')]);
   tabs.push(['pos','Purchase Orders']);
   tabs.push(['all','All Requests']);
@@ -2616,6 +2589,15 @@ let newRequestLines = [];
 let newReqExpandedId = null;
 let newReqDraftBannerDismissed = false;
 const REQ_DRAFT_KEY = 'taqwa_req_draft';
+const REASON_OPTIONS = ['Classroom Requirements','Refreshments','Events / Annual Functions','Sanitation & Hygiene','First-Aid','Office','Furniture','Any Other'];
+// Freely selectable, not locked to the logged-in person — the operator is
+// often digitizing a paper register entry on behalf of whoever asked,
+// defaulting to their own name only as a starting point.
+function requestedByOptions(){
+  const mine = myStaffRecord();
+  const staffList = DB.staff.filter(s=>!s.deleted && s.active!==false).slice().sort((a,b)=>a.name.localeCompare(b.name));
+  return staffList.map(s=>'<option value="'+s.id+'" '+(mine && mine.id===s.id?'selected':'')+'>'+escapeHtml(s.name)+'</option>').join('');
+}
 function renderNewRequestTab(){
   const panel = document.getElementById('proc-panel');
   if(!newRequestLines.length) newRequestLines = [{ localId: nextId('line') }];
@@ -2634,7 +2616,7 @@ function renderNewRequestTab(){
       : '')
     + '<div class="field-row">'
     +   '<div class="field"><label>Request Date</label><input type="date" id="req-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
-    +   '<div class="field"><label>Requested By</label><input type="text" value="'+escapeHtml(currentUserEmail||'')+'" disabled></div>'
+    +   '<div class="field"><label>Requested By</label><select id="req-requested-by">'+requestedByOptions()+'</select></div>'
     + '</div>'
     + '<div class="req-items-header"><h3>Items</h3><button class="btn btn-outline btn-sm" id="add-line-btn">+ Add Another Item</button></div>'
     + '<div id="req-lines"></div>'
@@ -2710,8 +2692,11 @@ function renderNewRequestTab(){
         +   '<div class="field"><label>Quantity Requested</label><input type="number" min="1" value="'+escapeHtml(line.quantityRequested||'1')+'" data-line-field="quantityRequested" data-line-id="'+line.localId+'"></div>'
         +   '<div class="field"><label>Priority</label><select data-line-field="priority" data-line-id="'+line.localId+'">'+priorityOptions+'</select></div>'
         + '</div>'
-        + '<div class="field"><label>Reason</label><input type="text" data-line-field="reason" data-line-id="'+line.localId+'" placeholder="Why is this needed?" value="'+escapeHtml(line.reason||'')+'"></div>'
-        + '<div class="field"><label>Description (optional)</label><textarea rows="2" data-line-field="description" data-line-id="'+line.localId+'">'+escapeHtml(line.description||'')+'</textarea></div>'
+        + '<div class="field"><label>Reason</label><select data-line-field="reason" data-line-id="'+line.localId+'" data-reason-select="'+line.localId+'">'
+        +   '<option value="">— Select a reason —</option>'
+        +   REASON_OPTIONS.map(opt=>'<option value="'+opt+'" '+(line.reason===opt?'selected':'')+'>'+opt+'</option>').join('')
+        + '</select></div>'
+        + '<div class="field" data-desc-wrap="'+line.localId+'" style="'+(line.reason==='Any Other'?'':'display:none;')+'"><label>Description '+(line.reason==='Any Other'?'(required)':'(optional)')+'</label><textarea rows="2" data-line-field="description" data-line-id="'+line.localId+'">'+escapeHtml(line.description||'')+'</textarea></div>'
         + '</div>'
         + '</div>';
     }).join('');
@@ -2720,6 +2705,19 @@ function renderNewRequestTab(){
     wrap.querySelectorAll('textarea[data-line-field="description"]').forEach(ta=>{
       autoGrowTextarea(ta);
       ta.addEventListener('input', ()=>autoGrowTextarea(ta));
+    });
+    wrap.querySelectorAll('[data-reason-select]').forEach(sel=>{
+      sel.addEventListener('change', ()=>{
+        const lineId = sel.getAttribute('data-reason-select');
+        const line = newRequestLines.find(l=>l.localId===lineId);
+        if(line) line.reason = sel.value;
+        const isOther = sel.value === 'Any Other';
+        const descWrap = wrap.querySelector('[data-desc-wrap="'+lineId+'"]');
+        if(descWrap){
+          descWrap.style.display = isOther ? '' : 'none';
+          descWrap.querySelector('label').textContent = 'Description ' + (isOther ? '(required)' : '(optional)');
+        }
+      });
     });
     wrap.querySelectorAll('[data-cat-select]').forEach(sel=>{
       sel.addEventListener('change', ()=>{
@@ -2848,7 +2846,14 @@ function renderNewRequestTab(){
       };
     });
     if(lineData.some(l=>!l.itemName || !l.quantityRequested)){ toast('Every item needs a selected catalog item and quantity','error'); return; }
+    if(lineData.some(l=>!l.reason)){ toast('Every item needs a Reason selected','error'); return; }
+    if(lineData.some(l=>l.reason==='Any Other' && !l.description)){ toast('Description is required when Reason is "Any Other"','error'); return; }
     const requestDate = document.getElementById('req-date').value;
+    const requestedByStaffId = document.getElementById('req-requested-by').value;
+    const requestedByStaff = staffById(requestedByStaffId);
+    if(!requestedByStaff){ toast('Choose who this request is for','error'); return; }
+    const requestedByEmail = requestedByStaff.email || currentUserEmail;
+    const requestedByName = requestedByStaff.name;
 
     let createdNumbers = [];
     const ok = await runSaveAction(btn, 'Submitting…', async ()=>{
@@ -2868,12 +2873,13 @@ function renderNewRequestTab(){
           itemIds.push(id);
           const record = {
             id, requestId, requestNumber, requestDate,
-            requestedByEmail: currentUserEmail, requestedByName: (myStaffRecord()||{}).name || currentUserEmail,
+            requestedByStaffId, requestedByEmail, requestedByName,
             categoryId: l.categoryId, itemTypeId: l.itemTypeId, itemName: l.itemName, itemCode: l.itemCode, catalogItemId: l.catalogItemId, quantityRequested: l.quantityRequested,
             priority: l.priority, reason: l.reason, description: l.description,
             valueClass: l.valueClass, procurementPolicy: l.procurementPolicy,
             linkedAssetId: null,
-            status: 'pending_approval',
+            approvalStatus: null, status: null,
+            escalatedByEmail: null, escalatedByName: null, escalatedAt: null, escalationComment: null,
             assignedPurchaserEmail: null, assignedPurchaserName: null,
             purchase: null, receipt: null, assignments: [], maintenanceEvents: [], disposal: null,
             accountantClosed: false, accountantClosedByEmail: null, accountantClosedAt: null, accountantRemark: null,
@@ -2881,10 +2887,10 @@ function renderNewRequestTab(){
             history: [{ stage:'Requested', action:'created', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:'', timestamp:new Date().toISOString() }],
             createdAt: new Date().toISOString()
           };
-          initCirculation(record);
+          initApproval(record);
           newItemRecords.push(record);
         });
-        newRequestRecords.push({ id: requestId, requestNumber, requestDate, requestedByEmail: currentUserEmail, createdAt: new Date().toISOString(), itemIds });
+        newRequestRecords.push({ id: requestId, requestNumber, requestDate, requestedByEmail, createdAt: new Date().toISOString(), itemIds });
         createdNumbers.push(requestNumber);
       });
       DB.requestItems.push(...newItemRecords);
@@ -2923,106 +2929,84 @@ function renderApprovalsTab(){
   items.forEach(r=>{
     const card = panel.querySelector('[data-approval-card="'+r.id+'"]');
     const approveBtn = card.querySelector('[data-approve-one]');
-    if(approveBtn) approveBtn.addEventListener('click', ()=>submitCirculationAction(r, 'approve', approveBtn));
-    const forwardBtn = card.querySelector('[data-forward-one]');
-    if(forwardBtn) forwardBtn.addEventListener('click', ()=>submitCirculationAction(r, 'forward', forwardBtn));
-    const purchaserEl = card.querySelector('[data-purchaser="'+r.id+'"]');
-    if(purchaserEl) purchaserEl.addEventListener('change', ()=>{
-      if(purchaserEl.value){ const s = DB.staff.find(x=>x.email===purchaserEl.value); r.assignedPurchaserEmail = purchaserEl.value; r.assignedPurchaserName = s?s.name:purchaserEl.value; }
+    if(approveBtn) approveBtn.addEventListener('click', ()=>submitApprovalAction(r, 'approve', approveBtn));
+    // Decline/Escalate share one reveal panel — a low-weight button until
+    // clicked, then the card smoothly opens a mandatory-comment field.
+    card.querySelectorAll('[data-action-toggle]').forEach(toggleBtn=>{
+      toggleBtn.addEventListener('click', ()=>{
+        const which = toggleBtn.getAttribute('data-action-toggle');
+        card.querySelector('.approval-action-panel').setAttribute('data-pending-action', which);
+        card.querySelector('.approval-action-panel-label').textContent = which==='escalate' ? 'Escalation reason (required)' : 'Decline reason (required)';
+        card.querySelector('.approval-action-confirm').textContent = which==='escalate' ? 'Confirm Escalate' : 'Confirm Decline';
+        card.querySelector('.approval-action-confirm').className = 'btn btn-sm approval-action-confirm ' + (which==='escalate' ? 'btn-primary' : 'btn-danger');
+        card.classList.add('declining');
+        setTimeout(()=>{ const t = document.getElementById('comment-'+r.id); if(t) t.focus(); }, 200);
+      });
     });
-    // Decline stays a single low-weight button until clicked — only then
-    // does the card smoothly reveal the mandatory reason field.
-    const declineToggle = card.querySelector('[data-decline-toggle]');
-    if(declineToggle) declineToggle.addEventListener('click', ()=>{
-      card.classList.add('declining');
-      setTimeout(()=>{ const t = document.getElementById('comment-'+r.id); if(t) t.focus(); }, 200);
-    });
-    const declineCancel = card.querySelector('[data-decline-cancel]');
-    if(declineCancel) declineCancel.addEventListener('click', ()=>{
+    const cancelBtn = card.querySelector('[data-decline-cancel]');
+    if(cancelBtn) cancelBtn.addEventListener('click', ()=>{
       card.classList.remove('declining');
       const t = document.getElementById('comment-'+r.id); if(t) t.value = '';
     });
-    const declineConfirm = card.querySelector('[data-decline-confirm]');
-    if(declineConfirm) declineConfirm.addEventListener('click', ()=>submitCirculationAction(r, 'decline', declineConfirm));
+    const confirmBtn = card.querySelector('.approval-action-confirm');
+    if(confirmBtn) confirmBtn.addEventListener('click', ()=>{
+      const which = card.querySelector('.approval-action-panel').getAttribute('data-pending-action');
+      submitApprovalAction(r, which, confirmBtn);
+    });
   });
 }
 function renderApprovalCard(r){
-  const acts = circulationActionsFor(r);
-  const staffOptions = DB.staff.filter(s=>s.active!==false).map(s=>'<option value="'+s.email+'">'+escapeHtml(s.name)+'</option>').join('');
   const siblingCount = requestItemSiblings(r).length;
-
-  // Forward / Approve share the primary-actions row; Decline is the one
-  // deliberately lower-weight control that expands into a reason field.
-  let actionsHtml = '';
-  if(acts.canForward){
-    if(acts.forwardFixedTarget){
-      actionsHtml += '<button class="btn btn-outline btn-sm" data-forward-one="'+r.id+'" data-fixed-target="'+acts.forwardFixedTarget+'">Send to '+roleKeyLabel(acts.forwardFixedTarget)+'</button>';
-    } else if(acts.forwardTargets && acts.forwardTargets.length){
-      actionsHtml += '<select class="forward-target-select" id="forward-target-'+r.id+'">'
-        + acts.forwardTargets.map(t=>'<option value="'+t+'">Send to '+roleKeyLabel(t)+'</option>').join('')
-        + '</select>'
-        + '<button class="btn btn-outline btn-sm" data-forward-one="'+r.id+'">Forward</button>';
-    }
-  }
-  if(acts.canApprove){
-    actionsHtml += '<button class="btn btn-approve btn-sm" data-approve-one="'+r.id+'">Approve'+(!r.hasCirculated?'':' (Final)')+'</button>';
-  }
-  if(acts.canDecline){
-    actionsHtml += '<button class="btn btn-danger btn-sm" data-decline-toggle="'+r.id+'">Decline</button>';
-  }
-
-  const metaLine = [escapeHtml(r.requestNumber), escapeHtml(catName(r.categoryId)), 'Qty '+r.quantityRequested, 'Requested by '+escapeHtml(r.requestedByName||r.requestedByEmail)].join(' · ');
+  const canEscalate = r.approvalStatus === 'pending_coordinator' && hasRole('coordinator');
 
   return '<div class="approval-card" data-approval-card="'+r.id+'">'
     + '<div class="approval-card-top"><span class="approval-card-name">'+escapeHtml(r.itemName)+'</span>'
     +   '<span class="approval-card-tags">'+valueClassBadge(r.valueClass)+priorityChip(r.priority)+'</span></div>'
-    + '<div class="approval-card-meta">'+metaLine+'</div>'
-    + (r.reason ? '<div class="approval-card-reason">"'+escapeHtml(r.reason)+'"</div>' : '')
+    + '<div class="approval-card-rows">'
+    +   '<div class="approval-card-row"><label>Request No:</label><span>'+escapeHtml(r.requestNumber)+'</span></div>'
+    +   '<div class="approval-card-row"><label>Category:</label><span>'+escapeHtml(catName(r.categoryId))+'</span></div>'
+    +   '<div class="approval-card-row"><label>Quantity:</label><span>'+r.quantityRequested+'</span></div>'
+    +   '<div class="approval-card-row"><label>Requisitioner:</label><span>'+escapeHtml(r.requestedByName||r.requestedByEmail)+'</span></div>'
+    + '</div>'
+    + (r.reason ? '<div class="approval-card-reason">'+escapeHtml(r.reason)+(r.description?': "'+escapeHtml(r.description)+'"':'')+'</div>' : '')
     + (siblingCount>1 ? '<div class="approval-card-hint">1 of '+siblingCount+' items on this request — approved independently</div>' : '')
-    + (r.circulationLog && r.circulationLog.length ? '<div class="approval-card-hint">Trail: '+r.circulationLog.map(c=>roleKeyLabel(c.fromRole)+(c.toRole?' → '+roleKeyLabel(c.toRole):' ('+c.action+')')).join(' · ')+'</div>' : '')
-    + (canDirectApproveAtEntry(r) && !r.hasCirculated
-        ? '<div class="approval-card-divider"></div><div class="approval-assign"><label>Assign to</label><select data-purchaser="'+r.id+'"><option value="">Not yet decided</option>'+staffOptions+'</select></div>'
-        : '')
+    + (r.approvalStatus==='pending_principal' ? '<div class="approval-card-hint">Escalated by '+escapeHtml(r.escalatedByName||'—')+(r.escalationComment?': "'+escapeHtml(r.escalationComment)+'"':'')+'</div>' : '')
     + '<div class="approval-card-divider"></div>'
-    + '<div class="approval-card-actions">'+actionsHtml+'</div>'
-    + '<div class="approval-decline-panel">'
-    +   '<label>Decline reason</label>'
-    +   '<textarea id="comment-'+r.id+'" placeholder="Why is this being declined?"></textarea>'
+    + '<div class="approval-card-actions">'
+    +   '<button class="btn btn-approve btn-sm" data-approve-one="'+r.id+'">Approve</button>'
+    +   (canEscalate ? '<button class="btn btn-outline btn-sm" data-action-toggle="escalate">Escalate</button>' : '')
+    +   '<button class="btn btn-danger btn-sm" data-action-toggle="decline">Decline</button>'
+    + '</div>'
+    + '<div class="approval-action-panel">'
+    +   '<label class="approval-action-panel-label">Decline reason (required)</label>'
+    +   '<textarea id="comment-'+r.id+'" placeholder="Required comment…"></textarea>'
     +   '<div class="approval-decline-actions">'
     +     '<button class="btn btn-cancel btn-sm" data-decline-cancel="'+r.id+'">Cancel</button>'
-    +     '<button class="btn btn-danger btn-sm" data-decline-confirm="'+r.id+'">Confirm Decline</button>'
+    +     '<button class="btn btn-danger btn-sm approval-action-confirm">Confirm Decline</button>'
     +   '</div>'
     + '</div>'
     + '</div>';
 }
-async function submitCirculationAction(r, action, btn){
+async function submitApprovalAction(r, action, btn){
   const commentEl = document.getElementById('comment-'+r.id);
   const comment = commentEl ? commentEl.value.trim() : '';
-  if(action === 'decline' && !comment){ toast('A comment is required to decline','error'); return; }
-  let targetRole = null;
-  if(action === 'forward'){
-    const forwardBtn = document.querySelector('[data-forward-one="'+r.id+'"]');
-    const fixedTarget = forwardBtn ? forwardBtn.getAttribute('data-fixed-target') : null;
-    if(fixedTarget){ targetRole = fixedTarget; }
-    else{ const sel = document.getElementById('forward-target-'+r.id); targetRole = sel ? sel.value : null; }
-    if(!targetRole){ toast('Choose where to send this','error'); return; }
-  }
-  const busyLabel = action==='approve' ? 'Approving…' : action==='decline' ? 'Declining…' : 'Forwarding…';
+  if((action === 'decline' || action === 'escalate') && !comment){ toast('A comment is required for this action','error'); return; }
+  const busyLabel = action==='approve' ? 'Approving…' : action==='decline' ? 'Declining…' : 'Escalating…';
   const ok = await runSaveAction(btn, busyLabel, async ()=>{
-    await applyCirculationAction(r, action, targetRole, comment);
+    await applyApprovalAction(r, action, comment);
   });
   if(!ok) return;
-  toast(action==='approve'?'Approved':action==='decline'?'Declined':'Forwarded to '+roleKeyLabel(targetRole), action==='decline'?'error':'success');
+  toast(action==='approve'?'Approved':action==='decline'?'Declined':'Escalated to Principal', action==='decline'?'error':'success');
   renderProcurementPage();
 }
 
-/* ---------------- My Purchase Tasks ---------------- */
+/* ---------------- Purchase Assignment ---------------- */
 function renderTasksTab(){
   const panel = document.getElementById('proc-panel');
   const items = myPurchaseQueue();
-  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🛒</div><h3>No purchase tasks assigned to you</h3></div>'; return; }
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🛒</div><h3>Nothing ready for purchasing</h3></div>'; return; }
   panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Status</th><th>Qty Requested</th><th></th></tr></thead><tbody>'
-    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+itemStatusBadge(r.status, itemPattern(r))+'</td><td>'+r.quantityRequested+'</td><td><button class="btn btn-primary btn-sm" data-open-task="'+r.id+'">'+(r.status==='purchase_pending'?'Enter Purchase':'Confirm Receipt')+'</button></td></tr>').join('')
+    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+itemStatusBadge(r.status, itemPattern(r))+'</td><td>'+r.quantityRequested+'</td><td><button class="btn btn-primary btn-sm" data-open-task="'+r.id+'">Enter Purchase</button></td></tr>').join('')
     + '</tbody></table></div>';
   panel.querySelectorAll('[data-open-task]').forEach(btn=>{
     btn.addEventListener('click', ()=>openItemDetailModal(btn.getAttribute('data-open-task')));
@@ -3033,9 +3017,9 @@ function renderTasksTab(){
 function renderAssignmentTab(){
   const panel = document.getElementById('proc-panel');
   const items = myAssignmentQueue();
-  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📦</div><h3>Nothing waiting for assignment</h3></div>'; return; }
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📦</div><h3>Nothing waiting for receiving or assignment</h3></div>'; return; }
   panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Request</th><th>Type</th><th>Qty</th><th></th></tr></thead><tbody>'
-    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+escapeHtml(itemTypeName(r.itemTypeId))+'</td><td>'+(r.purchase?r.purchase.quantityPurchased:r.quantityRequested)+'</td><td><button class="btn btn-primary btn-sm" data-open-task="'+r.id+'">Assign / Complete</button></td></tr>').join('')
+    + items.map(r=>'<tr><td>'+escapeHtml(r.itemName)+'</td><td>'+escapeHtml(r.requestNumber)+'</td><td>'+escapeHtml(itemTypeName(r.itemTypeId))+'</td><td>'+(r.purchase?r.purchase.quantityPurchased:r.quantityRequested)+'</td><td><button class="btn btn-primary btn-sm" data-open-task="'+r.id+'">'+(r.status==='purchased'?'Confirm Receipt':'Assign / Complete')+'</button></td></tr>').join('')
     + '</tbody></table></div>';
   panel.querySelectorAll('[data-open-task]').forEach(btn=>{
     btn.addEventListener('click', ()=>openItemDetailModal(btn.getAttribute('data-open-task')));
@@ -3141,20 +3125,21 @@ function openItemDetailModal(id){
   renderItemDetailModalBody(r);
 }
 /* ============================================================
-   Circulation display — "current holder + trail" replaces the old
-   fixed left-to-right stepper, since items can move up, down, and
-   sideways rather than through one linear chain. Status badges
-   remain as secondary info alongside it.
+   Procurement stepper — shows where a request currently stands.
+   The full blow-by-blow (who approved/declined/escalated, with
+   comments) lives in the Permanent Timeline below; this widget is
+   just the at-a-glance status, built only from real state — never
+   a fabricated "approved" step for a request that bypassed approval.
    ============================================================ */
 function renderProcurementStepper(r){
   if(r.status==='rejected'){
-    const last = r.circulationLog && r.circulationLog.length ? r.circulationLog[r.circulationLog.length-1] : null;
-    return '<div class="circ-status circ-status-declined">⊘ Declined'+(last?' by '+roleKeyLabel(last.fromRole):'')+'</div>' + renderCirculationTrail(r);
+    return '<div class="circ-status circ-status-declined">⊘ Declined</div>';
   }
   if(r.status==='pending_approval'){
-    return '<div class="circ-status circ-status-current">● Currently with <strong>'+roleKeyLabel(r.currentHolderRole)+'</strong></div>' + renderCirculationTrail(r);
+    const withWhom = r.approvalStatus==='pending_principal' ? 'Principal' : 'Coordinator';
+    return '<div class="circ-status circ-status-current">● Pending — currently with <strong>'+withWhom+'</strong></div>';
   }
-  // Past circulation — show the post-approval lifecycle as a simple linear strip
+  // Post-approval lifecycle as a simple linear strip: Purchase → Receiving → (Assignment) → Closed
   const pattern = itemPattern(r);
   const steps = [{ key:'purchase', label:'Purchase' }];
   if(pattern!=='service') steps.push({ key:'receive', label:'Receiving' });
@@ -3166,19 +3151,11 @@ function renderProcurementStepper(r){
   else if(r.status==='received') curIdx = steps.findIndex(s=>s.key==='receive')>=0 ? steps.findIndex(s=>s.key==='receive')+1 : 1;
   else if(r.status==='assigned' || r.status==='active') curIdx = steps.length-1;
   else if(r.status==='completed' || r.status==='archived') curIdx = r.accountantClosed ? steps.length : steps.length-1;
-  const linear = '<div class="proc-stepper">' + steps.map((s,i)=>{
+  return '<div class="proc-stepper">' + steps.map((s,i)=>{
     const state = i<curIdx ? 'done' : (i===curIdx ? 'current' : 'todo');
     const icon = state==='done' ? '✓' : (state==='current' ? '●' : '○');
     return '<div class="proc-step '+state+'"><span class="proc-step-icon">'+icon+'</span><span class="proc-step-label">'+escapeHtml(s.label)+'</span></div>';
   }).join('<div class="proc-step-connector"></div>') + '</div>';
-  return linear + renderCirculationTrail(r);
-}
-function renderCirculationTrail(r){
-  if(!r.circulationLog || !r.circulationLog.length) return '';
-  return '<div class="circ-trail">' + r.circulationLog.map(c=>{
-    const label = c.action==='approved' ? 'Approved' : c.action==='declined' ? 'Declined' : 'Forwarded to '+roleKeyLabel(c.toRole);
-    return '<div class="circ-trail-row"><span class="circ-trail-from">'+roleKeyLabel(c.fromRole)+'</span><span class="circ-trail-arrow">→</span><span class="circ-trail-action">'+label+'</span>'+(c.comment?'<span class="circ-trail-comment">"'+escapeHtml(c.comment)+'"</span>':'')+'</div>';
-  }).join('') + '</div>';
 }
 function renderItemDetailModalBody(r){
   const pattern = itemPattern(r);
@@ -3192,7 +3169,6 @@ function renderItemDetailModalBody(r){
     +   '<div class="spec-item"><label>Requested By</label><div class="val">'+escapeHtml(r.requestedByName||r.requestedByEmail)+'</div></div>'
     +   '<div class="spec-item"><label>Quantity Requested</label><div class="val">'+r.quantityRequested+'</div></div>'
     +   '<div class="spec-item"><label>Procurement Policy</label><div class="val">'+(r.procurementPolicy==='required'?'Requires Approval':'No Approval Required')+'</div></div>'
-    +   '<div class="spec-item"><label>Assigned Purchaser</label><div class="val">'+(r.assignedPurchaserName||'—')+'</div></div>'
     + '</div>'
     + (r.reason ? '<div class="field"><label>Reason</label><div class="val">'+escapeHtml(r.reason)+'</div></div>' : '')
     + (r.description ? '<div class="field"><label>Description</label><div class="val">'+escapeHtml(r.description)+'</div></div>' : '');
@@ -3237,14 +3213,6 @@ function renderItemDetailModalBody(r){
       + (r.disposal.documentFileId ? '<div class="field-hint" style="margin-bottom:12px;">📎 <a href="'+driveDownloadUrl(r.disposal.documentFileId)+'" target="_blank" rel="noopener">'+escapeHtml(r.disposal.documentFileName||'View document')+'</a></div>' : '');
   }
 
-  body += '<div class="plain-divider"></div><h3 style="margin-bottom:10px;">Notesheet</h3>'
-    + '<div class="notesheet-thread">'
-    + ((r.notes && r.notes.length) ? r.notes.map(n=>
-        '<div class="notesheet-note"><div class="notesheet-note-head"><span>'+escapeHtml(n.authorName)+' <span class="notesheet-note-meta">('+escapeHtml(n.designation)+')</span></span><span class="notesheet-note-meta">'+formatDateTime(n.timestamp)+'</span></div><div class="notesheet-note-body">'+escapeHtml(n.comment)+'</div></div>'
-      ).join('') : '<div class="field-hint">No notes yet — add the first comment below.</div>')
-    + '</div>'
-    + (isSignedIn() && !r.deleted ? ('<div class="field"><label>Add Comment</label><textarea id="notesheet-new-comment" placeholder="Type a note for others to see…"></textarea></div><button class="btn btn-outline btn-sm" id="notesheet-add-btn">Add Comment</button>') : '');
-
   body += '<div class="plain-divider"></div><h3 style="margin-bottom:10px;">Permanent Timeline</h3><ul class="timeline">'
     + r.history.map(h=>'<li><div class="t-title">'+escapeHtml(h.stage)+' — '+escapeHtml(h.action)+'</div><div class="t-meta">'+escapeHtml(h.actorName||h.actorEmail||'—')+' · '+formatDateTime(h.timestamp)+'</div>'+(h.remark?'<div class="t-remark">'+escapeHtml(h.remark)+'</div>':'')+'</li>').join('')
     + '</ul>';
@@ -3254,29 +3222,20 @@ function renderItemDetailModalBody(r){
   }
   body += '<div id="item-action-box"></div>';
 
+  // Print/PO options don't exist before a purchase is actually recorded —
+  // enforced by real state (r.purchase), not just hidden in the UI, so
+  // there's nothing to print prematurely for a still-pending request.
   const linkedPo = poForRequestItem(r.id);
   const footerBtns = '<button class="btn btn-outline" id="modal-done-btn">Close</button>'
-    + '<button class="btn btn-outline" id="modal-print-btn">Print / Export Report</button>'
-    + (linkedPo ? '<button class="btn btn-outline" id="modal-print-po-btn">Print PO ('+escapeHtml(linkedPo.poNumber)+')</button>' : '')
+    + (r.purchase ? '<button class="btn btn-outline" id="modal-print-btn">Print / Export Report</button>' : '')
+    + (r.purchase && linkedPo ? '<button class="btn btn-outline" id="modal-print-po-btn">Print PO ('+escapeHtml(linkedPo.poNumber)+')</button>' : '')
     + (isAdmin() && !r.deleted ? '<button class="btn btn-danger" id="modal-delete-item-btn">Delete Request</button>' : '');
   openModal(escapeHtml(r.itemName), body, footerBtns, 'module-procurement');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
-  document.getElementById('modal-print-btn').addEventListener('click', ()=>openRequestItemReportModal(r));
+  const printBtn = document.getElementById('modal-print-btn');
+  if(printBtn) printBtn.addEventListener('click', ()=>openRequestItemReportModal(r));
   const poBtn = document.getElementById('modal-print-po-btn');
   if(poBtn) poBtn.addEventListener('click', ()=>openPurchaseOrderReportModal(linkedPo));
-  const noteBtn = document.getElementById('notesheet-add-btn');
-  if(noteBtn) noteBtn.addEventListener('click', async ()=>{
-    const textEl = document.getElementById('notesheet-new-comment');
-    const comment = textEl.value.trim();
-    if(!comment){ toast('Write a comment first','error'); return; }
-    const ok = await runSaveAction(noteBtn, 'Posting…', async ()=>{
-      if(!Array.isArray(r.notes)) r.notes = [];
-      r.notes.push({ id: nextId('note'), authorEmail: currentUserEmail, authorName: (myStaffRecord()||{}).name||currentUserEmail, designation: myRoleLabel(), comment, timestamp: new Date().toISOString() });
-      await saveDb();
-    });
-    if(!ok) return;
-    toast('Comment added','success'); openItemDetailModal(r.id);
-  });
   const delBtn = document.getElementById('modal-delete-item-btn');
   if(delBtn) delBtn.addEventListener('click', async ()=>{
     if(!promptAndArchive('requestItem', r, r.itemName+' ('+r.requestNumber+')')) return;
@@ -3292,32 +3251,21 @@ function renderItemActionBox(r){
   box.innerHTML = '';
   const pattern = itemPattern(r);
 
-  if(r.status==='pending_approval' && canActOnCirculation(r)){
-    const acts = circulationActionsFor(r);
-    const staffOptions = DB.staff.filter(s=>s.active!==false).map(s=>'<option value="'+s.email+'" '+(r.assignedPurchaserEmail===s.email?'selected':'')+'>'+escapeHtml(s.name)+'</option>').join('');
-    let actionsHtml = '';
-    if(acts.canApprove) actionsHtml += '<button class="btn btn-primary" id="modal-approve-btn">Approve'+(r.hasCirculated?' (Final)':'')+'</button>';
-    if(acts.canForward){
-      if(acts.forwardFixedTarget){
-        actionsHtml += '<button class="btn btn-outline" id="modal-forward-btn" data-fixed-target="'+acts.forwardFixedTarget+'">Send to '+roleKeyLabel(acts.forwardFixedTarget)+'</button>';
-      } else if(acts.forwardTargets && acts.forwardTargets.length){
-        actionsHtml += '<select id="modal-forward-target" style="font-size:13px; padding:8px 10px; border:1.5px solid var(--color-border); border-radius:6px;">'
-          + acts.forwardTargets.map(t=>'<option value="'+t+'">Send to '+roleKeyLabel(t)+'</option>').join('')
-          + '</select><button class="btn btn-outline" id="modal-forward-btn">Forward</button>';
-      }
-    }
-    if(acts.canDecline) actionsHtml += '<button class="btn btn-danger" id="modal-decline-btn">Decline</button>';
+  if(r.status==='pending_approval' && canActOnApproval(r)){
+    const canEscalate = r.approvalStatus === 'pending_coordinator' && hasRole('coordinator');
+    const stage = r.approvalStatus === 'pending_principal' ? 'Principal' : 'Coordinator';
     box.innerHTML = '<div class="plain-divider"></div>'
-      + '<h4>Currently with you — '+roleKeyLabel(r.currentHolderRole)+'</h4>'
-      + (canDirectApproveAtEntry(r) && !r.hasCirculated ? '<div class="field"><label>Delegate Purchaser (optional)</label><select id="modal-purchaser"><option value="">— Not yet decided —</option>'+staffOptions+'</select></div>' : '')
-      + '<div class="field"><label>Comment '+(acts.canDecline?'(required to Decline)':'(optional)')+'</label><textarea id="modal-remark"></textarea></div>'
-      + '<div style="display:flex; gap:10px; flex-wrap:wrap;">'+actionsHtml+'</div>';
+      + '<h4>Pending with you — '+stage+'</h4>'
+      + '<div class="field"><label>Comment (required to Decline/Escalate, optional to Approve)</label><textarea id="modal-remark"></textarea></div>'
+      + '<div style="display:flex; gap:10px; flex-wrap:wrap;">'
+      +   '<button class="btn btn-approve" id="modal-approve-btn">Approve</button>'
+      +   (canEscalate ? '<button class="btn btn-outline" id="modal-escalate-btn">Escalate</button>' : '')
+      +   '<button class="btn btn-danger" id="modal-decline-btn">Decline</button>'
+      + '</div>';
     const approveBtn = document.getElementById('modal-approve-btn');
     if(approveBtn) approveBtn.addEventListener('click', async ()=>{
-      const sel = document.getElementById('modal-purchaser');
-      if(sel && sel.value){ const s = DB.staff.find(x=>x.email===sel.value); r.assignedPurchaserEmail = sel.value; r.assignedPurchaserName = s?s.name:sel.value; }
       const comment = document.getElementById('modal-remark').value.trim();
-      const ok = await runSaveAction(approveBtn, 'Approving…', async ()=>{ await applyCirculationAction(r, 'approve', null, comment); });
+      const ok = await runSaveAction(approveBtn, 'Approving…', async ()=>{ await applyApprovalAction(r, 'approve', comment); });
       if(!ok) return;
       toast('Approved','success'); openItemDetailModal(r.id);
     });
@@ -3325,34 +3273,39 @@ function renderItemActionBox(r){
     if(declineBtn) declineBtn.addEventListener('click', async ()=>{
       const comment = document.getElementById('modal-remark').value.trim();
       if(!comment){ toast('A comment is required to decline','error'); return; }
-      const ok = await runSaveAction(declineBtn, 'Declining…', async ()=>{ await applyCirculationAction(r, 'decline', null, comment); });
+      const ok = await runSaveAction(declineBtn, 'Declining…', async ()=>{ await applyApprovalAction(r, 'decline', comment); });
       if(!ok) return;
       toast('Declined','error'); openItemDetailModal(r.id);
     });
-    const forwardBtn = document.getElementById('modal-forward-btn');
-    if(forwardBtn) forwardBtn.addEventListener('click', async ()=>{
-      const fixedTarget = forwardBtn.getAttribute('data-fixed-target');
-      const targetSel = document.getElementById('modal-forward-target');
-      const targetRole = fixedTarget || (targetSel ? targetSel.value : null);
-      if(!targetRole){ toast('Choose where to send this','error'); return; }
+    const escalateBtn = document.getElementById('modal-escalate-btn');
+    if(escalateBtn) escalateBtn.addEventListener('click', async ()=>{
       const comment = document.getElementById('modal-remark').value.trim();
-      const ok = await runSaveAction(forwardBtn, 'Forwarding…', async ()=>{ await applyCirculationAction(r, 'forward', targetRole, comment); });
+      if(!comment){ toast('A comment is required to escalate','error'); return; }
+      const ok = await runSaveAction(escalateBtn, 'Escalating…', async ()=>{ await applyApprovalAction(r, 'escalate', comment); });
       if(!ok) return;
-      toast('Forwarded to '+roleKeyLabel(targetRole),'success'); openItemDetailModal(r.id);
+      toast('Escalated to Principal','success'); openItemDetailModal(r.id);
     });
     return;
   }
 
-  if(r.status==='purchase_pending' && isMyPurchaseTask(r)){
+  if(r.status==='purchase_pending' && canPurchaseAction()){
+    const requester = staffById(r.requestedByStaffId);
+    const staffOptions = DB.staff.filter(s=>!s.deleted && s.active!==false).map(s=>'<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>').join('');
     box.innerHTML = '<div class="plain-divider"></div><h4>Purchase Entry</h4>'
-      + '<div class="field"><label>Purchaser Name</label><input type="text" value="'+escapeHtml(r.assignedPurchaserName||currentUserEmail)+'" disabled></div>'
+      + '<div class="field chk-row"><input type="checkbox" id="pe-same-as-req" checked><label for="pe-same-as-req" style="margin:0;">Same as Requisitioner ('+escapeHtml(r.requestedByName||'—')+')</label></div>'
+      + '<div class="field" id="pe-purchaser-wrap" style="display:none;"><label>Purchaser Name</label><select id="pe-purchaser">'+staffOptions+'</select></div>'
       + '<div class="field-row"><div class="field"><label>Supplier / Shop</label><input type="text" id="pe-supplier"></div><div class="field"><label>Invoice Number (optional)</label><input type="text" id="pe-invoice"></div></div>'
-      + '<div class="field-row"><div class="field"><label>Invoice Date</label><input type="date" id="pe-invoice-date"></div><div class="field"><label>Purchase Date</label><input type="date" id="pe-purchase-date" value="'+new Date().toISOString().slice(0,10)+'"></div></div>'
-      + '<div class="field-row"><div class="field"><label>Quantity Purchased</label><input type="number" id="pe-qty" value="'+r.quantityRequested+'" disabled><div class="field-hint">Locked to the approved quantity ('+r.quantityRequested+')</div></div><div class="field"><label>Unit Price (₹)</label><input type="number" id="pe-unit-price" value="0"></div></div>'
-      + '<div class="field-row"><div class="field"><label>Tax Amount (₹, optional)</label><input type="number" id="pe-tax" value="0"></div><div class="field"><label>Total Amount (₹, auto)</label><input type="number" id="pe-total" value="0" readonly></div></div>'
+      + '<div class="field-row"><div class="field"><label>Purchase Date</label><input type="date" id="pe-purchase-date" value="'+new Date().toISOString().slice(0,10)+'"></div><div class="field"><label>Quantity Purchased</label><input type="number" id="pe-qty" value="'+r.quantityRequested+'" disabled><div class="field-hint">Locked to the approved quantity ('+r.quantityRequested+')</div></div></div>'
+      + '<div class="field-row"><div class="field"><label>Unit Price (₹)</label><input type="number" id="pe-unit-price" value="0"></div><div class="field"><label>Tax (₹, optional)</label><input type="number" id="pe-tax" value="0"></div></div>'
+      + '<div class="field"><label>Total Amount (₹, auto)</label><input type="number" id="pe-total" value="0" readonly></div>'
       + '<div class="field"><label>Bill / Receipt Photo or PDF (optional)</label><input type="file" id="pe-bill-file" accept="image/*,.pdf"></div>'
-      + '<div class="field"><label>Remarks</label><textarea id="pe-remarks"></textarea></div>'
-      + '<button class="btn btn-primary" id="pe-submit-btn">Record Purchase</button>';
+      + '<div class="field"><label>Remarks (optional)</label><textarea id="pe-remarks"></textarea></div>'
+      + '<div class="req-action-bar" style="position:static;"><button class="btn btn-primary" id="pe-submit-btn">Record Purchase</button>'
+      +   (isAdmin() ? '<button class="btn btn-danger" id="pe-delete-btn">Delete Request</button>' : '')
+      + '</div>';
+    const sameAsReqChk = document.getElementById('pe-same-as-req');
+    const purchaserWrap = document.getElementById('pe-purchaser-wrap');
+    sameAsReqChk.addEventListener('change', ()=>{ purchaserWrap.style.display = sameAsReqChk.checked ? 'none' : ''; });
     const qtyEl = document.getElementById('pe-qty'), priceEl = document.getElementById('pe-unit-price'), totalEl = document.getElementById('pe-total'), taxEl = document.getElementById('pe-tax');
     function recalc(){ totalEl.value = ((Number(qtyEl.value)||0)*(Number(priceEl.value)||0)+(Number(taxEl.value)||0)).toFixed(2); }
     qtyEl.addEventListener('input', recalc); priceEl.addEventListener('input', recalc); taxEl.addEventListener('input', recalc);
@@ -3360,6 +3313,13 @@ function renderItemActionBox(r){
       const submitBtn = document.getElementById('pe-submit-btn');
       const fileInput = document.getElementById('pe-bill-file');
       const file = fileInput.files && fileInput.files[0];
+      let purchaserEmail, purchaserName;
+      if(sameAsReqChk.checked){ purchaserEmail = requester ? requester.email : r.requestedByEmail; purchaserName = r.requestedByName; }
+      else{
+        const chosen = staffById(document.getElementById('pe-purchaser').value);
+        if(!chosen){ toast('Choose a purchaser','error'); return; }
+        purchaserEmail = chosen.email; purchaserName = chosen.name;
+      }
       let billFileId = null, billFileName = null;
       if(file){
         submitBtn.disabled = true; submitBtn.textContent = 'Uploading bill…';
@@ -3367,11 +3327,11 @@ function renderItemActionBox(r){
         catch(e){ toast('Bill upload failed: '+e.message, 'error'); submitBtn.disabled = false; submitBtn.textContent = 'Record Purchase'; return; }
       }
       const ok = await runSaveAction(submitBtn, 'Recording…', async ()=>{
+        r.assignedPurchaserEmail = purchaserEmail; r.assignedPurchaserName = purchaserName;
         r.purchase = {
-          purchaserEmail: currentUserEmail, purchaserName: r.assignedPurchaserName||currentUserEmail,
+          purchaserEmail, purchaserName,
           supplier: document.getElementById('pe-supplier').value.trim(),
           invoiceNumber: document.getElementById('pe-invoice').value.trim(),
-          invoiceDate: document.getElementById('pe-invoice-date').value,
           purchaseDate: document.getElementById('pe-purchase-date').value,
           quantityPurchased: Number(qtyEl.value)||0,
           unitPrice: Number(priceEl.value)||0,
@@ -3381,18 +3341,29 @@ function renderItemActionBox(r){
           remarks: document.getElementById('pe-remarks').value.trim(),
           recordedAt: new Date().toISOString()
         };
-        r.history.push({ stage:'Purchase Recorded', action:'recorded', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark: r.purchase.remarks, timestamp:new Date().toISOString() });
-        r.status = (pattern==='service') ? 'purchased' : 'purchased';
+        r.history.push({ stage:'Purchase Recorded', action:'recorded', actorEmail: currentUserEmail, actorName: purchaserName, remark: r.purchase.remarks, timestamp:new Date().toISOString() });
+        r.status = 'purchased';
+        // PO only comes into existence once a purchase is actually recorded —
+        // never generated at approval time, so Print PO has nothing to show
+        // (and nothing to enforce via the UI alone) until this point.
+        if(!poForRequestItem(r.id)) generatePurchaseOrder(r);
         updatePurchaseOrderFromPurchase(r);
         await saveDb();
       });
       if(!ok) return;
       toast('Purchase recorded','success'); openItemDetailModal(r.id);
     });
+    const peDeleteBtn = document.getElementById('pe-delete-btn');
+    if(peDeleteBtn) peDeleteBtn.addEventListener('click', async ()=>{
+      if(!promptAndArchive('requestItem', r, r.itemName+' ('+r.requestNumber+')')) return;
+      const ok = await runSaveAction(peDeleteBtn, 'Deleting…', async ()=>{ await saveDb(); });
+      if(!ok) return;
+      toast('Request deleted (archived)','success'); closeModal(); renderProcurementPage();
+    });
     return;
   }
 
-  if(r.status==='purchased' && pattern==='service' && isMyPurchaseTask(r)){
+  if(r.status==='purchased' && pattern==='service' && canReceiveAction()){
     box.innerHTML = '<div class="plain-divider"></div><h4>Mark Service as Rendered / Performed</h4>'
       + '<div class="field"><label>Date</label><input type="date" id="svc-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
       + '<div class="field"><label>Remarks</label><textarea id="svc-remarks"></textarea></div>'
@@ -3412,18 +3383,19 @@ function renderItemActionBox(r){
     return;
   }
 
-  if(r.status==='purchased' && pattern!=='service' && isMyPurchaseTask(r)){
+  if(r.status==='purchased' && pattern!=='service' && canReceiveAction()){
+    const myName = (myStaffRecord()||{}).name || currentUserEmail;
     box.innerHTML = '<div class="plain-divider"></div><h4>Confirm Item Received</h4>'
       + '<div class="field"><label>Received Date</label><input type="date" id="rc-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
-      + '<div class="field"><label>Received By</label><input type="text" value="'+escapeHtml(r.assignedPurchaserName||currentUserEmail)+'" disabled></div>'
+      + '<div class="field"><label>Received By</label><input type="text" value="'+escapeHtml(myName)+'" disabled></div>'
       + '<div class="field"><label>Remarks</label><textarea id="rc-remarks"></textarea></div>'
       + '<button class="btn btn-primary" id="rc-submit-btn">Confirm Received</button>';
     document.getElementById('rc-submit-btn').addEventListener('click', async function(){
       const btn = this;
       const remark = document.getElementById('rc-remarks').value.trim();
       const ok = await runSaveAction(btn, 'Saving…', async ()=>{
-        r.receipt = { receivedDate: document.getElementById('rc-date').value, receivedByEmail: currentUserEmail, receivedByName: r.assignedPurchaserName||currentUserEmail, remarks: remark, recordedAt: new Date().toISOString() };
-        r.history.push({ stage:'Item Received', action:'received', actorEmail: currentUserEmail, actorName: r.assignedPurchaserName||currentUserEmail, remark, timestamp:new Date().toISOString() });
+        r.receipt = { receivedDate: document.getElementById('rc-date').value, receivedByEmail: currentUserEmail, receivedByName: myName, remarks: remark, recordedAt: new Date().toISOString() };
+        r.history.push({ stage:'Item Received', action:'received', actorEmail: currentUserEmail, actorName: myName, remark, timestamp:new Date().toISOString() });
         if(pattern==='consumable'){
           // Receipt completes the purchase process immediately — it reflects in
           // stock straightaway. Consumption is tracked separately, later, via
@@ -3606,10 +3578,12 @@ function renderManageStaffModalBody(){
     const isTop = topRoles.includes(s.role);
     const canEdit = isTop ? canManageTopRoles() : canManageStaff();
     return '<div class="cat-policy-row">'
-      + '<div class="cat-policy-name">'+escapeHtml(s.name)+' <span class="badge badge-status">'+roleKeyLabel(s.role)+'</span>'+(s.canConsume?' <span class="badge badge-approved">Can Consume</span>':'')+(s.active===false?' <span class="badge badge-rejected">Inactive</span>':'')+'<br><small style="color:var(--color-ink-faint);">'+escapeHtml(s.email||'no email set')+'</small></div>'
+      + '<div class="cat-policy-name">'+escapeHtml(s.name)+' <span class="badge badge-status">'+roleKeyLabel(s.role)+'</span>'+(s.canConsume?' <span class="badge badge-approved">Can Consume</span>':'')+(s.canPurchase?' <span class="badge badge-approved">Can Purchase</span>':'')+(s.canReceive?' <span class="badge badge-approved">Can Receive</span>':'')+(s.active===false?' <span class="badge badge-rejected">Inactive</span>':'')+'<br><small style="color:var(--color-ink-faint);">'+escapeHtml(s.email||'no email set')+'</small></div>'
       + (canEdit ? ('<div class="cat-policy-controls">'
           + '<button class="btn btn-outline btn-sm" data-edit-staff="'+s.id+'">Edit</button>'
           + (isAdmin() ? '<button class="btn btn-outline btn-sm" data-toggle-consume="'+s.id+'">'+(s.canConsume?'Revoke Consume':'Allow Consume')+'</button>' : '')
+          + (isAdmin() ? '<button class="btn btn-outline btn-sm" data-toggle-purchase="'+s.id+'">'+(s.canPurchase?'Revoke Purchase':'Allow Purchase')+'</button>' : '')
+          + (isAdmin() ? '<button class="btn btn-outline btn-sm" data-toggle-receive="'+s.id+'">'+(s.canReceive?'Revoke Receive':'Allow Receive')+'</button>' : '')
           + '<button class="btn btn-danger btn-sm" data-toggle-staff="'+s.id+'">'+(s.active===false?'Reactivate':'Deactivate')+'</button>'
         + '</div>') : '')
       + '</div>';
@@ -3669,6 +3643,26 @@ function renderManageStaffModalBody(){
       const s = DB.staff.find(x=>x.id===btn.getAttribute('data-toggle-consume'));
       const ok = await runSaveAction(btn, '…', async ()=>{
         s.canConsume = !s.canConsume;
+        await saveDb();
+      });
+      if(ok){ toast('Updated','success'); renderManageStaffModalBody(); }
+    });
+  });
+  document.querySelectorAll('[data-toggle-purchase]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const s = DB.staff.find(x=>x.id===btn.getAttribute('data-toggle-purchase'));
+      const ok = await runSaveAction(btn, '…', async ()=>{
+        s.canPurchase = !s.canPurchase;
+        await saveDb();
+      });
+      if(ok){ toast('Updated','success'); renderManageStaffModalBody(); }
+    });
+  });
+  document.querySelectorAll('[data-toggle-receive]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const s = DB.staff.find(x=>x.id===btn.getAttribute('data-toggle-receive'));
+      const ok = await runSaveAction(btn, '…', async ()=>{
+        s.canReceive = !s.canReceive;
         await saveDb();
       });
       if(ok){ toast('Updated','success'); renderManageStaffModalBody(); }
@@ -3793,7 +3787,6 @@ async function buildRequestItemReportPdf(r){
     heading('Purchase Record');
     section('Supplier / Shop:', r.purchase.supplier);
     section('Invoice Number:', r.purchase.invoiceNumber);
-    section('Invoice Date:', formatDateDMY(r.purchase.invoiceDate));
     section('Purchase Date:', formatDateDMY(r.purchase.purchaseDate));
     section('Quantity Purchased:', String(r.purchase.quantityPurchased)+' (requested '+r.quantityRequested+')');
     section('Unit Price:', formatMoney(r.purchase.unitPrice));
