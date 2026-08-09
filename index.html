@@ -398,6 +398,13 @@ tbody tr:hover{ background:#F8FAFC; }
 
 /* ---- Spec sheet ---- */
 .spec-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:16px; }
+.install-card-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:10px; margin-bottom:16px; }
+.install-card{ background:var(--color-surface); border:1px solid var(--color-border); border-radius:8px; padding:12px; }
+.install-card.fully-disposed{ opacity:.6; background:var(--color-surface-2); }
+.install-card-qty{ font-size:14px; font-weight:700; color:var(--color-ink); margin-bottom:6px; }
+.install-card-row{ display:flex; gap:6px; font-size:12px; margin-top:2px; }
+.install-card-row label{ flex:none; font-weight:600; color:var(--color-ink-faint); }
+.install-card-row span{ color:var(--color-ink-soft); }
 .spec-item label{ display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--color-ink-faint); margin-bottom:3px; }
 .spec-item .val{ font-size:14.5px; color:var(--color-ink); font-weight:500; }
 
@@ -1825,6 +1832,7 @@ function canManageConsumption(){
   return Boolean(s && s.canConsume);
 }
 let inventoryPageTab = 'browse';
+let assetsSubTab = 'installed';
 function renderInventoryPage(){
   const app = document.getElementById('app');
   app.innerHTML =
@@ -1835,7 +1843,8 @@ function renderInventoryPage(){
     + '<div class="page-subtitle">Select a category to view and manage its stock.</div>'
     + '<div class="tab-strip">'
     +   '<button class="tab-btn '+(inventoryPageTab==='browse'?'active':'')+'" data-inv-tab="browse">Browse by Category</button>'
-    +   (canManageConsumption() ? '<button class="tab-btn '+(inventoryPageTab==='consumption'?'active':'')+'" data-inv-tab="consumption">Stock Consumption</button>' : '')
+    +   (canManageConsumption() ? '<button class="tab-btn '+(inventoryPageTab==='consumption'?'active':'')+'" data-inv-tab="consumption">Consumables</button>' : '')
+    +   (canManageConsumption() ? '<button class="tab-btn '+(inventoryPageTab==='assets'?'active':'')+'" data-inv-tab="assets">Assets</button>' : '')
     + '</div>'
     + '<div class="tab-panel" id="inv-page-panel"></div>'
     + '</div>';
@@ -1844,6 +1853,7 @@ function renderInventoryPage(){
     b.addEventListener('click', ()=>{ inventoryPageTab = b.getAttribute('data-inv-tab'); renderInventoryPage(); });
   });
   if(inventoryPageTab==='consumption' && canManageConsumption()) renderConsumptionTab();
+  else if(inventoryPageTab==='assets' && canManageConsumption()) renderAssetsTab();
   else renderInventoryBrowseTab();
 }
 function renderInventoryBrowseTab(){
@@ -1865,26 +1875,32 @@ function renderInventoryBrowseTab(){
 let consumptionCategoryFilter = '';
 function renderConsumptionTab(){
   const panel = document.getElementById('inv-page-panel');
-  const allItems = DB.inventoryItems.filter(i=>!i.deleted);
-  if(!allItems.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📉</div><h3>No stock to consume yet</h3></div>'; return; }
+  // Consumables only — items whose catalog Item Type is Consumable. Assets
+  // (even ones sitting spare with quantity > 0) never appear here; they
+  // live under the Assets tab instead.
+  const allItems = DB.inventoryItems.filter(i=>!i.deleted && itemPatternOf(i)==='consumable');
+  if(!allItems.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📉</div><h3>No consumable stock yet</h3></div>'; return; }
   const cats = DB.categories.filter(c=>!c.deleted);
   const items = allItems.filter(i=>!consumptionCategoryFilter || i.categoryId===consumptionCategoryFilter).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const filterHtml = '<div class="field" style="max-width:280px; margin-bottom:12px;"><label>Filter by Category</label>'
     + '<select id="consumption-cat-filter"><option value="">— All Categories —</option>'
     + cats.map(c=>'<option value="'+c.id+'" '+(consumptionCategoryFilter===c.id?'selected':'')+'>'+escapeHtml(c.name)+'</option>').join('')
     + '</select></div>';
-  panel.innerHTML = '<div class="page-subtitle-inline">Record consumption directly against any item\'s stock, including where it actually went — independent of any specific purchase.</div>'
+  panel.innerHTML = '<div class="page-subtitle-inline">Record consumption directly against any consumable\'s stock, including where it actually went — independent of any specific purchase.</div>'
     + filterHtml
     + (items.length
       ? '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Current Stock</th><th></th></tr></thead><tbody>'
-        + items.map(i=>'<tr><td>'+escapeHtml(i.name)+'</td><td>'+escapeHtml(catName(i.categoryId))+'</td><td><strong>'+escapeHtml(i.quantity)+'</strong> '+escapeHtml(i.unit||'')+'</td><td><button class="btn btn-outline btn-sm" data-consume-item="'+i.id+'">Consume</button></td></tr>').join('')
+        + items.map(i=>{
+            const zero = Number(i.quantity)<=0;
+            return '<tr><td>'+escapeHtml(i.name)+'</td><td>'+escapeHtml(catName(i.categoryId))+'</td><td><strong>'+escapeHtml(i.quantity)+'</strong> '+escapeHtml(i.unit||'')+'</td><td><button class="btn btn-outline btn-sm" data-consume-item="'+i.id+'" '+(zero?'disabled title="No stock available to consume"':'')+'>Consume</button></td></tr>';
+          }).join('')
         + '</tbody></table></div>'
       : '<div class="empty-state"><div class="icon">📉</div><h3>No items in this category</h3></div>');
   document.getElementById('consumption-cat-filter').addEventListener('change', (e)=>{
     consumptionCategoryFilter = e.target.value;
     renderConsumptionTab();
   });
-  panel.querySelectorAll('[data-consume-item]').forEach(btn=>{
+  panel.querySelectorAll('[data-consume-item]:not([disabled])').forEach(btn=>{
     btn.addEventListener('click', ()=>openConsumeModal(btn.getAttribute('data-consume-item')));
   });
 }
@@ -1920,6 +1936,157 @@ function openConsumeModal(itemId){
     });
     if(!ok) return;
     toast('Consumption recorded','success'); closeModal(); renderInventoryPage();
+  });
+}
+
+/* ---------------- Assets ---------------- */
+function renderAssetsTab(){
+  const panel = document.getElementById('inv-page-panel');
+  panel.innerHTML = '<div class="tab-strip" style="margin-bottom:0;">'
+    + ['installed','spare','disposed'].map(k=>{
+        const label = { installed:'Installed Assets', spare:'Spare Assets', disposed:'Disposed-Off Assets' }[k];
+        return '<button class="tab-btn '+(assetsSubTab===k?'active':'')+'" data-assets-subtab="'+k+'">'+label+'</button>';
+      }).join('')
+    + '</div><div class="tab-panel" id="assets-subpanel"></div>';
+  document.querySelectorAll('[data-assets-subtab]').forEach(b=>{
+    b.addEventListener('click', ()=>{ assetsSubTab = b.getAttribute('data-assets-subtab'); renderAssetsTab(); });
+  });
+  if(assetsSubTab==='spare') renderSpareAssetsSubTab();
+  else if(assetsSubTab==='disposed') renderDisposedAssetsSubTab();
+  else renderInstalledAssetsSubTab();
+}
+function assetItems(){ return DB.inventoryItems.filter(i=>!i.deleted && itemPatternOf(i)==='asset'); }
+function renderInstalledAssetsSubTab(){
+  const panel = document.getElementById('assets-subpanel');
+  const items = assetItems().filter(i=>installedQtyForItem(i)>0).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🏫</div><h3>No assets installed yet</h3></div>'; return; }
+  panel.innerHTML = '<div class="page-subtitle-inline">Click a row to see each installation\'s exact location and date.</div>'
+    + '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Item Code</th><th>Qty Installed</th><th></th></tr></thead><tbody>'
+    + items.map(i=>'<tr class="row-clickable" data-open-item="'+i.id+'"><td>'+escapeHtml(i.name)+'</td><td>'+escapeHtml(i.itemCode||'—')+'</td><td>'+installedQtyForItem(i)+'</td><td><button class="btn btn-danger btn-sm" data-dispose-item="'+i.id+'">Dispose</button></td></tr>').join('')
+    + '</tbody></table></div>';
+  panel.querySelectorAll('[data-open-item]').forEach(row=>{
+    row.addEventListener('click', ()=>{ location.hash = '#/inventory/item/'+row.getAttribute('data-open-item'); });
+  });
+  panel.querySelectorAll('[data-dispose-item]').forEach(btn=>{
+    btn.addEventListener('click', (ev)=>{ ev.stopPropagation(); openDisposeAssetModal(btn.getAttribute('data-dispose-item')); });
+  });
+}
+function renderSpareAssetsSubTab(){
+  const panel = document.getElementById('assets-subpanel');
+  const items = assetItems().filter(i=>Number(i.quantity)>0).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📦</div><h3>No spare assets right now</h3></div>'; return; }
+  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Item Code</th><th>Qty Spare</th><th></th></tr></thead><tbody>'
+    + items.map(i=>'<tr class="row-clickable" data-open-item="'+i.id+'"><td>'+escapeHtml(i.name)+'</td><td>'+escapeHtml(i.itemCode||'—')+'</td><td>'+i.quantity+'</td><td><button class="btn btn-primary btn-sm" data-install-item="'+i.id+'">Install Asset</button></td></tr>').join('')
+    + '</tbody></table></div>';
+  panel.querySelectorAll('[data-open-item]').forEach(row=>{
+    row.addEventListener('click', ()=>{ location.hash = '#/inventory/item/'+row.getAttribute('data-open-item'); });
+  });
+  panel.querySelectorAll('[data-install-item]').forEach(btn=>{
+    btn.addEventListener('click', (ev)=>{ ev.stopPropagation(); openInstallAssetModalForItem(btn.getAttribute('data-install-item')); });
+  });
+}
+function renderDisposedAssetsSubTab(){
+  const panel = document.getElementById('assets-subpanel');
+  const items = assetItems().filter(i=>disposedQtyForItem(i)>0).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🗑️</div><h3>No disposed assets on record</h3></div>'; return; }
+  panel.innerHTML = '<div class="page-subtitle-inline">Permanent historical record — click a row for full disposal details.</div>'
+    + '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Item Code</th><th>Qty Disposed</th></tr></thead><tbody>'
+    + items.map(i=>'<tr class="row-clickable" data-open-item="'+i.id+'"><td>'+escapeHtml(i.name)+'</td><td>'+escapeHtml(i.itemCode||'—')+'</td><td>'+disposedQtyForItem(i)+'</td></tr>').join('')
+    + '</tbody></table></div>';
+  panel.querySelectorAll('[data-open-item]').forEach(row=>{
+    row.addEventListener('click', ()=>{ location.hash = '#/inventory/item/'+row.getAttribute('data-open-item'); });
+  });
+}
+// Item-linked Install — same fields/validation as the request-linked Install
+// inside Item Issue / Return, just triggered from already-spare stock with
+// no specific procurement request behind this particular action.
+function openInstallAssetModalForItem(itemId){
+  const item = DB.inventoryItems.find(i=>i.id===itemId);
+  if(!item){ toast('Item not found','error'); return; }
+  const available = Number(item.quantity)||0;
+  if(available<=0){ toast('No spare stock available to install','error'); return; }
+  const buildings = DB.buildings.filter(b=>!b.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
+  const body = '<div class="field-hint" style="margin-bottom:10px;">Spare available: <strong>'+available+'</strong></div>'
+    + '<div class="field"><label>Quantity</label><input type="number" id="ia-qty" min="1" max="'+available+'" value="'+available+'"></div>'
+    + '<div class="field-row"><div class="field"><label>Building</label><select id="ia-building"><option value="">— Select —</option>'+buildings.map(b=>'<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('')+'</select></div>'
+    + '<div class="field"><label>Room (optional)</label><select id="ia-room"><option value="">— None —</option></select></div></div>'
+    + '<div class="field"><label>Remarks (optional)</label><textarea id="ia-remarks"></textarea></div>';
+  openModal('Install Asset — '+escapeHtml(item.name), body,
+    '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-primary" id="ia-submit-btn">Install</button>', 'module-inventory');
+  document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+  const bSel = document.getElementById('ia-building');
+  function refreshRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===bSel.value); document.getElementById('ia-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
+  bSel.addEventListener('change', refreshRooms); refreshRooms();
+  document.getElementById('ia-submit-btn').addEventListener('click', async function(){
+    const btn = this;
+    const qty = Number(document.getElementById('ia-qty').value)||0;
+    const liveItem = DB.inventoryItems.find(i=>i.id===itemId);
+    const liveAvailable = liveItem ? Number(liveItem.quantity)||0 : 0;
+    if(qty<=0 || qty>liveAvailable){ toast('Quantity must be between 1 and '+liveAvailable+' (currently spare)','error'); return; }
+    const buildingId = bSel.value;
+    if(!buildingId){ toast('Choose a building','error'); return; }
+    const roomId = document.getElementById('ia-room').value;
+    const remarks = document.getElementById('ia-remarks').value.trim();
+    const ok = await runSaveAction(btn, 'Installing…', async ()=>{
+      performAssetInstall(liveItem, qty, buildingId, roomId, remarks, '');
+      await saveDb();
+    });
+    if(!ok) return;
+    toast('Asset installed','success'); closeModal(); renderInventoryPage();
+  });
+}
+function openDisposeAssetModal(itemId){
+  const item = DB.inventoryItems.find(i=>i.id===itemId);
+  if(!item){ toast('Item not found','error'); return; }
+  const active = activeInstallationsForItem(item);
+  if(!active.length){ toast('Nothing currently installed to dispose','error'); return; }
+  const staffOptions = DB.staff.filter(s=>!s.deleted && s.active!==false).map(s=>'<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>').join('');
+  const locationOptions = active.map(ins=>{
+    const remaining = (Number(ins.qty)||0)-(Number(ins.disposedQty)||0);
+    return '<option value="'+ins.id+'" data-remaining="'+remaining+'">'+escapeHtml(buildingName(ins.buildingId)+(ins.roomId?' → '+roomName(ins.roomId):''))+' ('+remaining+' remaining)</option>';
+  }).join('');
+  const mine = myStaffRecord();
+  const body = '<div class="field"><label>Location</label><select id="da-location">'+locationOptions+'</select></div>'
+    + '<div class="field"><label>Quantity</label><input type="number" id="da-qty" min="1" value="1"></div>'
+    + '<div class="field"><label>Disposed Off By</label><select id="da-by">'+staffOptions+'</select></div>'
+    + '<div class="field"><label>Date</label><input type="date" id="da-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+    + '<div class="field"><label>Reason</label><select id="da-reason"><option>Asset faulty</option><option>Asset poor performance</option><option>Technological upgrade</option><option>Other</option></select></div>'
+    + '<div class="field" id="da-other-wrap" style="display:none;"><label>Reason (specify)</label><input type="text" id="da-other-text"></div>'
+    + '<div class="field"><label>Remarks (optional)</label><textarea id="da-remarks"></textarea></div>';
+  openModal('Dispose — '+escapeHtml(item.name), body,
+    '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-danger" id="da-submit-btn">Submit Disposal</button>', 'module-inventory');
+  document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+  if(mine){ const byS=document.getElementById('da-by'); if([...byS.options].some(o=>o.value===mine.id)) byS.value=mine.id; }
+  const locSel = document.getElementById('da-location');
+  const qtyEl = document.getElementById('da-qty');
+  function refreshQtyCap(){ const opt = locSel.selectedOptions[0]; const rem = opt?Number(opt.getAttribute('data-remaining'))||1:1; qtyEl.max = rem; qtyEl.value = Math.min(Number(qtyEl.value)||1, rem); }
+  locSel.addEventListener('change', refreshQtyCap); refreshQtyCap();
+  const reasonSel = document.getElementById('da-reason');
+  reasonSel.addEventListener('change', ()=>{ document.getElementById('da-other-wrap').style.display = reasonSel.value==='Other' ? '' : 'none'; });
+  document.getElementById('da-submit-btn').addEventListener('click', async function(){
+    const btn = this;
+    const installationId = locSel.value;
+    const opt = locSel.selectedOptions[0];
+    const remaining = opt ? Number(opt.getAttribute('data-remaining'))||0 : 0;
+    const qty = Number(qtyEl.value)||0;
+    if(qty<=0 || qty>remaining){ toast('Quantity must be between 1 and '+remaining+' at that location','error'); return; }
+    const staffRec = staffById(document.getElementById('da-by').value);
+    if(!staffRec){ toast('Choose who is disposing this','error'); return; }
+    let reason = reasonSel.value;
+    if(reason==='Other'){
+      const otherText = document.getElementById('da-other-text').value.trim();
+      if(!otherText){ toast('Specify the reason','error'); return; }
+      reason = otherText;
+    }
+    const date = document.getElementById('da-date').value;
+    const remarks = document.getElementById('da-remarks').value.trim();
+    const ok = await runSaveAction(btn, 'Saving…', async ()=>{
+      const liveItem = DB.inventoryItems.find(i=>i.id===itemId);
+      performAssetDispose(liveItem, installationId, qty, staffRec.email, staffRec.name, date, reason, remarks);
+      await saveDb();
+    });
+    if(!ok) return;
+    toast('Disposed','success'); closeModal(); renderInventoryPage();
   });
 }
 
@@ -2114,16 +2281,19 @@ function renderItemsTable(catId){
     + '</tr></thead><tbody>'
     + items.map(i=>{
         const low = Number(i.reorderThreshold)>0 && Number(i.quantity) <= Number(i.reorderThreshold);
-        // Location is derived from the item's own recorded install transaction
-        // (installedBuildingId/installedRoomId, set at Item Issue → Install
-        // time) — never hardcoded — so it only ever shows what actually
-        // happened, and stays blank for anything never installed.
-        const statusLabel = (i.status==='Assets Installed' && i.installedQty)
-          ? 'Assets Installed: '+i.installedQty
+        // Location is derived live from the item's own installation records
+        // — never hardcoded — so it only ever shows what actually happened.
+        // A single active location shows directly; more than one (installed
+        // across several rooms over time) is summarized rather than picking
+        // one arbitrarily — full breakdown lives on the item detail page.
+        const activeInst = activeInstallationsForItem(i);
+        const installedTotal = installedQtyForItem(i);
+        const statusLabel = (i.status==='Assets Installed' && installedTotal>0)
+          ? 'Assets Installed: '+installedTotal
           : (i.status||'—');
-        const locationLabel = i.installedBuildingId
-          ? buildingName(i.installedBuildingId)+(i.installedRoomId?' → '+roomName(i.installedRoomId):'')
-          : '—';
+        const locationLabel = activeInst.length===0 ? '—'
+          : activeInst.length===1 ? (buildingName(activeInst[0].buildingId)+(activeInst[0].roomId?' → '+roomName(activeInst[0].roomId):''))
+          : activeInst.length+' locations';
         return '<tr class="row-clickable" data-open-item="'+i.id+'">'
           + '<td>'+escapeHtml(i.name)+(low?' <span class="badge badge-high">low</span>':'')+'</td>'
           + '<td>'+escapeHtml(i.quantity)+'</td>'
@@ -2189,14 +2359,16 @@ function renderInventoryItemDetailPage(itemId){
     +   '<div class="spec-item"><label>Average Purchase Cost</label><div class="val">'+formatMoney(avgCost)+'</div></div>'
     +   '<div class="spec-item"><label>Last Purchase Date</label><div class="val">'+formatDate(lastPurchase)+'</div></div>'
     +   '<div class="spec-item"><label>Preferred Supplier</label><div class="val">'+escapeHtml(item.preferredSupplier||'—')+'</div></div>'
-    +   '<div class="spec-item"><label>Status</label><div class="val">'+escapeHtml((item.status==='Assets Installed' && item.installedQty) ? 'Assets Installed: '+item.installedQty : (item.status||'—'))+'</div></div>'
-    +   (item.installedBuildingId ? '<div class="spec-item"><label>Location</label><div class="val">'+escapeHtml(buildingName(item.installedBuildingId)+(item.installedRoomId?' → '+roomName(item.installedRoomId):''))+'</div></div>' : '')
+    +   '<div class="spec-item"><label>Status</label><div class="val">'+escapeHtml((item.status==='Assets Installed' && installedQtyForItem(item)>0) ? 'Assets Installed: '+installedQtyForItem(item) : (item.status||'—'))+'</div></div>'
     + '</div>'
     + (item.remarks ? '<div class="field"><label>Remarks</label><div class="val">'+escapeHtml(item.remarks)+'</div></div>' : '')
 
     + '<div class="section-heading">Item Photo</div>'
     + '<div id="item-photo-box" style="margin-bottom:8px;">'+renderItemPhotoHtml(item)+'</div>'
     + (isAdmin() ? '<div class="field-row"><div class="field"><input type="file" id="item-photo-input" accept="image/*"></div><div class="field"><button class="btn btn-outline btn-sm" id="item-photo-upload-btn">Upload Photo</button></div></div>' : '')
+
+    + renderInstallationHistoryHtml(item)
+    + renderDisposalHistoryHtml(item)
 
     + '<div class="section-heading">Stock Ledger</div>'
     + renderLedgerTableHtml(ledger)
@@ -2234,6 +2406,45 @@ function renderInventoryItemDetailPage(itemId){
       await saveDb(); toast('Photo uploaded','success'); renderInventoryItemDetailPage(item.id);
     }catch(e){ toast('Upload failed: '+e.message, 'error'); uploadBtn.disabled = false; uploadBtn.textContent = 'Upload Photo'; }
   });
+}
+/* Per-location cards — an asset can be installed across several locations
+   over time (2 here, 1 there), each install its own immutable event.
+   Fully-disposed installs still show, muted, so the history stays complete. */
+function renderInstallationHistoryHtml(item){
+  if(itemPatternOf(item)!=='asset') return '';
+  const list = item.installations||[];
+  if(!list.length) return '';
+  return '<div class="section-heading">Installation History</div>'
+    + '<div class="install-card-grid">'
+    + list.slice().reverse().map(ins=>{
+        const remaining = (Number(ins.qty)||0)-(Number(ins.disposedQty)||0);
+        const fullyDisposed = remaining<=0;
+        return '<div class="install-card'+(fullyDisposed?' fully-disposed':'')+'">'
+          + '<div class="install-card-qty">Qty: '+(fullyDisposed?ins.qty+' <span class="badge badge-rejected">Fully Disposed</span>':remaining)+'</div>'
+          + '<div class="install-card-row"><label>Location:</label><span>'+escapeHtml(buildingName(ins.buildingId)+(ins.roomId?' → '+roomName(ins.roomId):''))+'</span></div>'
+          + '<div class="install-card-row"><label>Installed:</label><span>'+formatDateDMY(ins.installedDate)+' by '+escapeHtml(ins.installedByName||'—')+'</span></div>'
+          + (ins.requestNumber ? '<div class="install-card-row"><label>Request:</label><span>'+escapeHtml(ins.requestNumber)+'</span></div>' : '')
+          + (ins.remarks ? '<div class="install-card-row"><label>Remarks:</label><span>'+escapeHtml(ins.remarks)+'</span></div>' : '')
+          + '</div>';
+      }).join('')
+    + '</div>';
+}
+function renderDisposalHistoryHtml(item){
+  if(itemPatternOf(item)!=='asset') return '';
+  const list = item.disposals||[];
+  if(!list.length) return '';
+  return '<div class="section-heading">Disposal History</div>'
+    + '<div class="install-card-grid">'
+    + list.slice().reverse().map(d=>{
+        return '<div class="install-card fully-disposed">'
+          + '<div class="install-card-qty">Qty: '+d.qty+'</div>'
+          + '<div class="install-card-row"><label>From:</label><span>'+escapeHtml(buildingName(d.buildingId)+(d.roomId?' → '+roomName(d.roomId):''))+'</span></div>'
+          + '<div class="install-card-row"><label>Disposed:</label><span>'+formatDateDMY(d.date)+' by '+escapeHtml(d.disposedByName||'—')+'</span></div>'
+          + '<div class="install-card-row"><label>Reason:</label><span>'+escapeHtml(d.reason)+'</span></div>'
+          + (d.remarks ? '<div class="install-card-row"><label>Remarks:</label><span>'+escapeHtml(d.remarks)+'</span></div>' : '')
+          + '</div>';
+      }).join('')
+    + '</div>';
 }
 function renderItemPhotoHtml(item){
   if(!item.photoFileId) return '<div class="field-hint">No photo uploaded yet.</div>';
@@ -2502,20 +2713,102 @@ function syncConsumableStock(r){
 }
 function syncAssetToInventory(r, personEmail, personName){
   const qty = (r.purchase && r.purchase.quantityPurchased) || 1;
-  const item = {
-    id: nextId('item'), name: r.itemName, categoryId: r.categoryId,
-    catalogItemId: r.catalogItemId||null, itemCode: r.itemCode||'',
-    quantity: 0, unit:'unit', cost: r.purchase ? r.purchase.totalAmount : 0, reorderThreshold: 0, minStock: 0,
-    preferredSupplier: r.purchase ? (r.purchase.supplier||'') : '',
-    purchaseDate: r.purchase ? r.purchase.purchaseDate : '', status:'Received — Awaiting Installation',
-    remarks: 'Received by '+personName+' · Auto-added from Procurement · '+r.requestNumber,
-    linkedRequestItemId: r.id, history: [], updatedAt: new Date().toISOString()
-  };
-  DB.inventoryItems.push(item);
-  itemHistoryPush(item, 'Created', 'Auto-created via '+r.requestNumber+', received by '+personName);
+  // Same merge-by-identity rule as syncConsumableStock: a new procurement
+  // request for an asset that's already tracked must add to that item's
+  // existing stock, never spawn a second row for the same item.
+  let item = DB.inventoryItems.find(i=> !i.deleted && i.categoryId===r.categoryId
+    && (i.name||'').toLowerCase()===(r.itemName||'').toLowerCase());
+  if(item){
+    item.updatedAt = new Date().toISOString();
+    itemHistoryPush(item, 'Stock received', qty+' received via '+r.requestNumber);
+  } else {
+    item = {
+      id: nextId('item'), name: r.itemName, categoryId: r.categoryId,
+      catalogItemId: r.catalogItemId||null, itemCode: r.itemCode||'',
+      quantity: 0, unit:'unit', cost: r.purchase ? r.purchase.totalAmount : 0, reorderThreshold: 0, minStock: 0,
+      preferredSupplier: r.purchase ? (r.purchase.supplier||'') : '',
+      purchaseDate: r.purchase ? r.purchase.purchaseDate : '', status:'Received — Awaiting Installation',
+      remarks: 'Received by '+personName+' · Auto-added from Procurement · '+r.requestNumber,
+      linkedRequestItemId: r.id, installations: [], disposals: [], history: [], updatedAt: new Date().toISOString()
+    };
+    DB.inventoryItems.push(item);
+    itemHistoryPush(item, 'Created', 'Auto-created via '+r.requestNumber+', received by '+personName);
+  }
+  if(!Array.isArray(item.installations)) item.installations = [];
+  if(!Array.isArray(item.disposals)) item.disposals = [];
   const bal = pushLedgerEntry(item.id, 'Goods Receipt', r.requestNumber, qty, 0, 'Asset received by '+personName, r.purchase?r.purchase.purchaseDate:null);
-  DB.stockLedger[DB.stockLedger.length-1].unitCostAtEntry = qty>0 ? (item.cost/qty) : item.cost;
+  DB.stockLedger[DB.stockLedger.length-1].unitCostAtEntry = qty>0 ? ((r.purchase?r.purchase.totalAmount:item.cost)/qty) : item.cost;
   item.quantity = bal;
+  if(r.purchase && r.purchase.supplier) item.preferredSupplier = r.purchase.supplier;
+}
+
+/* ============================================================
+   Asset install/dispose — one shared mechanism used from both Item Issue /
+   Return (request-linked, for freshly-received stock) and Spare Assets
+   (item-linked, for stock already sitting spare). Each install is its own
+   immutable event (own location/date), so one item can be installed across
+   several locations over time without losing that history; disposal
+   reduces an installation's *remaining* qty rather than editing it away.
+   ============================================================ */
+function itemPatternOf(item){
+  if(item.catalogItemId){
+    const ci = DB.itemCatalog.find(c=>c.id===item.catalogItemId);
+    if(ci) return itemPattern({ itemTypeId: ci.itemTypeId });
+  }
+  return 'consumable';
+}
+function installedQtyForItem(item){
+  return (item.installations||[]).reduce((s,ins)=>s+(Number(ins.qty)||0)-(Number(ins.disposedQty)||0), 0);
+}
+function disposedQtyForItem(item){
+  return (item.disposals||[]).reduce((s,d)=>s+(Number(d.qty)||0), 0);
+}
+function activeInstallationsForItem(item){
+  return (item.installations||[]).filter(ins => (Number(ins.qty)||0)-(Number(ins.disposedQty)||0) > 0);
+}
+function performAssetInstall(item, qty, buildingId, roomId, remarks, requestNumber){
+  if(!Array.isArray(item.installations)) item.installations = [];
+  if(!Array.isArray(item.disposals)) item.disposals = [];
+  const destLabel = buildingName(buildingId)+(roomId?' → '+roomName(roomId):'');
+  const actorName = (myStaffRecord()||{}).name || currentUserEmail;
+  const remark = 'Installed '+qty+' at '+destLabel+(remarks?' — '+remarks:'');
+  // 'Install' is a distinct ledger type from 'Issue' — installing an asset
+  // is not consumption, and must never be counted by the Consumption totals
+  // (which specifically filter type==='Issue').
+  const balance = pushLedgerEntry(item.id, 'Install', requestNumber||'', 0, qty, remark);
+  item.quantity = balance;
+  item.updatedAt = new Date().toISOString();
+  item.status = 'Assets Installed';
+  item.installations.push({
+    id: nextId('inst'), qty, disposedQty: 0, buildingId, roomId: roomId||null,
+    installedDate: new Date().toISOString().slice(0,10), requestNumber: requestNumber||'',
+    installedByEmail: currentUserEmail, installedByName: actorName, remarks: remarks||'',
+    timestamp: new Date().toISOString()
+  });
+  itemHistoryPush(item, 'Installed', remark);
+}
+function performAssetDispose(item, installationId, qty, disposedByEmail, disposedByName, date, reason, remarks){
+  const inst = (item.installations||[]).find(i=>i.id===installationId);
+  if(!inst) throw new Error('Installation record not found');
+  const remaining = (Number(inst.qty)||0) - (Number(inst.disposedQty)||0);
+  if(qty<=0 || qty>remaining) throw new Error('Quantity must be between 1 and '+remaining+' (currently installed at that location)');
+  inst.disposedQty = (Number(inst.disposedQty)||0) + qty;
+  const destLabel = buildingName(inst.buildingId)+(inst.roomId?' → '+roomName(inst.roomId):'');
+  const remark = 'Disposed '+qty+' from '+destLabel+' — '+reason+(remarks?' — '+remarks:'');
+  if(!Array.isArray(item.disposals)) item.disposals = [];
+  item.disposals.push({
+    id: nextId('disp'), installationId, qty, disposedByEmail, disposedByName,
+    date: date || new Date().toISOString().slice(0,10), reason, remarks: remarks||'',
+    buildingId: inst.buildingId, roomId: inst.roomId, timestamp: new Date().toISOString()
+  });
+  // Recorded on the ledger for audit visibility (type 'Dispose', distinct
+  // from both 'Install' and 'Issue') but deliberately does NOT reduce
+  // item.quantity — disposal removes installed stock, not available/spare
+  // stock, and must never be read as a consumption transaction.
+  pushLedgerEntry(item.id, 'Dispose', '', 0, 0, remark);
+  item.updatedAt = new Date().toISOString();
+  if(installedQtyForItem(item)<=0) item.status = 'Disposed (fully)';
+  itemHistoryPush(item, 'Disposed', remark);
 }
 
 function myPurchaseQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='purchase_pending' && canPurchaseAction()); }
@@ -3265,28 +3558,18 @@ function openItemIssueModal(reqItemId){
 
     const ok = await runSaveAction(btn, 'Saving…', async ()=>{
       if(action==='issue'){
-        const destLabel = buildingId ? (buildingName(buildingId)+(roomId?' / '+roomName(roomId):'')) : '';
-        const remark = (isAsset ? 'Installed' : 'Consumed')+(destLabel?' at '+destLabel:'')+(purpose?' — '+purpose:'')+(remarks?' — '+remarks:'');
-        // Asset install and consumable consumption are NOT the same kind of
-        // stock movement, so they get distinct ledger transaction types.
-        // 'Issue' is what the Consumption dashboard cards and Stock
-        // Consumption totals actually filter on — an install must never be
-        // tagged that way, or it silently gets counted as consumed stock.
-        const balance = pushLedgerEntry(liveInv.id, isAsset ? 'Install' : 'Issue', r.requestNumber, 0, qty, remark);
-        liveInv.quantity = balance;
-        liveInv.updatedAt = new Date().toISOString();
-        itemHistoryPush(liveInv, isAsset?'Installed':'Consumed', qty+' — '+remark);
         if(isAsset){
+          performAssetInstall(liveInv, qty, buildingId, roomId, remarks, r.requestNumber);
           r.assignments.push({ responsiblePersonEmail: currentUserEmail, responsiblePersonName: actorName, buildingId, roomId, categoryId:r.categoryId, quantity: qty, remarks, assignedAt:new Date().toISOString(), assignedByEmail:currentUserEmail });
-          liveInv.status = 'Assets Installed';
-          // Derived-from-transaction location fields, read by Browse by
-          // Category — never hardcoded, always sourced from the actual
-          // building/room picked in this Install action.
-          liveInv.installedQty = (Number(liveInv.installedQty)||0) + qty;
-          liveInv.installedBuildingId = buildingId;
-          liveInv.installedRoomId = roomId || null;
+          r.history.push({ stage:'Item Issue', action:'installed '+qty, actorEmail: currentUserEmail, actorName, remark:'Installed at '+buildingName(buildingId)+(roomId?' → '+roomName(roomId):''), timestamp:new Date().toISOString() });
+        } else {
+          const remark = 'Consumed'+(buildingId?' at '+buildingName(buildingId)+(roomId?' / '+roomName(roomId):''):'')+(purpose?' — '+purpose:'')+(remarks?' — '+remarks:'');
+          const balance = pushLedgerEntry(liveInv.id, 'Issue', r.requestNumber, 0, qty, remark);
+          liveInv.quantity = balance;
+          liveInv.updatedAt = new Date().toISOString();
+          itemHistoryPush(liveInv, 'Consumed', qty+' — '+remark);
+          r.history.push({ stage:'Item Issue', action:'consumed '+qty, actorEmail: currentUserEmail, actorName, remark, timestamp:new Date().toISOString() });
         }
-        r.history.push({ stage:'Item Issue', action: (isAsset?'installed':'consumed')+' '+qty, actorEmail: currentUserEmail, actorName, remark, timestamp:new Date().toISOString() });
       } else {
         r.history.push({ stage:'Item Issue', action:'kept as spare inventory '+qty, actorEmail: currentUserEmail, actorName, remark: remarks, timestamp:new Date().toISOString() });
       }
