@@ -152,7 +152,7 @@ button{ font-family:inherit; cursor:pointer; }
 .plain-divider{ height:1px; margin:22px 0 16px; background:linear-gradient(90deg, transparent, var(--color-border) 15%, var(--color-border) 85%, transparent); }
 
 /* ---- Header: brand band + nav ribbon ---- */
-.brand-band{ background:linear-gradient(180deg, var(--color-primary-light), var(--color-surface)); border-bottom:1px solid var(--color-border); }
+.brand-band{ position:relative; z-index:55; background:linear-gradient(180deg, var(--color-primary-light), var(--color-surface)); border-bottom:1px solid var(--color-border); }
 .brand-band-inner{ display:flex; align-items:center; justify-content:space-between; gap:24px; padding:15px 0; }
 .brand{ display:flex; align-items:center; gap:13px; text-decoration:none; color:var(--color-ink); }
 .brand-logo-img{ height:42px; width:auto; display:block; flex:none; }
@@ -274,6 +274,25 @@ button{ font-family:inherit; cursor:pointer; }
 .kpi-row{ display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:12px; }
 .kpi-card{ background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:12px 15px; transition:box-shadow .18s ease, transform .18s ease; }
 .kpi-card:hover{ box-shadow:var(--shadow); transform:translateY(-1px); }
+
+.activity-carousel-wrap{ display:flex; align-items:center; gap:6px; margin-bottom:8px; }
+.activity-carousel{ display:flex; gap:10px; overflow-x:auto; scroll-behavior:smooth; padding:2px 2px 6px; scrollbar-width:thin; flex:1; }
+.activity-carousel::-webkit-scrollbar{ height:6px; }
+.activity-carousel::-webkit-scrollbar-thumb{ background:var(--color-border); border-radius:3px; }
+.activity-card{
+  flex:none; width:220px; background:var(--color-surface); border:1px solid var(--color-border); border-radius:10px;
+  padding:12px; text-decoration:none; color:inherit; transition:box-shadow var(--motion), transform var(--motion), border-color var(--motion);
+}
+.activity-card:hover{ box-shadow:var(--shadow); transform:translateY(-1px); border-color:var(--color-primary); }
+.activity-card-icon{ font-size:18px; margin-bottom:6px; }
+.activity-card-title{ font-size:12.5px; font-weight:700; color:var(--color-ink); line-height:1.3; margin-bottom:3px; }
+.activity-card-meta{ font-size:11px; color:var(--color-ink-soft); margin-bottom:4px; }
+.activity-card-time{ font-size:10.5px; color:var(--color-ink-faint); }
+.activity-nav-btn{
+  flex:none; width:30px; height:30px; border-radius:50%; border:1px solid var(--color-border); background:var(--color-surface);
+  color:var(--color-ink-soft); font-size:16px; line-height:1; cursor:pointer; transition:background var(--motion), color var(--motion), border-color var(--motion);
+}
+.activity-nav-btn:hover{ background:var(--color-primary-light); color:var(--color-primary-dark); border-color:var(--color-primary); }
 .kpi-lbl{ font-size:11.5px; color:var(--color-ink-faint); margin-bottom:4px; }
 .kpi-val{ font-size:20px; font-weight:700; color:var(--color-ink); letter-spacing:-.01em; }
 
@@ -348,6 +367,20 @@ button{ font-family:inherit; cursor:pointer; }
 .tab-btn{ background:none; border:none; border-radius:6px 6px 0 0; padding:10px 16px; font-size:13.5px; font-weight:600; color:var(--color-ink-soft); border-bottom:2px solid transparent; margin-bottom:-1.5px; white-space:nowrap; transition:color var(--motion-slow), background-color var(--motion-slow), border-color var(--motion-slow); }
 .tab-btn:hover{ color:var(--color-primary-dark); background:var(--color-surface-2); }
 .tab-btn.active{ color:var(--color-ink); border-bottom-color:var(--color-primary); font-weight:700; }
+.proc-tab-strip .tab-btn{ display:inline-flex; align-items:center; gap:7px; padding:11px 14px; }
+.proc-tab-strip .tab-btn.active{ background:var(--color-primary-light); border-radius:8px 8px 0 0; }
+.tab-count-badge{
+  display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px;
+  border-radius:999px; background:var(--color-ink-faint); color:#fff; font-size:10.5px; font-weight:700;
+}
+.proc-tab-strip .tab-btn.active .tab-count-badge{ background:var(--color-primary); }
+/* "Something just changed here" — subtle, short-lived, never flashing. */
+.proc-tab-strip .tab-btn.tab-attention{ animation:tabAttentionPulse 1.8s ease-out 1; }
+.proc-tab-strip .tab-btn.tab-attention .tab-count-badge{ background:var(--action-approve); }
+@keyframes tabAttentionPulse{
+  0%{ background:var(--action-approve-soft); }
+  100%{ background:transparent; }
+}
 .tab-panel{ padding-top:14px; }
 
 /* ---- Tables ---- */
@@ -1119,6 +1152,24 @@ async function driveFetchAuthed(url, options){
     renderTopbar();
     throw new Error('Your session has expired. Please sign in again.');
   }
+  if(res.status === 403){
+    // A 403 here is usually NOT "you're not allowed" — it's a token that
+    // was issued with fewer scopes than the app now needs (e.g. it was
+    // obtained before Drive access was fully set up for this account, or
+    // before a scope was added). restoreSession() only checks expiry, not
+    // actual granted scope, so a degraded token can otherwise sit in
+    // sessionStorage and keep failing for up to an hour even after the
+    // underlying account access is fixed. Clearing it forces a fresh
+    // prompt:'consent' login next time, which re-requests the full scope.
+    const bodyText = await res.text().catch(()=> '');
+    if(/insufficient.*(scope|permission)/i.test(bodyText)){
+      accessToken = null; currentUserEmail = null;
+      try{ sessionStorage.removeItem('taqwa_session'); }catch(e){}
+      renderTopbar();
+      throw new Error('Your Google sign-in needs to be refreshed to pick up current permissions. Please sign in again.');
+    }
+    throw new Error('Drive request failed (403): '+bodyText.slice(0,180));
+  }
   if(!res.ok){ const t = await res.text().catch(()=> ''); throw new Error('Drive request failed ('+res.status+'): '+t.slice(0,180)); }
   return res;
 }
@@ -1389,14 +1440,41 @@ function renderSearchResults(q){
   const slot = document.getElementById('search-results-slot');
   q = (q||'').trim().toLowerCase();
   if(q.length < 2 || !DB){ slot.innerHTML=''; return; }
-  const items = DB.inventoryItems.filter(i=> (i.name||'').toLowerCase().includes(q) ).slice(0,6);
-  const reqItems = DB.requestItems.filter(r=> !r.deleted && (r.itemName||'').toLowerCase().includes(q) ).slice(0,6);
-  if(!items.length && !reqItems.length){ slot.innerHTML = '<div class="search-results"><a>No matches found</a></div>'; return; }
-  let html = '<div class="search-results">';
-  items.forEach(i=>{ html += '<a href="#/inventory/category/'+i.categoryId+'">'+escapeHtml(i.name)+'<small>Inventory · '+escapeHtml(catName(i.categoryId))+'</small></a>'; });
-  reqItems.forEach(r=>{ html += '<a href="#/procurement/item/'+r.id+'">'+escapeHtml(r.itemName)+'<small>Procurement · '+escapeHtml(r.requestNumber)+' · '+itemStatusLabel(r.status)+'</small></a>'; });
-  html += '</div>';
-  slot.innerHTML = html;
+  const results = [];
+
+  // Inventory items — by name or item code, tagged with their current
+  // asset state (Installed / Spare / Disposed) so the source is unambiguous,
+  // matching the same distinction the Assets tabs already use.
+  DB.inventoryItems.filter(i=>!i.deleted && ((i.name||'').toLowerCase().includes(q) || (i.itemCode||'').toLowerCase().includes(q))).slice(0,6).forEach(i=>{
+    let subtitle = 'Inventory · '+catName(i.categoryId);
+    if(itemPatternOf(i)==='asset'){
+      if(installedQtyForItem(i)>0) subtitle = 'Inventory · Installed Asset · '+catName(i.categoryId);
+      else if(Number(i.quantity)>0) subtitle = 'Inventory · Spare Asset · '+catName(i.categoryId);
+      else if(disposedQtyForItem(i)>0) subtitle = 'Inventory · Disposed Asset · '+catName(i.categoryId);
+    }
+    results.push({ href:'#/inventory/item/'+i.id, title:i.name+(i.itemCode?' ('+i.itemCode+')':''), subtitle });
+  });
+
+  // Categories
+  DB.categories.filter(c=>!c.deleted && (c.name||'').toLowerCase().includes(q)).slice(0,3).forEach(c=>{
+    results.push({ href:'#/inventory/category/'+c.id, title:c.name, subtitle:'Inventory · Category' });
+  });
+
+  // Procurement requests — by item name, item code, or request number
+  DB.requestItems.filter(r=> !r.deleted && ((r.itemName||'').toLowerCase().includes(q) || (r.itemCode||'').toLowerCase().includes(q) || (r.requestNumber||'').toLowerCase().includes(q))).slice(0,6).forEach(r=>{
+    results.push({ href:'#/procurement/item/'+r.id, title:r.itemName, subtitle:'Procurement · '+r.requestNumber+' · '+itemStatusLabel(r.status) });
+  });
+
+  // Purchase Orders — by PO number, surfacing the underlying request
+  DB.purchaseOrders.filter(po=>(po.poNumber||'').toLowerCase().includes(q)).slice(0,4).forEach(po=>{
+    const r = DB.requestItems.find(x=>x.id===po.requestItemId);
+    if(r) results.push({ href:'#/procurement/item/'+r.id, title:po.poNumber, subtitle:'Procurement · Purchase Order · '+r.itemName });
+  });
+
+  if(!results.length){ slot.innerHTML = '<div class="search-results"><a>No matches found</a></div>'; return; }
+  slot.innerHTML = '<div class="search-results">' + results.map(r=>
+    '<a href="'+r.href+'">'+escapeHtml(r.title)+'<small>'+escapeHtml(r.subtitle)+'</small></a>'
+  ).join('') + '</div>';
 }
 function renderFooter(){
   const slot = document.getElementById('footer-slot');
@@ -1694,6 +1772,113 @@ function animateLandingCounters(){
     requestAnimationFrame(tick);
   });
 }
+/* ============================================================
+   Home dashboard — recent activity + metrics. Built entirely from the
+   history[] entries already recorded on request items and inventory items
+   (no separate activity-log system) — every event type in this list
+   already gets logged there as part of the existing workflows.
+   ============================================================ */
+function activityIconFor(text){
+  text = (text||'').toLowerCase();
+  if(text.includes('escalat')) return '⬆️';
+  if(text.includes('declin')) return '❌';
+  if(text.includes('approv')) return '✅';
+  if(text.includes('purchase recorded') || text.includes('recorded')) return '🛒';
+  if(text.includes('received')) return '📦';
+  if(text.includes('install')) return '🏗️';
+  if(text.includes('dispos')) return '🗑️';
+  if(text.includes('consum')) return '📉';
+  if(text.includes('existing stock')) return '🆕';
+  if(text.includes('requested') || text.includes('created')) return '📝';
+  return '•';
+}
+function recentActivityEvents(days){
+  days = days || 3;
+  const cutoff = Date.now() - days*24*60*60*1000;
+  const events = [];
+  DB.requestItems.forEach(r=>{
+    if(r.deleted) return;
+    (r.history||[]).forEach(h=>{
+      const t = new Date(h.timestamp).getTime();
+      if(!isNaN(t) && t>=cutoff){
+        events.push({ timestamp:h.timestamp, title:(h.stage||h.action||'Update')+' — '+r.itemName,
+          subtitle:(h.actorName||h.actorEmail||'—')+' · '+r.requestNumber, remark:h.remark,
+          href:'#/procurement/item/'+r.id, icon: activityIconFor((h.stage||'')+' '+(h.action||'')) });
+      }
+    });
+  });
+  DB.inventoryItems.forEach(i=>{
+    if(i.deleted) return;
+    (i.history||[]).forEach(h=>{
+      const t = new Date(h.timestamp).getTime();
+      if(!isNaN(t) && t>=cutoff){
+        events.push({ timestamp:h.timestamp, title:(h.action||'Update')+' — '+i.name,
+          subtitle:(h.actorName||h.actorEmail||'—'), remark:h.remark,
+          href:'#/inventory/item/'+i.id, icon: activityIconFor((h.action||'')+' '+(h.remark||'')) });
+      }
+    });
+  });
+  events.sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
+  return events.slice(0, 30);
+}
+function renderRecentActivityHtml(){
+  const events = recentActivityEvents(3);
+  if(!events.length) return '';
+  return '<div class="section-heading">Recent Activity</div>'
+    + '<div class="activity-carousel-wrap">'
+    +   '<button class="activity-nav-btn" id="activity-nav-left" aria-label="Scroll left">‹</button>'
+    +   '<div class="activity-carousel" id="activity-carousel">'
+    +     events.map(e=>'<a class="activity-card" href="'+e.href+'"><div class="activity-card-icon">'+e.icon+'</div><div class="activity-card-title">'+escapeHtml(e.title)+'</div><div class="activity-card-meta">'+escapeHtml(e.subtitle)+'</div><div class="activity-card-time">'+formatRelativeTime(e.timestamp)+'</div></a>').join('')
+    +   '</div>'
+    +   '<button class="activity-nav-btn" id="activity-nav-right" aria-label="Scroll right">›</button>'
+    + '</div>';
+}
+function wireActivityCarousel(){
+  const track = document.getElementById('activity-carousel');
+  if(!track) return;
+  const left = document.getElementById('activity-nav-left');
+  const right = document.getElementById('activity-nav-right');
+  if(left) left.addEventListener('click', ()=> track.scrollBy({ left:-260, behavior:'smooth' }));
+  if(right) right.addEventListener('click', ()=> track.scrollBy({ left:260, behavior:'smooth' }));
+}
+function formatRelativeTime(iso){
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs/60000);
+  if(mins < 1) return 'just now';
+  if(mins < 60) return mins+'m ago';
+  const hrs = Math.floor(mins/60);
+  if(hrs < 24) return hrs+'h ago';
+  const days = Math.floor(hrs/24);
+  return days+'d ago';
+}
+function dashboardMetrics(){
+  const now = Date.now();
+  const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
+  const sevenDaysAgo = now - 7*24*60*60*1000;
+  const startOfMonth = new Date(); startOfMonth.setDate(1); startOfMonth.setHours(0,0,0,0);
+  let reqToday=0, reqWeek=0, expToday=0, expWeek=0, expMonth=0;
+  DB.requestItems.forEach(r=>{
+    if(r.deleted) return;
+    const createdMs = new Date(r.createdAt).getTime();
+    if(!isNaN(createdMs)){
+      if(createdMs>=startOfToday.getTime()) reqToday++;
+      if(createdMs>=sevenDaysAgo) reqWeek++;
+    }
+    // Expense is the actual recorded purchase amount, not a proxy for
+    // submission/approval — a request that was only submitted or approved
+    // but never purchased contributes nothing here.
+    if(r.purchase && r.purchase.recordedAt){
+      const recMs = new Date(r.purchase.recordedAt).getTime();
+      const amt = Number(r.purchase.totalAmount)||0;
+      if(!isNaN(recMs)){
+        if(recMs>=startOfToday.getTime()) expToday += amt;
+        if(recMs>=sevenDaysAgo) expWeek += amt;
+        if(recMs>=startOfMonth.getTime()) expMonth += amt;
+      }
+    }
+  });
+  return { reqToday, reqWeek, expToday, expWeek, expMonth };
+}
 function renderHomePage(){
   const app = document.getElementById('app');
   if(!isSignedIn()){
@@ -1783,6 +1968,7 @@ function renderHomePage(){
   const consumptionThisMonth = currentMonthConsumptionQty();
   const consumptionAllTime = totalConsumptionQtyAllTime();
   const hasAnyRequests = DB.requestItems.some(r=>!r.deleted);
+  const dm = dashboardMetrics();
 
   app.innerHTML =
     '<div class="content wrap">'
@@ -1795,6 +1981,15 @@ function renderHomePage(){
     +   '<a class="stat-card" href="#/procurement/all"><div class="stat-icon" style="background:var(--color-medium-soft);">'+iconFileText(17,'var(--color-medium)')+'</div><div><div class="stat-num">'+pendingAll+'</div><div class="stat-lbl">Requests Pending</div></div></a>'
     +   (isSignedIn() ? '<a class="stat-card" href="'+myActionTargetHash()+'"><div class="stat-icon" style="background:var(--color-gold-soft);">'+iconClipboardCheck(17,'var(--color-gold-bright)')+'</div><div><div class="stat-num">'+myPending+'</div><div class="stat-lbl">Awaiting My Action</div></div></a>' : '')
     + '</div>'
+    + '<div class="section-heading">Procurement &amp; Expenses at a Glance</div>'
+    + '<div class="kpi-row">'
+    +   '<div class="kpi-card"><div class="kpi-lbl">Requests Today</div><div class="kpi-val">'+dm.reqToday+'</div></div>'
+    +   '<div class="kpi-card"><div class="kpi-lbl">Requests This Week</div><div class="kpi-val">'+dm.reqWeek+'</div></div>'
+    +   '<div class="kpi-card"><div class="kpi-lbl">Expenses Today</div><div class="kpi-val" style="color:var(--color-success);">'+formatMoney(dm.expToday)+'</div></div>'
+    +   '<div class="kpi-card"><div class="kpi-lbl">Expenses This Week</div><div class="kpi-val" style="color:var(--color-success);">'+formatMoney(dm.expWeek)+'</div></div>'
+    +   '<div class="kpi-card"><div class="kpi-lbl">Expenses This Month</div><div class="kpi-val" style="color:var(--color-success);">'+formatMoney(dm.expMonth)+'</div></div>'
+    + '</div>'
+    + renderRecentActivityHtml()
     + '<div class="section-heading">Spending Overview (Purchased &amp; Received Only)</div>'
     + '<div class="kpi-row">'
     +   '<div class="kpi-card"><div class="kpi-lbl">This Month\'s Expenditure</div><div class="kpi-val">'+formatMoney(curMonth)+'</div></div>'
@@ -1819,6 +2014,7 @@ function renderHomePage(){
     )
     + '</div>';
   wireAlertDismissButtons();
+  wireActivityCarousel();
   const search = document.getElementById('global-search');
   if(search) search.addEventListener('input', ()=>renderSearchResults(search.value));
 }
@@ -1873,20 +2069,26 @@ function renderInventoryBrowseTab(){
   panel.innerHTML = '<div class="card-grid">'+(cards || '<div class="empty-state"><div class="icon">🗂️</div><h3>No categories yet</h3></div>')+'</div>';
 }
 let consumptionCategoryFilter = '';
+function wireAddExistingStockBtn(pattern){
+  const btn = document.getElementById(pattern==='asset' ? 'add-existing-asset-btn' : 'add-existing-consumable-btn');
+  if(btn) btn.addEventListener('click', ()=>openAddExistingStockModal(pattern));
+}
 function renderConsumptionTab(){
   const panel = document.getElementById('inv-page-panel');
   // Consumables only — items whose catalog Item Type is Consumable. Assets
   // (even ones sitting spare with quantity > 0) never appear here; they
   // live under the Assets tab instead.
   const allItems = DB.inventoryItems.filter(i=>!i.deleted && itemPatternOf(i)==='consumable');
-  if(!allItems.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📉</div><h3>No consumable stock yet</h3></div>'; return; }
+  const addBtnHtml = '<div style="display:flex; justify-content:flex-end; margin-bottom:10px;"><button class="btn btn-outline btn-sm" id="add-existing-consumable-btn">+ Add Existing Stock</button></div>';
+  if(!allItems.length){ panel.innerHTML = addBtnHtml + '<div class="empty-state"><div class="icon">📉</div><h3>No consumable stock yet</h3></div>'; wireAddExistingStockBtn('consumable'); return; }
   const cats = DB.categories.filter(c=>!c.deleted);
   const items = allItems.filter(i=>!consumptionCategoryFilter || i.categoryId===consumptionCategoryFilter).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const filterHtml = '<div class="field" style="max-width:280px; margin-bottom:12px;"><label>Filter by Category</label>'
     + '<select id="consumption-cat-filter"><option value="">— All Categories —</option>'
     + cats.map(c=>'<option value="'+c.id+'" '+(consumptionCategoryFilter===c.id?'selected':'')+'>'+escapeHtml(c.name)+'</option>').join('')
     + '</select></div>';
-  panel.innerHTML = '<div class="page-subtitle-inline">Record consumption directly against any consumable\'s stock, including where it actually went — independent of any specific purchase.</div>'
+  panel.innerHTML = addBtnHtml
+    + '<div class="page-subtitle-inline">Record consumption directly against any consumable\'s stock, including where it actually went — independent of any specific purchase.</div>'
     + filterHtml
     + (items.length
       ? '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Category</th><th>Current Stock</th><th></th></tr></thead><tbody>'
@@ -1896,6 +2098,7 @@ function renderConsumptionTab(){
           }).join('')
         + '</tbody></table></div>'
       : '<div class="empty-state"><div class="icon">📉</div><h3>No items in this category</h3></div>');
+  wireAddExistingStockBtn('consumable');
   document.getElementById('consumption-cat-filter').addEventListener('change', (e)=>{
     consumptionCategoryFilter = e.target.value;
     renderConsumptionTab();
@@ -1974,10 +2177,13 @@ function renderInstalledAssetsSubTab(){
 function renderSpareAssetsSubTab(){
   const panel = document.getElementById('assets-subpanel');
   const items = assetItems().filter(i=>Number(i.quantity)>0).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">📦</div><h3>No spare assets right now</h3></div>'; return; }
-  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Item Code</th><th>Qty Spare</th><th></th></tr></thead><tbody>'
+  const addBtnHtml = '<div style="display:flex; justify-content:flex-end; margin-bottom:10px;"><button class="btn btn-outline btn-sm" id="add-existing-asset-btn">+ Add Existing Asset</button></div>';
+  if(!items.length){ panel.innerHTML = addBtnHtml + '<div class="empty-state"><div class="icon">📦</div><h3>No spare assets right now</h3></div>'; wireAddExistingStockBtn('asset'); return; }
+  panel.innerHTML = addBtnHtml
+    + '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Item Code</th><th>Qty Spare</th><th></th></tr></thead><tbody>'
     + items.map(i=>'<tr class="row-clickable" data-open-item="'+i.id+'"><td>'+escapeHtml(i.name)+'</td><td>'+escapeHtml(i.itemCode||'—')+'</td><td>'+i.quantity+'</td><td><button class="btn btn-primary btn-sm" data-install-item="'+i.id+'">Install Asset</button></td></tr>').join('')
     + '</tbody></table></div>';
+  wireAddExistingStockBtn('asset');
   panel.querySelectorAll('[data-open-item]').forEach(row=>{
     row.addEventListener('click', ()=>{ location.hash = '#/inventory/item/'+row.getAttribute('data-open-item'); });
   });
@@ -2169,6 +2375,17 @@ function renderManageDeptsModalBody(){
       const input = document.querySelector('[data-newitem-name="'+categoryId+'"]');
       const name = input.value.trim();
       if(!name) return;
+      // Checked globally across ALL categories, not just this one — the
+      // same item existing under two categories (e.g. Fevicol in both Art
+      // & Craft and Stationery) is exactly the duplicate this must catch.
+      // Exact name match only (case-insensitive); anything short of that
+      // is left alone rather than guessing at "close enough" duplicates.
+      const dupe = DB.itemCatalog.find(i=>!i.deleted && (i.name||'').trim().toLowerCase()===name.toLowerCase());
+      if(dupe){
+        const dupeCat = DB.categories.find(c=>c.id===dupe.categoryId);
+        toast('"'+name+'" already exists as '+dupe.code+' under '+(dupeCat?dupeCat.name:'another category')+' — items can\'t be duplicated across categories','error');
+        return;
+      }
       const ok = await runSaveAction(btn, 'Adding…', async ()=>{
         const cat = DB.categories.find(c=>c.id===categoryId);
         await pushAndSave(DB.itemCatalog, {
@@ -2334,6 +2551,26 @@ function renderItemsTable(catId){
 function pendingRequestsForItem(item){
   return DB.requestItems.filter(r=> !r.deleted && r.categoryId===item.categoryId && (r.itemName||'').toLowerCase()===(item.name||'').toLowerCase() && !['completed','archived','rejected'].includes(r.status));
 }
+function renderPurchaseHistoryHtml(item){
+  // Filtered by actual item identity (catalogItemId), not name text-matching
+  // — two differently-catalogued items that happen to share a name never
+  // get mixed into the same history.
+  if(!item.catalogItemId) return '<div class="empty-state" style="padding:20px;"><div class="icon">🧾</div><h3>No linked catalog item, so no purchase history to show</h3></div>';
+  const records = DB.requestItems.filter(r=>!r.deleted && r.catalogItemId===item.catalogItemId && r.purchase)
+    .sort((a,b)=>(b.purchase.purchaseDate||'').localeCompare(a.purchase.purchaseDate||''));
+  if(!records.length) return '<div class="empty-state" style="padding:20px;"><div class="icon">🧾</div><h3>No recorded purchases yet</h3></div>';
+  return '<div class="install-card-grid">' + records.map(r=>{
+    const po = poForRequestItem(r.id);
+    return '<div class="install-card row-clickable" data-open-purchase="'+r.id+'">'
+      + (po ? '<div class="install-card-qty">'+escapeHtml(po.poNumber)+'</div>' : '')
+      + '<div class="install-card-row"><label>Request:</label><span>'+escapeHtml(r.requestNumber)+'</span></div>'
+      + '<div class="install-card-row"><label>Date:</label><span>'+formatDateDMY(r.purchase.purchaseDate)+' · Qty '+r.purchase.quantityPurchased+'</span></div>'
+      + '<div class="install-card-row"><label>Price:</label><span>'+formatMoney(r.purchase.unitPrice)+'/unit · '+formatMoney(r.purchase.totalAmount)+' total</span></div>'
+      + (r.purchase.supplier ? '<div class="install-card-row"><label>Supplier:</label><span>'+escapeHtml(r.purchase.supplier)+'</span></div>' : '')
+      + '<div class="install-card-row"><label>Status:</label><span>'+itemStatusLabel(r.status)+'</span></div>'
+      + '</div>';
+  }).join('') + '</div>';
+}
 function renderInventoryItemDetailPage(itemId){
   const app = document.getElementById('app');
   const item = DB.inventoryItems.find(i=>i.id===itemId);
@@ -2370,6 +2607,9 @@ function renderInventoryItemDetailPage(itemId){
     + renderInstallationHistoryHtml(item)
     + renderDisposalHistoryHtml(item)
 
+    + '<div class="section-heading">Purchase History</div>'
+    + renderPurchaseHistoryHtml(item)
+
     + '<div class="section-heading">Stock Ledger</div>'
     + renderLedgerTableHtml(ledger)
     + (isAdmin() ? renderAdjustmentFormHtml() : '')
@@ -2391,6 +2631,9 @@ function renderInventoryItemDetailPage(itemId){
 
   document.querySelectorAll('[data-open-req]').forEach(row=>{
     row.addEventListener('click', ()=>{ location.hash = '#/procurement/item/'+row.getAttribute('data-open-req'); });
+  });
+  document.querySelectorAll('[data-open-purchase]').forEach(card=>{
+    card.addEventListener('click', ()=>{ location.hash = '#/procurement/item/'+card.getAttribute('data-open-purchase'); });
   });
   wireAdjustmentForm(item);
   const uploadBtn = document.getElementById('item-photo-upload-btn');
@@ -2742,6 +2985,86 @@ function syncAssetToInventory(r, personEmail, personName){
   if(r.purchase && r.purchase.supplier) item.preferredSupplier = r.purchase.supplier;
 }
 
+/* Bringing pre-existing stock (never entered through Procurement) into the
+   system — same merge-by-identity dedup as the procurement sync functions
+   above, so an existing item and a later procurement purchase of the same
+   thing land in the SAME row, not two. Deliberately doesn't say "Auto-added
+   from Procurement" anywhere, since it wasn't. Used by both the Consumables
+   and Spare Assets "+ Add Existing" entry points. */
+function addExistingStock(catalogItem, categoryId, qty, refDate, reference, remarks, personEmail, personName, photoFileId, photoFileName){
+  let item = DB.inventoryItems.find(i=> !i.deleted && i.categoryId===categoryId
+    && (i.name||'').toLowerCase()===(catalogItem.name||'').toLowerCase());
+  const noteBits = ['Existing stock added by '+personName];
+  if(reference) noteBits.push('Ref: '+reference);
+  if(remarks) noteBits.push(remarks);
+  const fullRemark = noteBits.join(' · ');
+  if(item){
+    item.updatedAt = new Date().toISOString();
+    if(photoFileId && !item.photoFileId){ item.photoFileId = photoFileId; item.photoFileName = photoFileName; }
+    itemHistoryPush(item, 'Stock received', qty+' added as existing stock by '+personName+(reference?' · Ref: '+reference:''));
+  } else {
+    item = {
+      id: nextId('item'), name: catalogItem.name, categoryId,
+      catalogItemId: catalogItem.id, itemCode: catalogItem.code||'',
+      quantity: 0, unit: itemPattern({itemTypeId:catalogItem.itemTypeId})==='asset' ? 'unit' : '', cost: 0, reorderThreshold: 0, minStock: 0,
+      preferredSupplier: '', purchaseDate: refDate||'', status:'Good',
+      remarks: fullRemark, photoFileId: photoFileId||null, photoFileName: photoFileName||null,
+      linkedRequestItemId: null, installations: [], disposals: [], history: [], updatedAt: new Date().toISOString()
+    };
+    DB.inventoryItems.push(item);
+    itemHistoryPush(item, 'Created', 'Added as existing stock by '+personName+(reference?' · Ref: '+reference:''));
+  }
+  if(!Array.isArray(item.installations)) item.installations = [];
+  if(!Array.isArray(item.disposals)) item.disposals = [];
+  const balance = pushLedgerEntry(item.id, 'Goods Receipt', reference||'', qty, 0, fullRemark, refDate);
+  item.quantity = balance;
+  item.updatedAt = new Date().toISOString();
+  return item;
+}
+function openAddExistingStockModal(pattern){
+  // pattern: 'asset' or 'consumable' — filters which catalog items are
+  // offered, matching whichever tab this was opened from.
+  const catalogOptions = DB.itemCatalog.filter(ci=>!ci.deleted && itemPattern({itemTypeId:ci.itemTypeId})===pattern)
+    .sort((a,b)=>a.code.localeCompare(b.code))
+    .map(ci=>'<option value="'+ci.id+'">'+escapeHtml(ci.code)+' — '+escapeHtml(ci.name)+'</option>').join('');
+  if(!catalogOptions){ toast('No catalog items of this type exist yet — add one via Manage Categories & Items first','error'); return; }
+  const title = pattern==='asset' ? 'Add Existing Asset' : 'Add Existing Stock';
+  const body = '<div class="field-hint" style="margin-bottom:10px;">For stock that\'s already physically at school but never went through this portal\'s Procurement workflow.</div>'
+    + '<div class="field"><label>Item</label><select id="aes-item"><option value="">— Select a catalog item —</option>'+catalogOptions+'</select></div>'
+    + '<div class="field"><label>Quantity</label><input type="number" id="aes-qty" min="1" value="1"></div>'
+    + '<div class="field-row"><div class="field"><label>Purchase / Reference Date (optional)</label><input type="date" id="aes-date"></div>'
+    + '<div class="field"><label>Reference (optional)</label><input type="text" id="aes-ref" placeholder="e.g. old invoice no., donor, etc."></div></div>'
+    + '<div class="field"><label>Remarks (optional)</label><textarea id="aes-remarks"></textarea></div>'
+    + '<div class="field"><label>Photo (optional'+(pattern==='asset'?', recommended for identification':'')+')</label><input type="file" id="aes-photo" accept="image/*"></div>';
+  openModal(title, body, '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-primary" id="aes-submit-btn">Add</button>', 'module-inventory');
+  document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+  document.getElementById('aes-submit-btn').addEventListener('click', async function(){
+    const btn = this;
+    const catalogItem = DB.itemCatalog.find(ci=>ci.id===document.getElementById('aes-item').value);
+    if(!catalogItem){ toast('Choose an item','error'); return; }
+    const qty = Number(document.getElementById('aes-qty').value)||0;
+    if(qty<=0){ toast('Enter a quantity greater than zero','error'); return; }
+    const refDate = document.getElementById('aes-date').value;
+    const reference = document.getElementById('aes-ref').value.trim();
+    const remarks = document.getElementById('aes-remarks').value.trim();
+    const fileInput = document.getElementById('aes-photo');
+    const file = fileInput.files && fileInput.files[0];
+    let photoFileId = null, photoFileName = null;
+    if(file){
+      btn.disabled = true; btn.textContent = 'Uploading photo…';
+      try{ photoFileId = await driveUploadBinary(file, CONFIG.UPLOADS_FOLDER_ID); photoFileName = file.name; }
+      catch(e){ toast('Photo upload failed: '+e.message, 'error'); btn.disabled = false; btn.textContent = 'Add'; return; }
+    }
+    const actorName = (myStaffRecord()||{}).name || currentUserEmail;
+    const ok = await runSaveAction(btn, 'Adding…', async ()=>{
+      addExistingStock(catalogItem, catalogItem.categoryId, qty, refDate, reference, remarks, currentUserEmail, actorName, photoFileId, photoFileName);
+      await saveDb();
+    });
+    if(!ok) return;
+    toast('Existing stock added','success'); closeModal(); renderInventoryPage();
+  });
+}
+
 /* ============================================================
    Asset install/dispose — one shared mechanism used from both Item Issue /
    Return (request-linked, for freshly-received stock) and Spare Assets
@@ -2835,6 +3158,14 @@ function myActionTargetHash(){
    procurement-side count, so there is exactly one source of truth. */
 function linkedInventoryItem(r){ return DB.inventoryItems.find(i=>i.linkedRequestItemId===r.id && !i.deleted) || null; }
 
+/* Live "something just changed here" highlight — tied to real state
+   transitions (both same-user actions and, on the next background poll,
+   changes another user made), not a bare timer. A tab only gets flagged
+   when its own queue actually grew. */
+let tabAttentionFlags = {};
+function flagTabAttention(tabKey){ tabAttentionFlags[tabKey] = Date.now(); }
+function tabHasAttention(tabKey){ return !!tabAttentionFlags[tabKey] && (Date.now()-tabAttentionFlags[tabKey] < 4000); }
+
 function renderProcurementPage(initialTab){
   const app = document.getElementById('app');
   if(initialTab) procTab = initialTab;
@@ -2844,13 +3175,13 @@ function renderProcurementPage(initialTab){
   const canReceiveAny = isSignedIn() && canReceiveAction();
 
   const tabs = [];
-  if(isSignedIn()) tabs.push(['new','New Request']);
-  if(canApproveAny) tabs.push(['approvals','Approvals'+(myApprovalQueue().length?' ('+myApprovalQueue().length+')':'')]);
-  if(canPurchaseAny) tabs.push(['tasks','Purchase Assignment'+(myPurchaseQueue().length?' ('+myPurchaseQueue().length+')':'')]);
-  if(canReceiveAny) tabs.push(['receipt','Item Receipt'+(myReceiptQueue().length?' ('+myReceiptQueue().length+')':'')]);
-  if(canReceiveAny) tabs.push(['issue','Item Issue / Return'+(myItemIssueQueue().length?' ('+myItemIssueQueue().length+')':'')]);
-  tabs.push(['pos','Purchase Orders']);
-  tabs.push(['all','All Requests']);
+  if(isSignedIn()) tabs.push(['new','New Request', 0]);
+  if(canApproveAny) tabs.push(['approvals','Approvals', myApprovalQueue().length]);
+  if(canPurchaseAny) tabs.push(['tasks','Purchase Assignment', myPurchaseQueue().length]);
+  if(canReceiveAny) tabs.push(['receipt','Item Receipt', myReceiptQueue().length]);
+  if(canReceiveAny) tabs.push(['issue','Item Issue / Return', myItemIssueQueue().length]);
+  tabs.push(['pos','Purchase Orders', 0]);
+  tabs.push(['all','All Requests', 0]);
 
   app.innerHTML =
     '<div class="content wrap module-procurement">'
@@ -2858,12 +3189,16 @@ function renderProcurementPage(initialTab){
     +   (canManageStaff() ? '<span style="display:flex; gap:8px;"><button class="btn btn-outline btn-sm" id="manage-staff-btn">Manage Staff</button><button class="btn btn-outline btn-sm" id="manage-buildings-btn">Manage Buildings</button>'+(isAdmin()?'<button class="btn btn-outline btn-sm" id="view-archive-btn">Archive</button>':'')+'</span>' : '')
     + '</div>'
     + '<div class="page-subtitle-inline">Purchase requests, approvals, purchasing, receipt and issue — permanently tracked.</div>'
-    + '<div class="tab-strip">' + tabs.map(t=>'<button class="tab-btn '+(procTab===t[0]?'active':'')+'" data-proc-tab="'+t[0]+'">'+t[1]+'</button>').join('') + '</div>'
+    + '<div class="tab-strip proc-tab-strip">' + tabs.map(t=>
+        '<button class="tab-btn '+(procTab===t[0]?'active':'')+(tabHasAttention(t[0])?' tab-attention':'')+'" data-proc-tab="'+t[0]+'">'
+          + '<span>'+t[1]+'</span>' + (t[2] ? '<span class="tab-count-badge">'+t[2]+'</span>' : '')
+        + '</button>'
+      ).join('') + '</div>'
     + '<div class="tab-panel" id="proc-panel"></div>'
     + '</div>';
 
   document.querySelectorAll('[data-proc-tab]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ procTab = btn.getAttribute('data-proc-tab'); renderProcurementPage(); });
+    btn.addEventListener('click', ()=>{ procTab = btn.getAttribute('data-proc-tab'); delete tabAttentionFlags[procTab]; renderProcurementPage(); });
   });
   const msBtn = document.getElementById('manage-staff-btn'); if(msBtn) msBtn.addEventListener('click', openManageStaffModal);
   const mbBtn = document.getElementById('manage-buildings-btn'); if(mbBtn) mbBtn.addEventListener('click', openManageBuildingsModal);
@@ -3252,6 +3587,13 @@ function renderApprovalsTab(){
 function renderApprovalCard(r){
   const siblingCount = requestItemSiblings(r).length;
   const canEscalate = r.approvalStatus === 'pending_coordinator' && hasRole('coordinator');
+  // Decision-support info, sourced from the actual Inventory record this
+  // item is tied to by catalog identity — not a text-name guess. For
+  // assets, "stock" means spare/available quantity, never installed units,
+  // so an approver isn't misled into thinking installed assets are up for grabs.
+  const linkedInv = r.catalogItemId ? DB.inventoryItems.find(i=>!i.deleted && i.catalogItemId===r.catalogItemId) : null;
+  const lastProcDate = linkedInv ? itemLastPurchaseDate(linkedInv.id) : null;
+  const currentStock = linkedInv ? linkedInv.quantity : null;
 
   return '<div class="approval-card" data-approval-card="'+r.id+'">'
     + '<div class="approval-card-top"><span class="approval-card-name">'+escapeHtml(r.itemName)+'</span>'
@@ -3261,6 +3603,8 @@ function renderApprovalCard(r){
     +   '<div class="approval-card-row"><label>Category:</label><span>'+escapeHtml(catName(r.categoryId))+'</span></div>'
     +   '<div class="approval-card-row"><label>Quantity:</label><span>'+r.quantityRequested+'</span></div>'
     +   '<div class="approval-card-row"><label>Requisitioner:</label><span>'+escapeHtml(r.requestedByName||r.requestedByEmail)+'</span></div>'
+    +   '<div class="approval-card-row"><label>Last Procurement:</label><span>'+(lastProcDate?formatDateDMY(lastProcDate):'—')+'</span></div>'
+    +   '<div class="approval-card-row"><label>Current Stock:</label><span>'+(currentStock!==null?currentStock+' '+escapeHtml(linkedInv.unit||''):'Nil')+'</span></div>'
     + '</div>'
     + (r.reason ? '<div class="approval-card-reason">'+escapeHtml(r.reason)+(r.description?': "'+escapeHtml(r.description)+'"':'')+'</div>' : '')
     + (siblingCount>1 ? '<div class="approval-card-hint">1 of '+siblingCount+' items on this request — approved independently</div>' : '')
@@ -3291,6 +3635,7 @@ async function submitApprovalAction(r, action, btn){
   });
   if(!ok) return;
   toast(action==='approve'?'Approved':action==='decline'?'Declined':'Escalated to Principal', action==='decline'?'error':'success');
+  if(action==='approve') flagTabAttention('tasks');
   renderProcurementPage();
 }
 
@@ -3491,6 +3836,7 @@ function openConfirmReceiptModal(reqItemId){
     if(!ok) return;
     toast('Receipt confirmed','success');
     closeModal();
+    flagTabAttention('issue');
     renderProcurementPage();
   });
 }
@@ -3730,7 +4076,7 @@ function renderItemActionBox(r){
       const comment = document.getElementById('modal-remark').value.trim();
       const ok = await runSaveAction(approveBtn, 'Approving…', async ()=>{ await applyApprovalAction(r, 'approve', comment); });
       if(!ok) return;
-      toast('Approved','success'); renderProcurementPage(); openItemDetailModal(r.id);
+      toast('Approved','success'); flagTabAttention('tasks'); renderProcurementPage(); openItemDetailModal(r.id);
     });
     const declineBtn = document.getElementById('modal-decline-btn');
     if(declineBtn) declineBtn.addEventListener('click', async ()=>{
@@ -3818,6 +4164,7 @@ function renderItemActionBox(r){
       // persisted it), not a network reload — Purchase Assignment updates
       // immediately and the item shows up in Item Receipt without any
       // manual refresh.
+      flagTabAttention('receipt');
       renderProcurementPage();
       openItemDetailModal(r.id);
     });
@@ -4321,9 +4668,19 @@ async function autoRefreshTick(){
   if(!isSafeToAutoRefresh()) return;
   try{
     const before = JSON.stringify(DB);
+    const beforeCounts = isSignedIn() ? { approvals:myApprovalQueue().length, tasks:myPurchaseQueue().length, receipt:myReceiptQueue().length, issue:myItemIssueQueue().length } : null;
     await loadDb(false); // no internal retry here — the next tick in 30s IS the retry; tripling requests on every failed tick is what helped trip the throttling in the first place
     const after = JSON.stringify(DB);
-    if(before !== after){ renderTopbar(); renderRoute(); }
+    if(before !== after){
+      if(beforeCounts){
+        const afterCounts = { approvals:myApprovalQueue().length, tasks:myPurchaseQueue().length, receipt:myReceiptQueue().length, issue:myItemIssueQueue().length };
+        // Same real-state-change principle as the same-user case — just
+        // discovered on the next poll instead of instantly, since there's
+        // no push/websocket layer to notify across users immediately.
+        Object.keys(afterCounts).forEach(k=>{ if(afterCounts[k] > beforeCounts[k]) flagTabAttention(k); });
+      }
+      renderTopbar(); renderRoute();
+    }
   }catch(e){ /* silent — keep showing existing data, try again next tick */ }
 }
 function startAutoRefresh(){
