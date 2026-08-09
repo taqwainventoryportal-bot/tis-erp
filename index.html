@@ -58,9 +58,16 @@
   --module-inventory: #059669;
   --module-inventory-dark: #047857;
   --module-inventory-soft: #D1FAE5;
-  --module-procurement: #C2410C;
-  --module-procurement-dark: #9A3412;
-  --module-procurement-soft: #FFEDD5;
+  /* Item/Service Procurement — deliberately two distinct, muted colours
+     (not the old saturated burnt-orange) so the two modules stay visually
+     told apart, while both sitting calmly alongside Inventory's green and
+     the portal's blue navigation rather than competing with them. */
+  --module-procurement: #0D9488;
+  --module-procurement-dark: #0F766E;
+  --module-procurement-soft: #CCFBF1;
+  --module-service-procurement: #4F46E5;
+  --module-service-procurement-dark: #4338CA;
+  --module-service-procurement-soft: #E0E7FF;
   --module-reports: #7C3AED;
   --module-reports-dark: #6D28D9;
   --module-reports-soft: #EDE9FE;
@@ -182,6 +189,10 @@ button{ font-family:inherit; cursor:pointer; }
 .nav-ribbon a[data-module="inventory"]::after{ background:var(--accent-inventory); }
 .nav-ribbon a[data-module="procurement"]:hover, .nav-ribbon a[data-module="procurement"].active{ color:var(--accent-procurement-dark); }
 .nav-ribbon a[data-module="procurement"]::after{ background:var(--accent-procurement); }
+.nav-ribbon a[data-module="service-procurement"]:hover, .nav-ribbon a[data-module="service-procurement"].active{ color:var(--module-service-procurement-dark); }
+.nav-ribbon a[data-module="service-procurement"]::after{ background:var(--module-service-procurement); }
+.nav-ribbon a[data-module="admin"]:hover, .nav-ribbon a[data-module="admin"].active{ color:var(--accent-admin-dark); }
+.nav-ribbon a[data-module="admin"]::after{ background:var(--accent-admin); }
 
 .auth-box{ display:flex; align-items:center; gap:10px; padding-left:16px; border-left:1px solid var(--color-border); }
 .role-chip{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; background:var(--color-primary-light); color:var(--color-primary-dark); border:1px solid var(--color-border); padding:5px 11px 5px 8px; border-radius:999px; }
@@ -328,6 +339,7 @@ button{ font-family:inherit; cursor:pointer; }
    accent without touching each component individually. */
 .module-inventory{ --color-primary: var(--module-inventory); --color-primary-dark: var(--module-inventory-dark); --color-primary-light: var(--module-inventory-soft); --color-ink: #0F172A; }
 .module-procurement{ --color-primary: var(--module-procurement); --color-primary-dark: var(--module-procurement-dark); --color-primary-light: var(--module-procurement-soft); }
+.module-service-procurement{ --color-primary: var(--module-service-procurement); --color-primary-dark: var(--module-service-procurement-dark); --color-primary-light: var(--module-service-procurement-soft); }
 .module-reports{ --color-primary: var(--module-reports); --color-primary-dark: var(--module-reports-dark); --color-primary-light: var(--module-reports-soft); }
 .module-admin{ --color-primary: var(--module-admin); --color-primary-dark: var(--module-admin-dark); --color-primary-light: var(--module-admin-soft); }
 .page-title{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
@@ -800,8 +812,34 @@ function emptyDb(){
     archiveLog: [],
     stockLedger: [],
     itemCatalog: seedItemCatalog(),
-    purchaseOrders: []
+    purchaseOrders: [],
+    serviceCategories: seedServiceCategories(),
+    serviceRequests: []
   };
+}
+function seedServiceCategories(){
+  // From the school's own reference table — Admin can add/rename/remove
+  // categories and sub-categories afterward via Manage Service Categories.
+  const defs = [
+    ['Utilities', ['Electricity','Water','House Tax','Internet','Mobile Bills','LPG','Fire Extinguisher']],
+    ['Printing & Publishing', ['ID Cards','Diaries','Test Paper Answersheets','Prospectus']],
+    ['Advertising & Branding', ['Flex Banners','Hoardings']],
+    ['IT & Digital Services', ['School ERP system','Domain & Hosting Renewal','Antivirus','JustDial Subscription']],
+    ['Maintenance & Repairs', ['Electrical','Plumbing','Carpentry','Painting','Civil Work','Aluminium & Glass','Computer Repair','Printer Service','AC']],
+    ['Construction & Renovation', ['Renovation','Flooring','Roofing','False Ceiling','Fabrication','Extensions']],
+    ['Labour & Workforce', ['Daily Labour','Contract Labour','Temporary Helpers','Extra Payments to Staff','Loading & Unloading']],
+    ['Professional Services', ['Lawyer','Consultant','Architect','Trainer']],
+    ['Events & Activities', ['Stage','Sound System','Decorations','Photography','Catering','Guest Speakers']],
+    ['Transport & Logistics', ['Vehicle Hire','Courier','Goods Transport','Parcel Services']],
+    ['Housekeeping & Facility Services', ['Cleaning','Pest Control','Security','Waste Disposal']],
+    ['Compliance & Government', ['Licence Fees','Registration','Fire Safety','Municipal Charges']],
+    ['Financial Charges', ['Bank Charges','Payment Gateway Charges','Cheque Book Charges']],
+    ['Miscellaneous Services', ['Any one-time or uncategorised service']]
+  ];
+  return defs.map(([name, subs], i)=>({
+    id: 'svccat_'+i, name, requiresApproval: true,
+    subcategories: subs.map((s,j)=>({ id:'svcsub_'+i+'_'+j, name:s }))
+  }));
 }
 
 /* ============================================================
@@ -1083,6 +1121,71 @@ async function applyApprovalAction(r, action, comment){
   }
   await saveDb();
 }
+/* ============================================================
+   Service Procurement — approval engine (v1). Deliberately a SEPARATE
+   engine from Item Procurement's above, not a shared/generalized one:
+   same proven pattern (pending_coordinator → pending_principal →
+   approved/declined, same role-based authorization, same mandatory-
+   comment rules), but operating on DB.serviceRequests with its own
+   status vocabulary (open/pending_approval/approved/declined/
+   under_observation/not_satisfactory/closed) — no shared code surface
+   with Item Procurement, so nothing here can regress it.
+   ============================================================ */
+function nextServiceRequestNumber(){
+  const n = DB.serviceRequests.length + 1;
+  const y = new Date().getFullYear();
+  return 'SR-'+y+'-'+String(n).padStart(4,'0');
+}
+function initServiceApproval(sr){
+  const cat = DB.serviceCategories.find(c=>c.id===sr.categoryId);
+  if(cat && cat.requiresApproval===false){
+    sr.approvalStatus = 'not_required';
+    sr.status = 'approved'; // no-approval services go straight to Service Details & Receipts
+  } else {
+    sr.approvalStatus = 'pending_coordinator';
+    sr.status = 'pending_approval';
+  }
+}
+function canActOnServiceApproval(sr){
+  if(sr.status !== 'pending_approval') return false;
+  if(sr.approvalStatus === 'pending_coordinator') return hasRole('coordinator');
+  if(sr.approvalStatus === 'pending_principal') return hasRole('principal');
+  return false;
+}
+function myServiceApprovalQueue(){ return DB.serviceRequests.filter(s=> !s.deleted && s.status==='pending_approval' && canActOnServiceApproval(s)); }
+async function applyServiceApprovalAction(sr, action, comment){
+  const actorName = (myStaffRecord()||{}).name || currentUserEmail;
+  const stage = approvalStageLabel(sr.approvalStatus);
+  if(action === 'approve'){
+    sr.approvalStatus = 'approved';
+    sr.status = 'approved';
+    sr.history.push({ stage: stage+' Approval', action:'approved', actorEmail:currentUserEmail, actorName, remark: comment||'', timestamp:new Date().toISOString() });
+  } else if(action === 'decline'){
+    sr.approvalStatus = 'declined';
+    sr.status = 'declined';
+    sr.history.push({ stage: stage+' Decline', action:'declined', actorEmail:currentUserEmail, actorName, remark: comment, timestamp:new Date().toISOString() });
+  } else if(action === 'escalate'){
+    sr.approvalStatus = 'pending_principal';
+    sr.escalatedByEmail = currentUserEmail; sr.escalatedByName = actorName;
+    sr.escalatedAt = new Date().toISOString(); sr.escalationComment = comment;
+    sr.history.push({ stage:'Escalated to Principal', action:'escalated', actorEmail:currentUserEmail, actorName, remark: comment, timestamp:new Date().toISOString() });
+  }
+  await saveDb();
+}
+/* Service Details & Receipts: approved services awaiting Confirm Service
+   Receipt, plus anything sent back for follow-up (Not Satisfactory /
+   Under Observation) — those stay actionable here until finally closed. */
+function myServiceReceiptQueue(){ return DB.serviceRequests.filter(s=> !s.deleted && ['approved','under_observation','not_satisfactory'].includes(s.status) && canReceiveAction()); }
+function serviceStatusLabel(status){
+  return { open:'Open', pending_approval:'Pending Approval', approved:'Approved', declined:'Declined',
+    under_observation:'Under Observation', not_satisfactory:'Not Satisfactory', closed:'Closed' }[status] || status;
+}
+function serviceStatusBadgeClass(status){
+  return { approved:'badge-approved', declined:'badge-rejected', pending_approval:'badge-status',
+    under_observation:'badge-medium', not_satisfactory:'badge-high', closed:'badge-approved' }[status] || 'badge-status';
+}
+function serviceStatusBadge(status){ return '<span class="badge '+serviceStatusBadgeClass(status)+'">'+serviceStatusLabel(status)+'</span>'; }
+
 function requestItemSiblings(reqItem){
   // Informational only (e.g. "3 items in this request") — items no longer
   // move together. See applyApprovalAction: bundling was removed because
@@ -1253,7 +1356,7 @@ async function loadDb(allowRetry){
   const raw = await driveGetJson(CONFIG.DB_FILE_ID, allowRetry);
   const base = emptyDb();
   DB = Object.assign(base, raw);
-  ['departments','categories','inventoryItems','dismissedAlerts','buildings','rooms','itemTypes','staff','requests','requestItems','archiveLog','stockLedger','itemCatalog','purchaseOrders'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
+  ['departments','categories','inventoryItems','dismissedAlerts','buildings','rooms','itemTypes','staff','requests','requestItems','archiveLog','stockLedger','itemCatalog','purchaseOrders','serviceCategories','serviceRequests'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
   DB.inventoryItems.forEach(i=>{
     if(!Array.isArray(i.history)) i.history = [];
     if(i.minStock===undefined) i.minStock = 0;
@@ -1399,7 +1502,7 @@ function renderTopbar(){
   const route = location.hash || '#/';
   const navItem = (href, label, module)=>'<a href="'+href+'" data-module="'+(module||'')+'" class="'+(route.startsWith(href) && href!=='#/' || route===href ? 'active':'')+'">'+label+'</a>';
   const navLinks = isSignedIn()
-    ? navItem('#/', 'Home', 'dashboard') + navItem('#/inventory','Inventory','inventory') + navItem('#/procurement','Procurement','procurement')
+    ? navItem('#/', 'Home', 'dashboard') + navItem('#/inventory','Inventory','inventory') + navItem('#/procurement','Item Procurement','procurement') + navItem('#/service-procurement','Service Procurement','service-procurement') + (canManageStaff() ? navItem('#/admin','Admin Settings','admin') : '')
     : navItem('#/', 'Home', 'dashboard') + navItem('#/about','About Portal','') + navItem('#/help','Help','') + navItem('#/contact','Contact','');
   slot.innerHTML =
     '<div class="brand-band"><div class="wrap brand-band-inner">'
@@ -1553,6 +1656,9 @@ function renderRoute(){
   if(parts[0]==='inventory' && !parts[1]) return renderInventoryPage();
   if(parts[0]==='procurement' && parts[1]==='item' && parts[2]) { renderProcurementPage(); openItemDetailModal(parts[2]); return; }
   if(parts[0]==='procurement') return renderProcurementPage(parts[1]);
+  if(parts[0]==='service-procurement' && parts[1]==='item' && parts[2]) { renderServiceProcurementPage(); openServiceRequestModal(parts[2]); return; }
+  if(parts[0]==='service-procurement') return renderServiceProcurementPage(parts[1]);
+  if(parts[0]==='admin') return renderAdminSettingsPage();
   return renderHomePage();
 }
 
@@ -1624,6 +1730,11 @@ function last6MonthBuckets(){
   return buckets;
 }
 function purchasedItems(){ return DB.requestItems.filter(r=>!r.deleted && r.purchase && r.purchase.totalAmount!=null); }
+/* Only genuinely CLOSED services count as expenditure — matching the same
+   "recorded amount, not a proxy for submission/approval" rule Item
+   Procurement already follows. Draft/pending/approved-but-incomplete/
+   under-observation services contribute nothing here. */
+function closedServices(){ return DB.serviceRequests.filter(sr=>!sr.deleted && sr.status==='closed' && sr.totalAmount!=null); }
 function computeMonthlyExpenditure(){
   const buckets = last6MonthBuckets();
   const map = {}; buckets.forEach(b=>map[b.key]=b);
@@ -1632,6 +1743,12 @@ function computeMonthlyExpenditure(){
     if(isNaN(d.getTime())) return;
     const k = monthKey(d);
     if(map[k]) map[k].value += Number(r.purchase.totalAmount)||0;
+  });
+  closedServices().forEach(sr=>{
+    const d = new Date(sr.closedAt || sr.serviceDate);
+    if(isNaN(d.getTime())) return;
+    const k = monthKey(d);
+    if(map[k]) map[k].value += Number(sr.totalAmount)||0;
   });
   return buckets;
 }
@@ -1669,10 +1786,15 @@ function currentMonthExpenditure(){
     const d = new Date(r.purchase.purchaseDate || r.purchase.recordedAt);
     if(!isNaN(d.getTime()) && monthKey(d)===k) total += Number(r.purchase.totalAmount)||0;
   });
+  closedServices().forEach(sr=>{
+    const d = new Date(sr.closedAt || sr.serviceDate);
+    if(!isNaN(d.getTime()) && monthKey(d)===k) total += Number(sr.totalAmount)||0;
+  });
   return total;
 }
 function totalExpenditureAllTime(){
-  return purchasedItems().reduce((s,r)=> s + (Number(r.purchase.totalAmount)||0), 0);
+  return purchasedItems().reduce((s,r)=> s + (Number(r.purchase.totalAmount)||0), 0)
+    + closedServices().reduce((s,sr)=> s + (Number(sr.totalAmount)||0), 0);
 }
 /* Consumption — entirely separate from Expenditure. Expenditure = money spent
    on purchases received. Consumption = stock actually used up, tracked via
@@ -1818,6 +1940,17 @@ function recentActivityEvents(days){
       }
     });
   });
+  DB.serviceRequests.forEach(sr=>{
+    if(sr.deleted) return;
+    (sr.history||[]).forEach(h=>{
+      const t = new Date(h.timestamp).getTime();
+      if(!isNaN(t) && t>=cutoff){
+        events.push({ timestamp:h.timestamp, title:(h.stage||h.action||'Update')+' — '+sr.serviceRequestNumber,
+          subtitle:(h.actorName||h.actorEmail||'—')+' · '+svcCategoryName(sr.categoryId), remark:h.remark,
+          href:'#/service-procurement/item/'+sr.id, icon: activityIconFor((h.stage||'')+' '+(h.action||'')) });
+      }
+    });
+  });
   events.sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
   return events.slice(0, 30);
 }
@@ -1874,6 +2007,25 @@ function dashboardMetrics(){
         if(recMs>=startOfToday.getTime()) expToday += amt;
         if(recMs>=sevenDaysAgo) expWeek += amt;
         if(recMs>=startOfMonth.getTime()) expMonth += amt;
+      }
+    }
+  });
+  DB.serviceRequests.forEach(sr=>{
+    if(sr.deleted) return;
+    const createdMs = new Date(sr.createdAt).getTime();
+    if(!isNaN(createdMs)){
+      if(createdMs>=startOfToday.getTime()) reqToday++;
+      if(createdMs>=sevenDaysAgo) reqWeek++;
+    }
+    // Same rule as above, applied to services — only a genuinely CLOSED
+    // service counts as an expense, never a pending/approved/under-observation one.
+    if(sr.status==='closed' && sr.closedAt){
+      const closedMs = new Date(sr.closedAt).getTime();
+      const amt = Number(sr.totalAmount)||0;
+      if(!isNaN(closedMs)){
+        if(closedMs>=startOfToday.getTime()) expToday += amt;
+        if(closedMs>=sevenDaysAgo) expWeek += amt;
+        if(closedMs>=startOfMonth.getTime()) expMonth += amt;
       }
     }
   });
@@ -2033,9 +2185,7 @@ function renderInventoryPage(){
   const app = document.getElementById('app');
   app.innerHTML =
     '<div class="content wrap module-inventory">'
-    + '<div class="page-title"><h2>Inventory Management</h2>'
-    + (isAdmin() ? '<button class="btn btn-primary btn-sm" id="manage-cats-btn">Manage Categories &amp; Items</button>' : '')
-    + '</div>'
+    + '<div class="page-title"><h2>Inventory Management</h2></div>'
     + '<div class="page-subtitle">Select a category to view and manage its stock.</div>'
     + '<div class="tab-strip">'
     +   '<button class="tab-btn '+(inventoryPageTab==='browse'?'active':'')+'" data-inv-tab="browse">Browse by Category</button>'
@@ -2044,7 +2194,6 @@ function renderInventoryPage(){
     + '</div>'
     + '<div class="tab-panel" id="inv-page-panel"></div>'
     + '</div>';
-  const btn = document.getElementById('manage-cats-btn'); if(btn) btn.addEventListener('click', openManageDeptsModal);
   document.querySelectorAll('[data-inv-tab]').forEach(b=>{
     b.addEventListener('click', ()=>{ inventoryPageTab = b.getAttribute('data-inv-tab'); renderInventoryPage(); });
   });
@@ -2052,6 +2201,46 @@ function renderInventoryPage(){
   else if(inventoryPageTab==='assets' && canManageConsumption()) renderAssetsTab();
   else renderInventoryBrowseTab();
 }
+/* ============================================================
+   Admin Settings — one place for every configuration screen (Manage
+   Staff, Buildings, item & service categories, Archive), instead of
+   scattering them as header buttons across whichever page happened to
+   need one first. Admin, or anyone with staff-management authority,
+   per the same canManageStaff() check those buttons used before.
+   ============================================================ */
+function renderAdminSettingsPage(){
+  const app = document.getElementById('app');
+  if(!canManageStaff()){ app.innerHTML = '<div class="content wrap"><div class="empty-state"><h3>Not available</h3></div></div>'; return; }
+  const cards = [
+    { id:'staff', icon:'👥', title:'Manage Staff', desc:'Roles, permissions, active/inactive status.', show:true },
+    { id:'buildings', icon:'🏢', title:'Manage Buildings', desc:'Buildings and rooms used for asset locations.', show:true },
+    { id:'item-cats', icon:'📦', title:'Manage Categories & Items', desc:'Item Procurement catalog, policies and value tiers.', show:true },
+    { id:'service-cats', icon:'🛠️', title:'Manage Service Categories', desc:'Service categories, sub-categories and approval policy.', show:true },
+    { id:'archive', icon:'🗄️', title:'Archive', desc:'Deleted records, restorable at any time.', show:isAdmin() }
+  ].filter(c=>c.show);
+  app.innerHTML = '<div class="content wrap module-admin">'
+    + '<div class="page-title"><h2>Admin Settings</h2></div>'
+    + '<div class="page-subtitle-inline">Configuration for staff, locations, and the item &amp; service catalogs.</div>'
+    + '<div class="card-grid">' + cards.map(c=>
+        '<button class="card cat-card" data-admin-card="'+c.id+'" style="width:100%; text-align:left; cursor:pointer; border:1px solid var(--color-border); background:var(--color-surface);">'
+          + '<div class="cat-card-icon" style="background:var(--color-primary-light); color:var(--color-primary-dark);">'+c.icon+'</div>'
+          + '<div class="cat-card-title">'+c.title+'</div>'
+          + '<div class="cat-card-meta">'+c.desc+'</div>'
+        + '</button>'
+      ).join('') + '</div>'
+    + '</div>';
+  document.querySelectorAll('[data-admin-card]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.getAttribute('data-admin-card');
+      if(id==='staff') openManageStaffModal();
+      else if(id==='buildings') openManageBuildingsModal();
+      else if(id==='item-cats') openManageDeptsModal();
+      else if(id==='service-cats') openManageServiceCategoriesModal();
+      else if(id==='archive') openArchiveModal();
+    });
+  });
+}
+
 function renderInventoryBrowseTab(){
   const panel = document.getElementById('inv-page-panel');
   const cards = DB.categories.filter(c=>!c.deleted).map(c=>{
@@ -2293,6 +2482,107 @@ function openDisposeAssetModal(itemId){
     });
     if(!ok) return;
     toast('Disposed','success'); closeModal(); renderInventoryPage();
+  });
+}
+
+/* ============================================================
+   Manage Service Categories (Admin) — mirrors Manage Categories & Items'
+   layout for consistency, but far simpler: no item type/value tier per
+   entry, just a name, its sub-categories, and one Requires Approval
+   toggle per category (services have no per-item policy override the
+   way item catalog entries do).
+   ============================================================ */
+function openManageServiceCategoriesModal(){ renderManageServiceCategoriesModalBody(); }
+function renderManageServiceCategoriesModalBody(){
+  const cats = DB.serviceCategories.filter(c=>!c.deleted);
+  const rows = cats.map(c=>{
+    const subs = (c.subcategories||[]).filter(s=>!s.deleted);
+    return '<div style="border:1px solid var(--color-border); border-radius:10px; padding:12px; margin-bottom:10px;">'
+      + '<div class="cat-policy-row"><div class="cat-policy-name"><strong>'+escapeHtml(c.name)+'</strong> '+(c.requiresApproval?'<span class="badge badge-high">Requires Approval</span>':'<span class="badge badge-approved">No Approval Required</span>')+'</div>'
+      +   '<div class="cat-policy-controls">'
+      +     '<button class="btn btn-outline btn-sm" data-rename-svccat="'+c.id+'">Rename</button>'
+      +     '<button class="btn btn-outline btn-sm" data-toggle-svccat-policy="'+c.id+'">'+(c.requiresApproval?'Make No-Approval':'Require Approval')+'</button>'
+      +     '<button class="btn btn-danger btn-sm" data-del-svccat="'+c.id+'">Delete</button>'
+      +   '</div></div>'
+      + '<div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">'
+      +   subs.map(s=>'<span class="badge badge-status">'+escapeHtml(s.name)+' <a href="javascript:void(0)" data-del-svcsub="'+c.id+'|'+s.id+'" style="color:var(--color-danger); margin-left:4px;">×</a></span>').join('')
+      + '</div>'
+      + '<div class="field-row" style="margin-top:8px;"><div class="field"><input type="text" data-newsub-name="'+c.id+'" placeholder="New sub-category name"></div><div class="field" style="flex:none;"><button class="btn btn-outline btn-sm" data-add-svcsub="'+c.id+'">+ Add</button></div></div>'
+      + '</div>';
+  }).join('');
+
+  const body = rows
+    + '<div class="plain-divider"></div>'
+    + '<h4>Add Category</h4>'
+    + '<div class="field-row"><div class="field"><input type="text" id="new-svccat-name" placeholder="Category name"></div><div class="field" style="flex:none;"><button class="btn btn-primary btn-sm" id="add-svccat-btn">+ Add Category</button></div></div>';
+
+  openModal('Manage Service Categories', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-service-procurement');
+  document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+
+  document.getElementById('add-svccat-btn').addEventListener('click', async function(){
+    const btn = this;
+    const name = document.getElementById('new-svccat-name').value.trim();
+    if(!name) return;
+    const dupe = DB.serviceCategories.find(c=>!c.deleted && (c.name||'').toLowerCase()===name.toLowerCase());
+    if(dupe){ toast('"'+name+'" already exists as a service category','error'); return; }
+    const ok = await runSaveAction(btn, 'Adding…', async ()=>{
+      await pushAndSave(DB.serviceCategories, { id:nextId('svccat'), name, requiresApproval:true, subcategories:[] });
+    });
+    if(!ok) return;
+    toast('Category added','success'); renderManageServiceCategoriesModalBody();
+  });
+  document.querySelectorAll('[data-rename-svccat]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const c = DB.serviceCategories.find(x=>x.id===btn.getAttribute('data-rename-svccat'));
+      const name = prompt('Rename category:', c.name); if(!name || !name.trim()) return;
+      const ok = await runSaveAction(btn, '…', async ()=>{ c.name = name.trim(); await saveDb(); });
+      if(!ok) return;
+      toast('Renamed','success'); renderManageServiceCategoriesModalBody();
+    });
+  });
+  document.querySelectorAll('[data-toggle-svccat-policy]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const c = DB.serviceCategories.find(x=>x.id===btn.getAttribute('data-toggle-svccat-policy'));
+      const ok = await runSaveAction(btn, '…', async ()=>{ c.requiresApproval = !c.requiresApproval; await saveDb(); });
+      if(!ok) return;
+      toast('Updated','success'); renderManageServiceCategoriesModalBody();
+    });
+  });
+  document.querySelectorAll('[data-del-svccat]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const c = DB.serviceCategories.find(x=>x.id===btn.getAttribute('data-del-svccat'));
+      if(!promptAndArchive('serviceCategory', c, c.name)) return;
+      const ok = await runSaveAction(btn, 'Deleting…', async ()=>{ await saveDb(); });
+      if(!ok) return;
+      toast('Category deleted','success'); renderManageServiceCategoriesModalBody();
+    });
+  });
+  document.querySelectorAll('[data-add-svcsub]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const catId = btn.getAttribute('data-add-svcsub');
+      const input = document.querySelector('[data-newsub-name="'+catId+'"]');
+      const name = input.value.trim(); if(!name) return;
+      const c = DB.serviceCategories.find(x=>x.id===catId);
+      if((c.subcategories||[]).some(s=>!s.deleted && s.name.toLowerCase()===name.toLowerCase())){ toast('That sub-category already exists','error'); return; }
+      const ok = await runSaveAction(btn, '…', async ()=>{
+        if(!Array.isArray(c.subcategories)) c.subcategories = [];
+        c.subcategories.push({ id:nextId('svcsub'), name });
+        await saveDb();
+      });
+      if(!ok) return;
+      toast('Sub-category added','success'); renderManageServiceCategoriesModalBody();
+    });
+  });
+  document.querySelectorAll('[data-del-svcsub]').forEach(a=>{
+    a.addEventListener('click', async ()=>{
+      const [catId, subId] = a.getAttribute('data-del-svcsub').split('|');
+      const c = DB.serviceCategories.find(x=>x.id===catId);
+      const sub = (c.subcategories||[]).find(s=>s.id===subId);
+      if(!confirm('Remove sub-category "'+sub.name+'"?')) return;
+      const ok = await runSaveAction(a, '…', async ()=>{ sub.deleted = true; await saveDb(); });
+      if(!ok) return;
+      toast('Removed','success'); renderManageServiceCategoriesModalBody();
+    });
   });
 }
 
@@ -2606,6 +2896,7 @@ function renderInventoryItemDetailPage(itemId){
 
     + renderInstallationHistoryHtml(item)
     + renderDisposalHistoryHtml(item)
+    + renderServiceHistoryHtml(item)
 
     + '<div class="section-heading">Purchase History</div>'
     + renderPurchaseHistoryHtml(item)
@@ -2634,6 +2925,9 @@ function renderInventoryItemDetailPage(itemId){
   });
   document.querySelectorAll('[data-open-purchase]').forEach(card=>{
     card.addEventListener('click', ()=>{ location.hash = '#/procurement/item/'+card.getAttribute('data-open-purchase'); });
+  });
+  document.querySelectorAll('[data-open-service-history]').forEach(card=>{
+    card.addEventListener('click', ()=>{ location.hash = '#/service-procurement/item/'+card.getAttribute('data-open-service-history'); });
   });
   wireAdjustmentForm(item);
   const uploadBtn = document.getElementById('item-photo-upload-btn');
@@ -3185,9 +3479,7 @@ function renderProcurementPage(initialTab){
 
   app.innerHTML =
     '<div class="content wrap module-procurement">'
-    + '<div class="page-title"><h2>Procurement</h2>'
-    +   (canManageStaff() ? '<span style="display:flex; gap:8px;"><button class="btn btn-outline btn-sm" id="manage-staff-btn">Manage Staff</button><button class="btn btn-outline btn-sm" id="manage-buildings-btn">Manage Buildings</button>'+(isAdmin()?'<button class="btn btn-outline btn-sm" id="view-archive-btn">Archive</button>':'')+'</span>' : '')
-    + '</div>'
+    + '<div class="page-title"><h2>Item Procurement</h2></div>'
     + '<div class="page-subtitle-inline">Purchase requests, approvals, purchasing, receipt and issue — permanently tracked.</div>'
     + '<div class="tab-strip proc-tab-strip">' + tabs.map(t=>
         '<button class="tab-btn '+(procTab===t[0]?'active':'')+(tabHasAttention(t[0])?' tab-attention':'')+'" data-proc-tab="'+t[0]+'">'
@@ -3200,9 +3492,6 @@ function renderProcurementPage(initialTab){
   document.querySelectorAll('[data-proc-tab]').forEach(btn=>{
     btn.addEventListener('click', ()=>{ procTab = btn.getAttribute('data-proc-tab'); delete tabAttentionFlags[procTab]; renderProcurementPage(); });
   });
-  const msBtn = document.getElementById('manage-staff-btn'); if(msBtn) msBtn.addEventListener('click', openManageStaffModal);
-  const mbBtn = document.getElementById('manage-buildings-btn'); if(mbBtn) mbBtn.addEventListener('click', openManageBuildingsModal);
-  const arBtn = document.getElementById('view-archive-btn'); if(arBtn) arBtn.addEventListener('click', openArchiveModal);
 
   if(!isSignedIn() && procTab!=='all'){ procTab = 'all'; }
   if(procTab==='new') renderNewRequestTab();
@@ -3778,6 +4067,466 @@ function renderAllRequestsTab(){
   });
 }
 
+/* ================================================================
+   SERVICE PROCUREMENT — a genuinely parallel module. Physically separate
+   from everything above: own data collection (DB.serviceRequests), own
+   approval engine (defined earlier alongside Item Procurement's, but
+   operating independently), own tabs, own colour (.module-service-procurement).
+   Nothing in this section is called by Item Procurement, and nothing above
+   this point is called by Service Procurement.
+   ================================================================ */
+let serviceProcTab = 'new';
+let newServiceLines = null; // single in-progress request being composed
+function svcCatSubOptions(categoryId, selectedId){
+  const cat = DB.serviceCategories.find(c=>!c.deleted && c.id===categoryId);
+  const subs = cat ? (cat.subcategories||[]).filter(s=>!s.deleted) : [];
+  if(!subs.length) return '<option value="">— No sub-categories —</option>';
+  return '<option value="">— Select —</option>' + subs.map(s=>'<option value="'+s.id+'" '+(selectedId===s.id?'selected':'')+'>'+escapeHtml(s.name)+'</option>').join('');
+}
+function svcCategoryName(id){ const c = DB.serviceCategories.find(x=>x.id===id); return c ? c.name : '—'; }
+function svcSubcategoryName(catId, subId){
+  const cat = DB.serviceCategories.find(x=>x.id===catId);
+  const sub = cat ? (cat.subcategories||[]).find(s=>s.id===subId) : null;
+  return sub ? sub.name : '—';
+}
+function canManageServiceReceipts(){ return isAdmin() || isApproverRole() || isStaffPortalUser(); }
+
+function renderServiceProcurementPage(initialTab){
+  const app = document.getElementById('app');
+  if(initialTab) serviceProcTab = initialTab;
+  if(!serviceProcTab) serviceProcTab = 'new';
+  const canApproveAny = isSignedIn() && isApproverRole();
+  const canReceiveAny = isSignedIn() && canManageServiceReceipts();
+
+  const tabs = [];
+  if(isSignedIn()) tabs.push(['new','New Request', 0]);
+  if(canApproveAny) tabs.push(['approvals','Approvals', myServiceApprovalQueue().length]);
+  if(canReceiveAny) tabs.push(['receipts','Service Details & Receipts', myServiceReceiptQueue().length]);
+  tabs.push(['all','All Service Requests', 0]);
+
+  app.innerHTML =
+    '<div class="content wrap module-service-procurement">'
+    + '<div class="page-title"><h2>Service Procurement</h2></div>'
+    + '<div class="page-subtitle-inline">Service requests, approvals, service details and receipts — permanently tracked.</div>'
+    + '<div class="tab-strip proc-tab-strip">' + tabs.map(t=>
+        '<button class="tab-btn '+(serviceProcTab===t[0]?'active':'')+(tabHasAttention('svc_'+t[0])?' tab-attention':'')+'" data-svc-tab="'+t[0]+'">'
+          + '<span>'+t[1]+'</span>' + (t[2] ? '<span class="tab-count-badge">'+t[2]+'</span>' : '')
+        + '</button>'
+      ).join('') + '</div>'
+    + '<div class="tab-panel" id="svc-panel"></div>'
+    + '</div>';
+
+  document.querySelectorAll('[data-svc-tab]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ serviceProcTab = btn.getAttribute('data-svc-tab'); delete tabAttentionFlags['svc_'+serviceProcTab]; renderServiceProcurementPage(); });
+  });
+  if(!isSignedIn() && serviceProcTab!=='all'){ serviceProcTab = 'all'; }
+  if(serviceProcTab==='new') renderNewServiceRequestTab();
+  else if(serviceProcTab==='approvals') renderServiceApprovalsTab();
+  else if(serviceProcTab==='receipts') renderServiceReceiptsTab();
+  else renderAllServiceRequestsTab();
+}
+
+/* ---------------- New Service Request ---------------- */
+function renderNewServiceRequestTab(){
+  const panel = document.getElementById('svc-panel');
+  if(!newServiceLines) newServiceLines = { tiedTo:'general', assetIds:[], categoryId:'', subcategoryId:'', priority:'Medium' };
+  const L = newServiceLines;
+  const mine = myStaffRecord();
+  const staffOptions = DB.staff.filter(s=>!s.deleted && s.active!==false).sort((a,b)=>a.name.localeCompare(b.name))
+    .map(s=>'<option value="'+s.id+'" '+(mine && mine.id===s.id?'selected':'')+'>'+escapeHtml(s.name)+'</option>').join('');
+  const catOptions = DB.serviceCategories.filter(c=>!c.deleted).map(c=>'<option value="'+c.id+'" '+(L.categoryId===c.id?'selected':'')+'>'+escapeHtml(c.name)+'</option>').join('');
+  const priorities = ['Low','Medium','High','Urgent'];
+
+  panel.innerHTML =
+    '<div class="field-row">'
+    +   '<div class="field"><label>Request Date</label><input type="date" id="svcr-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+    +   '<div class="field"><label>Requested By</label><select id="svcr-requested-by">'+staffOptions+'</select></div>'
+    + '</div>'
+    + '<div class="req-line-card" style="margin-top:14px;">'
+    +   '<div class="req-line-head" style="cursor:default;"><strong>Service</strong></div>'
+    +   '<div class="req-line-body" style="max-height:none; opacity:1;">'
+    +   '<div class="field"><label>Service tied to</label><select id="svcr-tiedto"><option value="general" '+(L.tiedTo==='general'?'selected':'')+'>General</option><option value="assets" '+(L.tiedTo==='assets'?'selected':'')+'>Assets</option></select></div>'
+    +   '<div id="svcr-asset-picker">'+(L.tiedTo==='assets' ? renderServiceAssetPickerHtml() : '')+'</div>'
+    +   '<div class="field-row"><div class="field"><label>Category</label><select id="svcr-category"><option value="">— Select —</option>'+catOptions+'</select></div>'
+    +     '<div class="field"><label>Sub-category</label><select id="svcr-subcategory">'+svcCatSubOptions(L.categoryId, L.subcategoryId)+'</select></div></div>'
+    +   '<div class="field"><label>Priority</label><select id="svcr-priority">'+priorities.map(p=>'<option '+(L.priority===p?'selected':'')+'>'+p+'</option>').join('')+'</select></div>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="req-action-bar"><button class="btn btn-outline" id="svcr-cancel-btn">Cancel</button><button class="btn btn-primary" id="svcr-submit-btn">Submit Service Request</button></div>';
+
+  document.getElementById('svcr-tiedto').addEventListener('change', function(){
+    L.tiedTo = this.value; L.assetIds = [];
+    document.getElementById('svcr-asset-picker').innerHTML = L.tiedTo==='assets' ? renderServiceAssetPickerHtml() : '';
+    wireServiceAssetPicker();
+  });
+  document.getElementById('svcr-category').addEventListener('change', function(){
+    L.categoryId = this.value; L.subcategoryId = '';
+    document.getElementById('svcr-subcategory').innerHTML = svcCatSubOptions(L.categoryId, '');
+  });
+  wireServiceAssetPicker();
+
+  document.getElementById('svcr-cancel-btn').addEventListener('click', ()=>{ newServiceLines = null; renderServiceProcurementPage(); toast('Request cleared','success'); });
+  document.getElementById('svcr-submit-btn').addEventListener('click', async function(){
+    const btn = this;
+    const requestDate = document.getElementById('svcr-date').value;
+    const requestedByStaff = staffById(document.getElementById('svcr-requested-by').value);
+    if(!requestedByStaff){ toast('Choose who this request is for','error'); return; }
+    const categoryId = document.getElementById('svcr-category').value;
+    const subcategoryId = document.getElementById('svcr-subcategory').value;
+    if(!categoryId || !subcategoryId){ toast('Choose a Category and Sub-category','error'); return; }
+    if(L.tiedTo==='assets' && !L.assetIds.length){ toast('Choose at least one asset, or switch Service tied to General','error'); return; }
+    const priority = document.getElementById('svcr-priority').value;
+    const ok = await runSaveAction(btn, 'Submitting…', async ()=>{
+      const sr = {
+        id: nextId('svcreq'), serviceRequestNumber: nextServiceRequestNumber(), requestDate,
+        requestedByStaffId: requestedByStaff.id, requestedByEmail: requestedByStaff.email, requestedByName: requestedByStaff.name,
+        tiedTo: L.tiedTo, assetIds: L.tiedTo==='assets' ? L.assetIds.slice() : [],
+        categoryId, subcategoryId, priority,
+        approvalStatus: null, status: null,
+        escalatedByEmail: null, escalatedByName: null, escalatedAt: null, escalationComment: null,
+        checkedByEmail: null, checkedByName: null, serviceDate: null, serviceCharges: 0, taxes: 0, totalAmount: 0,
+        serviceStatus: null, closedAt: null, notes: [],
+        history: [{ stage:'Requested', action:'created', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:'', timestamp:new Date().toISOString() }],
+        createdAt: new Date().toISOString()
+      };
+      initServiceApproval(sr);
+      await pushAndSave(DB.serviceRequests, sr);
+    });
+    if(!ok) return;
+    newServiceLines = null;
+    toast('Service request submitted','success');
+    serviceProcTab = 'all';
+    renderServiceProcurementPage();
+  });
+}
+function renderServiceAssetPickerHtml(){
+  const buildings = DB.buildings.filter(b=>!b.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
+  return '<div class="field"><label>Choose Asset(s)</label></div>'
+    + '<div class="tab-strip" style="margin:0 0 8px;">'
+    +   '<button type="button" class="tab-btn active" data-svc-asset-src="installed">Installed Assets</button>'
+    +   '<button type="button" class="tab-btn" data-svc-asset-src="spare">Spare Assets</button>'
+    + '</div>'
+    + '<div id="svcr-asset-installed">'
+    +   '<div class="field-row"><div class="field"><label>Building</label><select id="svcr-asset-building"><option value="">— Select —</option>'+buildings.map(b=>'<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('')+'</select></div>'
+    +   '<div class="field"><label>Room</label><select id="svcr-asset-room"><option value="">— All Rooms —</option></select></div></div>'
+    +   '<div id="svcr-asset-installed-list" class="field-hint">Choose a building to see installed assets.</div>'
+    + '</div>'
+    + '<div id="svcr-asset-spare" style="display:none;"><div id="svcr-asset-spare-list"></div></div>';
+}
+function wireServiceAssetPicker(){
+  const L = newServiceLines;
+  if(!L || L.tiedTo!=='assets') return;
+  document.querySelectorAll('[data-svc-asset-src]').forEach(btn=>{
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('[data-svc-asset-src]').forEach(b=>b.classList.remove('active'));
+      this.classList.add('active');
+      const src = this.getAttribute('data-svc-asset-src');
+      document.getElementById('svcr-asset-installed').style.display = src==='installed' ? '' : 'none';
+      document.getElementById('svcr-asset-spare').style.display = src==='spare' ? '' : 'none';
+    });
+  });
+  const bSel = document.getElementById('svcr-asset-building');
+  const rSel = document.getElementById('svcr-asset-room');
+  function refreshRoomOptions(){
+    if(!bSel) return;
+    const rs = DB.rooms.filter(x=>x.buildingId===bSel.value);
+    rSel.innerHTML = '<option value="">— All Rooms —</option>' + rs.map(r=>'<option value="'+r.id+'">'+escapeHtml(r.name)+'</option>').join('');
+    refreshInstalledList();
+  }
+  function refreshInstalledList(){
+    const listEl = document.getElementById('svcr-asset-installed-list');
+    if(!bSel.value){ listEl.innerHTML = '<div class="field-hint">Choose a building to see installed assets.</div>'; return; }
+    const rows = [];
+    assetItems().forEach(item=>{
+      activeInstallationsForItem(item).forEach(ins=>{
+        if(ins.buildingId!==bSel.value) return;
+        if(rSel.value && ins.roomId!==rSel.value) return;
+        rows.push({ item, ins });
+      });
+    });
+    if(!rows.length){ listEl.innerHTML = '<div class="field-hint">No installed assets found there.</div>'; return; }
+    listEl.innerHTML = rows.map(({item,ins})=>{
+      const key = item.id+'|'+ins.id;
+      const checked = L.assetIds.includes(key);
+      return '<label class="chk-row" style="margin-bottom:6px;"><input type="checkbox" data-svc-asset-check="'+key+'" '+(checked?'checked':'')+'> '+escapeHtml(item.name)+' ('+escapeHtml(item.itemCode||'—')+') — '+buildingName(ins.buildingId)+(ins.roomId?' → '+roomName(ins.roomId):'')+'</label>';
+    }).join('<br>');
+    listEl.querySelectorAll('[data-svc-asset-check]').forEach(chk=>{
+      chk.addEventListener('change', function(){
+        const key = this.getAttribute('data-svc-asset-check');
+        if(this.checked){ if(!L.assetIds.includes(key)) L.assetIds.push(key); }
+        else{ L.assetIds = L.assetIds.filter(k=>k!==key); }
+      });
+    });
+  }
+  if(bSel){ bSel.addEventListener('change', refreshRoomOptions); rSel.addEventListener('change', refreshInstalledList); }
+  const spareListEl = document.getElementById('svcr-asset-spare-list');
+  if(spareListEl){
+    const spares = assetItems().filter(i=>Number(i.quantity)>0);
+    spareListEl.innerHTML = spares.length ? spares.map(item=>{
+      const key = item.id;
+      const checked = L.assetIds.includes(key);
+      return '<label class="chk-row" style="margin-bottom:6px;"><input type="checkbox" data-svc-asset-check-spare="'+key+'" '+(checked?'checked':'')+'> '+escapeHtml(item.name)+' ('+escapeHtml(item.itemCode||'—')+') — '+item.quantity+' spare</label>';
+    }).join('<br>') : '<div class="field-hint">No spare assets right now.</div>';
+    spareListEl.querySelectorAll('[data-svc-asset-check-spare]').forEach(chk=>{
+      chk.addEventListener('change', function(){
+        const key = this.getAttribute('data-svc-asset-check-spare');
+        if(this.checked){ if(!L.assetIds.includes(key)) L.assetIds.push(key); }
+        else{ L.assetIds = L.assetIds.filter(k=>k!==key); }
+      });
+    });
+  }
+}
+/* An assetIds entry is either "itemId|installationId" (a specific installed
+   instance, so the exact location travels with it) or bare "itemId" (a
+   spare asset, no location to pin). Resolve both forms for display. */
+function describeServiceAssetRef(ref){
+  const [itemId, installationId] = ref.split('|');
+  const item = DB.inventoryItems.find(i=>i.id===itemId);
+  if(!item) return '—';
+  if(installationId){
+    const ins = (item.installations||[]).find(x=>x.id===installationId);
+    return item.name + (ins ? ' — ' + buildingName(ins.buildingId)+(ins.roomId?' → '+roomName(ins.roomId):'') : '');
+  }
+  return item.name + ' (spare)';
+}
+
+/* ---------------- Service Approvals ---------------- */
+function renderServiceApprovalsTab(){
+  const panel = document.getElementById('svc-panel');
+  const items = myServiceApprovalQueue();
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">✅</div><h3>Nothing awaiting your action</h3></div>'; return; }
+  panel.innerHTML = '<div class="approval-card-grid">' + items.map(sr=>renderServiceApprovalCard(sr)).join('') + '</div>';
+  items.forEach(sr=>{
+    const card = panel.querySelector('[data-svc-approval-card="'+sr.id+'"]');
+    const approveBtn = card.querySelector('[data-svc-approve-one]');
+    if(approveBtn) approveBtn.addEventListener('click', ()=>submitServiceApprovalAction(sr, 'approve', approveBtn));
+    const canEscalate = sr.approvalStatus==='pending_coordinator' && hasRole('coordinator');
+    card.querySelectorAll('[data-action-toggle]').forEach(toggleBtn=>{
+      toggleBtn.addEventListener('click', ()=>{
+        const which = toggleBtn.getAttribute('data-action-toggle');
+        card.querySelector('.approval-action-panel').setAttribute('data-pending-action', which);
+        card.querySelector('.approval-action-panel-label').textContent = which==='escalate' ? 'Escalation reason (required)' : 'Decline reason (required)';
+        card.querySelector('.approval-action-confirm').textContent = which==='escalate' ? 'Confirm Escalate' : 'Confirm Decline';
+        card.querySelector('.approval-action-confirm').className = 'btn btn-sm approval-action-confirm ' + (which==='escalate' ? 'btn-primary' : 'btn-danger');
+        card.classList.add('declining');
+        setTimeout(()=>{ const t = document.getElementById('svc-comment-'+sr.id); if(t) t.focus(); }, 200);
+      });
+    });
+    const cancelBtn = card.querySelector('[data-decline-cancel]');
+    if(cancelBtn) cancelBtn.addEventListener('click', ()=>{ card.classList.remove('declining'); const t = document.getElementById('svc-comment-'+sr.id); if(t) t.value=''; });
+    const confirmBtn = card.querySelector('.approval-action-confirm');
+    if(confirmBtn) confirmBtn.addEventListener('click', ()=>{
+      const which = card.querySelector('.approval-action-panel').getAttribute('data-pending-action');
+      submitServiceApprovalAction(sr, which, confirmBtn);
+    });
+  });
+}
+function renderServiceApprovalCard(sr){
+  const canEscalate = sr.approvalStatus === 'pending_coordinator' && hasRole('coordinator');
+  const tiedToLabel = sr.tiedTo==='assets' ? (sr.assetIds||[]).map(describeServiceAssetRef).join(', ') : 'General';
+  return '<div class="approval-card" data-svc-approval-card="'+sr.id+'">'
+    + '<div class="approval-card-top"><span class="approval-card-name">'+escapeHtml(svcCategoryName(sr.categoryId))+' — '+escapeHtml(svcSubcategoryName(sr.categoryId, sr.subcategoryId))+'</span>'
+    +   '<span class="approval-card-tags">'+priorityChip(sr.priority)+'</span></div>'
+    + '<div class="approval-card-rows">'
+    +   '<div class="approval-card-row"><label>Request No:</label><span>'+escapeHtml(sr.serviceRequestNumber)+'</span></div>'
+    +   '<div class="approval-card-row"><label>Service tied to:</label><span>'+escapeHtml(tiedToLabel)+'</span></div>'
+    +   '<div class="approval-card-row"><label>Requisitioner:</label><span>'+escapeHtml(sr.requestedByName)+'</span></div>'
+    + '</div>'
+    + (sr.approvalStatus==='pending_principal' ? '<div class="approval-card-hint">Escalated by '+escapeHtml(sr.escalatedByName||'—')+(sr.escalationComment?': "'+escapeHtml(sr.escalationComment)+'"':'')+'</div>' : '')
+    + '<div class="approval-card-divider"></div>'
+    + '<div class="approval-card-actions">'
+    +   '<button class="btn btn-approve btn-sm" data-svc-approve-one="'+sr.id+'">Approve</button>'
+    +   (canEscalate ? '<button class="btn btn-outline btn-sm" data-action-toggle="escalate">Escalate</button>' : '')
+    +   '<button class="btn btn-danger btn-sm" data-action-toggle="decline">Decline</button>'
+    + '</div>'
+    + '<div class="approval-action-panel">'
+    +   '<label class="approval-action-panel-label">Decline reason (required)</label>'
+    +   '<textarea id="svc-comment-'+sr.id+'" placeholder="Required comment…"></textarea>'
+    +   '<div class="approval-decline-actions">'
+    +     '<button class="btn btn-cancel btn-sm" data-decline-cancel="'+sr.id+'">Cancel</button>'
+    +     '<button class="btn btn-danger btn-sm approval-action-confirm">Confirm Decline</button>'
+    +   '</div>'
+    + '</div>'
+    + '</div>';
+}
+async function submitServiceApprovalAction(sr, action, btn){
+  const commentEl = document.getElementById('svc-comment-'+sr.id);
+  const comment = commentEl ? commentEl.value.trim() : '';
+  if((action==='decline'||action==='escalate') && !comment){ toast('A comment is required for this action','error'); return; }
+  const busyLabel = action==='approve' ? 'Approving…' : action==='decline' ? 'Declining…' : 'Escalating…';
+  const ok = await runSaveAction(btn, busyLabel, async ()=>{ await applyServiceApprovalAction(sr, action, comment); });
+  if(!ok) return;
+  toast(action==='approve'?'Approved':action==='decline'?'Declined':'Escalated to Principal', action==='decline'?'error':'success');
+  if(action==='approve') flagTabAttention('svc_receipts');
+  renderServiceProcurementPage();
+}
+
+/* ---------------- Service Details & Receipts ---------------- */
+function renderServiceReceiptsTab(){
+  const panel = document.getElementById('svc-panel');
+  const items = myServiceReceiptQueue();
+  if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🛠️</div><h3>Nothing waiting on service details</h3></div>'; return; }
+  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Service Request</th><th>Requested By</th><th>Category</th><th>Priority</th><th>Status</th><th></th></tr></thead><tbody>'
+    + items.map(sr=>'<tr><td>'+escapeHtml(sr.serviceRequestNumber)+'</td><td>'+escapeHtml(sr.requestedByName)+'</td><td>'+escapeHtml(svcCategoryName(sr.categoryId))+' / '+escapeHtml(svcSubcategoryName(sr.categoryId,sr.subcategoryId))+'</td><td>'+priorityChip(sr.priority)+'</td><td>'+serviceStatusBadge(sr.status)+'</td><td><button class="btn btn-primary btn-sm" data-confirm-svc-receipt="'+sr.id+'">Confirm Service Receipt</button></td></tr>').join('')
+    + '</tbody></table></div>';
+  panel.querySelectorAll('[data-confirm-svc-receipt]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openServiceReceiptModal(btn.getAttribute('data-confirm-svc-receipt')));
+  });
+}
+function openServiceReceiptModal(serviceRequestId){
+  const sr = DB.serviceRequests.find(s=>s.id===serviceRequestId);
+  if(!sr){ toast('Service request not found','error'); return; }
+  const staffOptions = DB.staff.filter(s=>!s.deleted && s.active!==false).map(s=>'<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>').join('');
+  const tiedToLabel = sr.tiedTo==='assets' ? (sr.assetIds||[]).map(describeServiceAssetRef).join(', ') : 'General';
+  const body = '<div class="spec-grid" style="margin-bottom:14px;">'
+    +   '<div class="spec-item"><label>Service Request No.</label><div class="val">'+escapeHtml(sr.serviceRequestNumber)+'</div></div>'
+    +   '<div class="spec-item"><label>Requested By</label><div class="val">'+escapeHtml(sr.requestedByName)+'</div></div>'
+    +   '<div class="spec-item"><label>Service tied to</label><div class="val">'+escapeHtml(tiedToLabel)+'</div></div>'
+    +   '<div class="spec-item"><label>Category</label><div class="val">'+escapeHtml(svcCategoryName(sr.categoryId))+' / '+escapeHtml(svcSubcategoryName(sr.categoryId,sr.subcategoryId))+'</div></div>'
+    +   '<div class="spec-item"><label>Priority</label><div class="val">'+escapeHtml(sr.priority)+'</div></div>'
+    +   '<div class="spec-item"><label>Current Status</label><div class="val">'+serviceStatusLabel(sr.status)+'</div></div>'
+    + '</div>'
+    + '<div class="plain-divider"></div>'
+    + '<div class="field"><label>Checked By</label><select id="svcrc-checkedby">'+staffOptions+'</select></div>'
+    + '<div class="field"><label>Date</label><input type="date" id="svcrc-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+    + '<div class="field-row"><div class="field"><label>Service Charges (₹)</label><input type="number" id="svcrc-charges" value="'+(sr.serviceCharges||0)+'"></div>'
+    +   '<div class="field"><label>Taxes (₹)</label><input type="number" id="svcrc-taxes" value="'+(sr.taxes||0)+'"></div></div>'
+    + '<div class="field"><label>Total Amount (₹, auto)</label><input type="number" id="svcrc-total" value="'+(sr.totalAmount||0)+'" readonly></div>'
+    + '<div class="field"><label>Service Status</label>'
+    +   '<div class="radio-row"><label><input type="radio" name="svcrc-status" value="Satisfactory"> Satisfactory</label>'
+    +     '<label><input type="radio" name="svcrc-status" value="Not Satisfactory"> Not Satisfactory</label>'
+    +     '<label><input type="radio" name="svcrc-status" value="Under Observation"> Under Observation</label></div>'
+    + '</div>';
+  openModal('Confirm Service Receipt — '+escapeHtml(sr.serviceRequestNumber), body,
+    '<button class="btn btn-outline" id="svcrc-close-plain-btn">Close</button>'
+    + '<button class="btn btn-outline" id="svcrc-observation-btn">Mark for Observation</button>'
+    + '<button class="btn btn-primary" id="svcrc-close-service-btn">Close Service</button>',
+    'module-service-procurement');
+  const mine = myStaffRecord();
+  if(mine){ const sel=document.getElementById('svcrc-checkedby'); if([...sel.options].some(o=>o.value===mine.id)) sel.value = mine.id; }
+  const chargesEl = document.getElementById('svcrc-charges'), taxEl = document.getElementById('svcrc-taxes'), totalEl = document.getElementById('svcrc-total');
+  function recalc(){ totalEl.value = ((Number(chargesEl.value)||0)+(Number(taxEl.value)||0)).toFixed(2); }
+  chargesEl.addEventListener('input', recalc); taxEl.addEventListener('input', recalc); recalc();
+  document.getElementById('svcrc-close-plain-btn').addEventListener('click', closeModal);
+
+  function collectReceiptFields(){
+    const staffRec = staffById(document.getElementById('svcrc-checkedby').value);
+    const statusRadio = document.querySelector('input[name="svcrc-status"]:checked');
+    return {
+      checkedByEmail: staffRec ? staffRec.email : null, checkedByName: staffRec ? staffRec.name : null,
+      serviceDate: document.getElementById('svcrc-date').value,
+      serviceCharges: Number(chargesEl.value)||0, taxes: Number(taxEl.value)||0, totalAmount: Number(totalEl.value)||0,
+      serviceStatus: statusRadio ? statusRadio.value : null
+    };
+  }
+  document.getElementById('svcrc-observation-btn').addEventListener('click', async function(){
+    const btn = this;
+    const f = collectReceiptFields();
+    if(f.serviceStatus !== 'Under Observation'){ toast('Select "Under Observation" above to use this action','error'); return; }
+    if(!f.checkedByEmail){ toast('Choose who checked this','error'); return; }
+    const actorName = (myStaffRecord()||{}).name || currentUserEmail;
+    const ok = await runSaveAction(btn, 'Saving…', async ()=>{
+      Object.assign(sr, f);
+      sr.status = 'under_observation';
+      sr.history.push({ stage:'Under Observation', action:'marked for observation', actorEmail:currentUserEmail, actorName, remark:'Charges: ₹'+f.totalAmount, timestamp:new Date().toISOString() });
+      await saveDb();
+    });
+    if(!ok) return;
+    toast('Marked for observation — stays active in Service Details & Receipts','success');
+    closeModal();
+    flagTabAttention('svc_receipts');
+    renderServiceProcurementPage();
+  });
+  document.getElementById('svcrc-close-service-btn').addEventListener('click', async function(){
+    const btn = this;
+    const f = collectReceiptFields();
+    if(!f.serviceStatus || f.serviceStatus==='Under Observation'){ toast('Select Satisfactory or Not Satisfactory to use Close Service (use "Mark for Observation" for that status instead)','error'); return; }
+    if(!f.checkedByEmail){ toast('Choose who checked this','error'); return; }
+    const actorName = (myStaffRecord()||{}).name || currentUserEmail;
+    const ok = await runSaveAction(btn, 'Saving…', async ()=>{
+      Object.assign(sr, f);
+      if(f.serviceStatus === 'Satisfactory'){
+        sr.status = 'closed';
+        sr.closedAt = new Date().toISOString();
+        sr.history.push({ stage:'Closed', action:'closed (satisfactory)', actorEmail:currentUserEmail, actorName, remark:'Charges: ₹'+f.totalAmount, timestamp:new Date().toISOString() });
+      } else {
+        // Not Satisfactory — recorded, but deliberately NOT closed: stays
+        // active in Service Details & Receipts until it's actually resolved.
+        sr.status = 'not_satisfactory';
+        sr.history.push({ stage:'Service Checked', action:'recorded as not satisfactory', actorEmail:currentUserEmail, actorName, remark:'Charges: ₹'+f.totalAmount, timestamp:new Date().toISOString() });
+      }
+      await saveDb();
+    });
+    if(!ok) return;
+    toast(f.serviceStatus==='Satisfactory' ? 'Service closed' : 'Recorded as not satisfactory — remains active for follow-up', f.serviceStatus==='Satisfactory'?'success':'error');
+    closeModal();
+    renderServiceProcurementPage();
+  });
+}
+
+/* ---------------- All Service Requests ---------------- */
+function renderAllServiceRequestsTab(){
+  const panel = document.getElementById('svc-panel');
+  const list = DB.serviceRequests.filter(s=>!s.deleted).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  if(!list.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🗒️</div><h3>No service requests yet</h3></div>'; return; }
+  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Request</th><th>Requested By</th><th>Category</th><th>Priority</th><th>Status</th><th>Raised</th>'+(isAdmin()?'<th></th>':'')+'</tr></thead><tbody>'
+    + list.map(sr=>'<tr class="row-clickable" data-open-svc="'+sr.id+'"><td>'+escapeHtml(sr.serviceRequestNumber)+'</td><td>'+escapeHtml(sr.requestedByName)+'</td><td>'+escapeHtml(svcCategoryName(sr.categoryId))+'</td><td>'+priorityChip(sr.priority)+'</td><td>'+serviceStatusBadge(sr.status)+'</td><td>'+formatDate(sr.createdAt)+'</td>'+(isAdmin()?'<td><button class="btn btn-danger btn-sm" data-delete-svc="'+sr.id+'">Archive / Delete</button></td>':'')+'</tr>').join('')
+    + '</tbody></table></div>';
+  panel.querySelectorAll('[data-open-svc]').forEach(row=>{
+    row.addEventListener('click', ()=>openServiceRequestModal(row.getAttribute('data-open-svc')));
+  });
+  panel.querySelectorAll('[data-delete-svc]').forEach(btn=>{
+    btn.addEventListener('click', async (ev)=>{
+      ev.stopPropagation();
+      const sr = DB.serviceRequests.find(x=>x.id===btn.getAttribute('data-delete-svc'));
+      if(!sr) return;
+      if(!promptAndArchive('serviceRequest', sr, sr.serviceRequestNumber)) return;
+      const ok = await runSaveAction(btn, 'Deleting…', async ()=>{ await saveDb(); });
+      if(!ok) return;
+      toast('Service request deleted (archived)','success'); renderAllServiceRequestsTab();
+    });
+  });
+}
+function openServiceRequestModal(serviceRequestId){
+  const sr = DB.serviceRequests.find(s=>s.id===serviceRequestId);
+  if(!sr){ toast('Service request not found','error'); return; }
+  const tiedToLabel = sr.tiedTo==='assets' ? (sr.assetIds||[]).map(describeServiceAssetRef).join(', ') : 'General';
+  const body = '<div class="card-badge-row" style="margin-bottom:10px;">'+serviceStatusBadge(sr.status)+priorityChip(sr.priority)+'</div>'
+    + '<div class="spec-grid" style="margin-bottom:14px;">'
+    +   '<div class="spec-item"><label>Service Request No.</label><div class="val">'+escapeHtml(sr.serviceRequestNumber)+'</div></div>'
+    +   '<div class="spec-item"><label>Requested By</label><div class="val">'+escapeHtml(sr.requestedByName)+'</div></div>'
+    +   '<div class="spec-item"><label>Service tied to</label><div class="val">'+escapeHtml(tiedToLabel)+'</div></div>'
+    +   '<div class="spec-item"><label>Category</label><div class="val">'+escapeHtml(svcCategoryName(sr.categoryId))+' / '+escapeHtml(svcSubcategoryName(sr.categoryId,sr.subcategoryId))+'</div></div>'
+    +   (sr.checkedByName ? '<div class="spec-item"><label>Checked By</label><div class="val">'+escapeHtml(sr.checkedByName)+'</div></div>' : '')
+    +   (sr.totalAmount ? '<div class="spec-item"><label>Total Amount</label><div class="val">'+formatMoney(sr.totalAmount)+'</div></div>' : '')
+    + '</div>'
+    + '<div class="section-heading">Timeline</div>'
+    + '<ul class="timeline">' + (sr.history||[]).map(h=>'<li><div class="t-title">'+escapeHtml(h.stage)+' — '+escapeHtml(h.action)+'</div><div class="t-meta">'+escapeHtml(h.actorName||h.actorEmail||'—')+' · '+formatDateTime(h.timestamp)+'</div>'+(h.remark?'<div class="t-remark">'+escapeHtml(h.remark)+'</div>':'')+'</li>').join('') + '</ul>';
+  openModal(escapeHtml(sr.serviceRequestNumber), body, '<button class="btn btn-outline" id="modal-done-btn">Close</button>', 'module-service-procurement');
+  document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+}
+/* Service history for a specific asset, used on the Inventory item detail
+   page — matched by real asset identity (item.id inside assetIds refs),
+   never by name, so two similarly-named assets never get mixed up. */
+function serviceHistoryForAsset(item){
+  return DB.serviceRequests.filter(sr=>!sr.deleted && sr.tiedTo==='assets' && (sr.assetIds||[]).some(ref=>ref.split('|')[0]===item.id))
+    .sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+}
+function renderServiceHistoryHtml(item){
+  const records = serviceHistoryForAsset(item);
+  if(!records.length) return '';
+  return '<div class="section-heading">Service History</div>'
+    + '<div class="install-card-grid">' + records.map(sr=>
+        '<div class="install-card row-clickable" data-open-service-history="'+sr.id+'">'
+          + '<div class="install-card-qty">'+escapeHtml(sr.serviceRequestNumber)+'</div>'
+          + '<div class="install-card-row"><label>Category:</label><span>'+escapeHtml(svcCategoryName(sr.categoryId))+' / '+escapeHtml(svcSubcategoryName(sr.categoryId,sr.subcategoryId))+'</span></div>'
+          + '<div class="install-card-row"><label>Status:</label><span>'+serviceStatusLabel(sr.status)+'</span></div>'
+          + '<div class="install-card-row"><label>Date:</label><span>'+formatDate(sr.createdAt)+'</span></div>'
+        + '</div>'
+      ).join('') + '</div>';
+}
+
+
 /* ============================================================
    Item Detail Modal — spec + permanent timeline + contextual actions
    ============================================================ */
@@ -4310,13 +5059,14 @@ function nextItemCode(categoryId){
 function findEntityRecord(entityType, id){
   const map = {
     department: DB.departments, category: DB.categories, inventoryItem: DB.inventoryItems,
-    building: DB.buildings, room: DB.rooms, requestItem: DB.requestItems, itemCatalog: DB.itemCatalog
+    building: DB.buildings, room: DB.rooms, requestItem: DB.requestItems, itemCatalog: DB.itemCatalog,
+    serviceRequest: DB.serviceRequests, serviceCategory: DB.serviceCategories
   };
   const arr = map[entityType];
   return arr ? arr.find(x=>x.id===id) : null;
 }
 function entityTypeLabel(t){
-  return { department:'Department', category:'Category', inventoryItem:'Inventory Item', building:'Building', room:'Room', requestItem:'Purchase Request', itemCatalog:'Catalog Item' }[t] || t;
+  return { department:'Department', category:'Category', inventoryItem:'Inventory Item', building:'Building', room:'Room', requestItem:'Purchase Request', itemCatalog:'Catalog Item', serviceRequest:'Service Request', serviceCategory:'Service Category' }[t] || t;
 }
 /* ============================================================
    Printable PDF documents — Taqwa letterhead, preview before download
