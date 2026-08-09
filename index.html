@@ -55,6 +55,15 @@
   --module-dashboard: #2563EB;
   --module-dashboard-dark: #1D4ED8;
   --module-dashboard-soft: #DBEAFE;
+  /* Home dashboard's own visual identity — deep navy card headers + a
+     muted gold accent, per the supplied reference. Deliberately scoped to
+     Home's cards only (not a site-wide recolor); every other module keeps
+     its own module colour untouched. */
+  --dashboard-navy: #0F2A47;
+  --dashboard-navy-dark: #0A1E33;
+  --dashboard-page-bg: #F4F6FA;
+  --dashboard-gold: #C08A2E;
+  --dashboard-gold-soft: #FBF1DD;
   --module-inventory: #059669;
   --module-inventory-dark: #047857;
   --module-inventory-soft: #D1FAE5;
@@ -283,6 +292,23 @@ button{ font-family:inherit; cursor:pointer; }
 /* ---- Section heading + KPI row ---- */
 .section-heading{ font-size:12.5px; font-weight:700; color:var(--color-ink-soft); text-transform:uppercase; letter-spacing:.04em; margin:22px 0 10px; }
 .kpi-row{ display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:12px; }
+
+/* Home dashboard cards — navy header band + white body + muted gold for
+   emphasis numbers, scoped to .home-dashboard-page only (set on Home's
+   outer wrapper). Every other page keeps the plain card treatment above. */
+.home-dashboard-page{ background:var(--dashboard-page-bg); border-radius:14px; padding:18px; margin:0 0 20px; }
+.dash-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(170px,1fr)); gap:14px; margin-bottom:20px; }
+.dash-card{ background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 2px rgba(15,42,71,0.06), 0 4px 14px -8px rgba(15,42,71,0.12); text-decoration:none; color:inherit; display:block; transition:transform var(--motion), box-shadow var(--motion); }
+a.dash-card:hover{ transform:translateY(-2px); box-shadow:0 4px 16px -6px rgba(15,42,71,0.22); }
+.dash-card-header{ background:var(--dashboard-navy); color:#fff; padding:9px 14px; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; display:flex; align-items:center; justify-content:space-between; }
+.dash-card-body{ padding:16px 14px; }
+.dash-card-num{ font-size:26px; font-weight:800; color:var(--dashboard-navy); line-height:1; }
+.dash-card-num.gold{ color:var(--dashboard-gold); }
+.dash-card-sub{ font-size:11.5px; color:var(--color-ink-faint); margin-top:4px; }
+.dash-section-title{ font-size:13px; font-weight:700; color:var(--dashboard-navy); text-transform:uppercase; letter-spacing:.04em; margin:24px 0 12px; }
+.dash-chart-card{ background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 2px rgba(15,42,71,0.06), 0 4px 14px -8px rgba(15,42,71,0.12); }
+.dash-chart-card .dash-card-header{ font-size:11px; }
+.dash-chart-card .dash-chart-body{ padding:16px; }
 .kpi-card{ background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:12px 15px; transition:box-shadow .18s ease, transform .18s ease; }
 .kpi-card:hover{ box-shadow:var(--shadow); transform:translateY(-1px); }
 
@@ -654,6 +680,57 @@ tbody tr:hover{ background:#F8FAFC; }
   .topbar-nav{ display:none; }
   .search-box input{ width:120px; }
   .hero h1{ font-size:24px; }
+}
+/* ============================================================
+   Mobile pass — real adjustments, not just a shrunk desktop layout.
+   Anything not touched here (field-row, req-action-bar, table-wrap,
+   analytics-grid, print) already had its own responsive rule above.
+   ============================================================ */
+@media (max-width:640px){
+  .wrap{ padding:0 14px; }
+  /* Nav becomes a single scrollable row instead of wrapping or overflowing
+     the page — same pattern the tab-strips already use. */
+  .nav-ribbon-inner{ overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; }
+  .nav-ribbon-inner a{ flex:none; }
+  .brand-band-inner{ flex-wrap:wrap; gap:10px; padding:12px 0; }
+  .brand-sub{ display:none; } /* the wordmark logo already identifies the app; the subtitle just eats width */
+  .header-right{ flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+  .search-box{ order:3; flex:1 1 100%; }
+  .search-box input{ width:100%; box-sizing:border-box; }
+  .auth-box{ padding-left:0; border-left:none; }
+  .role-chip{ display:none; } /* name/role already visible via Sign out context; saves space on a phone-width header */
+
+  /* Tabs: same horizontal-scroll treatment, slightly tighter padding so
+     more of the next tab peeks into view as a scroll affordance. */
+  .tab-strip{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .tab-btn{ padding:9px 12px; font-size:13px; }
+
+  /* Grids collapse to one column outright on a phone rather than relying
+     on auto-fit possibly leaving two cramped columns. */
+  .stat-row, .dash-grid, .kpi-row, .card-grid, .approval-card-grid, .install-card-grid{ grid-template-columns:1fr !important; }
+  .home-dashboard-page{ padding:12px; }
+
+  /* Modals: use the full width available and keep controls stacked and
+     easy to tap rather than cramming a field-row side by side. */
+  .modal-overlay{ padding:0; align-items:stretch; }
+  .modal{ max-width:100%; min-height:100%; border-radius:0; }
+  .modal-footer{ flex-wrap:wrap; }
+  .modal-footer .btn{ flex:1 1 auto; }
+
+  /* Tables stay horizontally scrollable within their own box (already
+     true via .table-wrap) — just tightened so more columns are readable
+     at once before the user needs to scroll sideways. */
+  .table-wrap table{ font-size:12.5px; }
+  .table-wrap th, .table-wrap td{ padding:8px 10px; white-space:nowrap; }
+
+  /* Tap targets: buttons and inputs get a touch-friendlier minimum height
+     specifically on touch-sized viewports, without changing desktop sizing. */
+  .btn{ min-height:40px; padding:9px 14px; }
+  .btn-sm{ min-height:34px; }
+  input, select, textarea{ font-size:16px; } /* prevents iOS Safari's automatic zoom-on-focus */
+
+  .activity-card{ width:200px; }
+  .req-line-card, .approval-card{ padding:12px; }
 }
 </style>
 </head>
@@ -1328,6 +1405,71 @@ function arrayBufferToBase64(buffer){
   }
   return btoa(binary);
 }
+/* ============================================================
+   Image compression — no backend here, everything runs in the browser.
+   Targets under 200KB while keeping reasonable quality; if that's not
+   achievable without the image becoming unreadable, allows up to a hard
+   cap of 500KB rather than degrading it into mush. Only touches image
+   files — anything else (e.g. a PDF bill) passes through untouched.
+   ============================================================ */
+const IMAGE_COMPRESS_TARGET_BYTES = 200*1024;
+const IMAGE_COMPRESS_HARD_CAP_BYTES = 500*1024;
+function compressImageFile(file){
+  return new Promise((resolve, reject)=>{
+    if(!file || !file.type || !file.type.startsWith('image/')){ resolve(file); return; }
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = ()=>{
+      URL.revokeObjectURL(objectUrl);
+      let width = img.naturalWidth, height = img.naturalHeight;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      function renderAt(w, h){
+        canvas.width = w; canvas.height = h;
+        ctx.clearRect(0,0,w,h);
+        ctx.drawImage(img, 0, 0, w, h);
+      }
+      function tryQuality(q){
+        return new Promise(res=> canvas.toBlob(b=>res(b), 'image/jpeg', q));
+      }
+      (async ()=>{
+        renderAt(width, height);
+        // Step 1: reduce JPEG quality first — cheaper than downscaling and
+        // usually enough on its own for typical phone-camera photos.
+        let quality = 0.85;
+        let blob = await tryQuality(quality);
+        while(blob && blob.size > IMAGE_COMPRESS_TARGET_BYTES && quality > 0.5){
+          quality -= 0.1;
+          blob = await tryQuality(quality);
+        }
+        // Step 2: if quality alone can't get under the target without going
+        // below a "reasonable" floor, start downscaling dimensions instead
+        // of pushing quality down further (blur reads worse than smaller).
+        let attempts = 0;
+        while(blob && blob.size > IMAGE_COMPRESS_TARGET_BYTES && attempts < 6){
+          width = Math.round(width*0.85); height = Math.round(height*0.85);
+          renderAt(width, height);
+          blob = await tryQuality(Math.max(quality, 0.6));
+          attempts++;
+        }
+        // Hard cap: never ship more than 500KB, even if that still means
+        // slightly over the 200KB target.
+        attempts = 0;
+        while(blob && blob.size > IMAGE_COMPRESS_HARD_CAP_BYTES && attempts < 6){
+          width = Math.round(width*0.8); height = Math.round(height*0.8);
+          renderAt(width, height);
+          blob = await tryQuality(0.6);
+          attempts++;
+        }
+        if(!blob){ resolve(file); return; } // toBlob failed for some reason — fall back to the original rather than lose the upload
+        const outName = (file.name||'photo').replace(/\.[^.]+$/, '') + '.jpg';
+        resolve(new File([blob], outName, { type:'image/jpeg' }));
+      })();
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(objectUrl); resolve(file); }; // not a decodable image — pass through, let the upload itself surface any real problem
+    img.src = objectUrl;
+  });
+}
 async function driveUploadBinary(file, parentId){
   const metadata = { name:file.name, parents:[parentId] };
   const boundary = '-------taqwa'+Date.now();
@@ -1713,6 +1855,11 @@ function pendingForMe(){
     else if(r.status==='purchase_pending' && canPurchaseAction()) out.push(r);
     else if((r.status==='purchased' || r.status==='received') && canReceiveAction()) out.push(r);
   });
+  DB.serviceRequests.forEach(sr=>{
+    if(sr.deleted) return;
+    if(sr.status==='pending_approval' && canActOnServiceApproval(sr)) out.push(sr);
+    else if(['approved','under_observation','not_satisfactory'].includes(sr.status) && canManageServiceReceipts()) out.push(sr);
+  });
   return out;
 }
 /* ============================================================
@@ -1832,7 +1979,7 @@ function svgBarChart(data, opts){
     const barH = max>0 ? (d.value/max) * innerH : 0;
     const x = padL + i*gap + (gap-barW)/2;
     const y = padT + innerH - barH;
-    bars += '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+Math.max(barH,1).toFixed(1)+'" rx="3" fill="var(--color-primary)" opacity="0.88"><title>'+escapeHtml(d.label)+': '+formatMoney(d.value)+'</title></rect>';
+    bars += '<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+Math.max(barH,1).toFixed(1)+'" rx="3" fill="var(--dashboard-gold)" opacity="0.9"><title>'+escapeHtml(d.label)+': '+formatMoney(d.value)+'</title></rect>';
     labels += '<text x="'+(x+barW/2).toFixed(1)+'" y="'+(h-8)+'" text-anchor="middle" font-size="10.5" fill="var(--color-ink-faint)">'+escapeHtml(d.label)+'</text>';
   });
   const gridY = padT + innerH;
@@ -2122,8 +2269,20 @@ function renderHomePage(){
   const hasAnyRequests = DB.requestItems.some(r=>!r.deleted);
   const dm = dashboardMetrics();
 
+  // Pending Work — one card per queue, each linking straight to the tab
+  // that clears it, so "what needs attention" is answerable without
+  // opening every module to check.
+  const pendingWork = [
+    { label:'Pending Approvals', count: isApproverRole()?myApprovalQueue().length:0, href:'#/procurement/approvals', show:isApproverRole() },
+    { label:'Purchase Assignment', count: canPurchaseAction()?myPurchaseQueue().length:0, href:'#/procurement/tasks', show:canPurchaseAction() },
+    { label:'Item Receipt', count: canReceiveAction()?myReceiptQueue().length:0, href:'#/procurement/receipt', show:canReceiveAction() },
+    { label:'Item Issue / Return', count: canReceiveAction()?myItemIssueQueue().length:0, href:'#/procurement/issue', show:canReceiveAction() },
+    { label:'Pending Service Requests', count: isApproverRole()?myServiceApprovalQueue().length:0, href:'#/service-procurement/approvals', show:isApproverRole() },
+    { label:'Services Under Observation', count: DB.serviceRequests.filter(sr=>!sr.deleted && sr.status==='under_observation').length, href:'#/service-procurement/receipts', show:canManageServiceReceipts() }
+  ].filter(p=>p.show);
+
   app.innerHTML =
-    '<div class="content wrap">'
+    '<div class="content wrap home-dashboard-page">'
     + '<div class="page-title"><h2>Dashboard</h2></div>'
     + '<div class="page-subtitle-inline">Overview of inventory, approvals and expenditure.</div>'
     + renderAlertsHtml()
@@ -2133,34 +2292,44 @@ function renderHomePage(){
     +   '<a class="stat-card" href="#/procurement/all"><div class="stat-icon" style="background:var(--color-medium-soft);">'+iconFileText(17,'var(--color-medium)')+'</div><div><div class="stat-num">'+pendingAll+'</div><div class="stat-lbl">Requests Pending</div></div></a>'
     +   (isSignedIn() ? '<a class="stat-card" href="'+myActionTargetHash()+'"><div class="stat-icon" style="background:var(--color-gold-soft);">'+iconClipboardCheck(17,'var(--color-gold-bright)')+'</div><div><div class="stat-num">'+myPending+'</div><div class="stat-lbl">Awaiting My Action</div></div></a>' : '')
     + '</div>'
-    + '<div class="section-heading">Procurement &amp; Expenses at a Glance</div>'
-    + '<div class="kpi-row">'
-    +   '<div class="kpi-card"><div class="kpi-lbl">Requests Today</div><div class="kpi-val">'+dm.reqToday+'</div></div>'
-    +   '<div class="kpi-card"><div class="kpi-lbl">Requests This Week</div><div class="kpi-val">'+dm.reqWeek+'</div></div>'
-    +   '<div class="kpi-card"><div class="kpi-lbl">Expenses Today</div><div class="kpi-val" style="color:var(--color-success);">'+formatMoney(dm.expToday)+'</div></div>'
-    +   '<div class="kpi-card"><div class="kpi-lbl">Expenses This Week</div><div class="kpi-val" style="color:var(--color-success);">'+formatMoney(dm.expWeek)+'</div></div>'
-    +   '<div class="kpi-card"><div class="kpi-lbl">Expenses This Month</div><div class="kpi-val" style="color:var(--color-success);">'+formatMoney(dm.expMonth)+'</div></div>'
+
+    + (pendingWork.length ? (
+      '<div class="dash-section-title">Pending Work</div>'
+      + '<div class="dash-grid">' + pendingWork.map(p=>
+          '<a class="dash-card" href="'+p.href+'"><div class="dash-card-header">'+p.label+'</div><div class="dash-card-body"><div class="dash-card-num'+(p.count>0?' gold':'')+'">'+p.count+'</div><div class="dash-card-sub">'+(p.count>0?'needs attention':'all clear')+'</div></div></a>'
+        ).join('') + '</div>'
+      ) : '')
+
+    + '<div class="dash-section-title">Procurement &amp; Expenses at a Glance</div>'
+    + '<div class="dash-grid">'
+    +   '<div class="dash-card"><div class="dash-card-header">Requests Today</div><div class="dash-card-body"><div class="dash-card-num">'+dm.reqToday+'</div></div></div>'
+    +   '<div class="dash-card"><div class="dash-card-header">Requests This Week</div><div class="dash-card-body"><div class="dash-card-num">'+dm.reqWeek+'</div></div></div>'
+    +   '<div class="dash-card"><div class="dash-card-header">Expenses Today</div><div class="dash-card-body"><div class="dash-card-num gold">'+formatMoney(dm.expToday)+'</div></div></div>'
+    +   '<div class="dash-card"><div class="dash-card-header">Expenses This Week</div><div class="dash-card-body"><div class="dash-card-num gold">'+formatMoney(dm.expWeek)+'</div></div></div>'
+    +   '<div class="dash-card"><div class="dash-card-header">Expenses This Month</div><div class="dash-card-body"><div class="dash-card-num gold">'+formatMoney(dm.expMonth)+'</div></div></div>'
     + '</div>'
+
     + renderRecentActivityHtml()
-    + '<div class="section-heading">Spending Overview (Purchased &amp; Received Only)</div>'
-    + '<div class="kpi-row">'
-    +   '<div class="kpi-card"><div class="kpi-lbl">This Month\'s Expenditure</div><div class="kpi-val">'+formatMoney(curMonth)+'</div></div>'
-    +   '<div class="kpi-card"><div class="kpi-lbl">Total Expenditure (All Time)</div><div class="kpi-val" style="color:var(--color-success);">'+formatMoney(allTime)+'</div></div>'
-    +   '<div class="kpi-card"><div class="kpi-lbl">Requests Awaiting Approval</div><div class="kpi-val" style="color:var(--color-medium);">'+pendingAll+'</div></div>'
+
+    + '<div class="dash-section-title">Spending Overview (Purchased, Received &amp; Closed Services)</div>'
+    + '<div class="dash-grid">'
+    +   '<div class="dash-card"><div class="dash-card-header">This Month\'s Expenditure</div><div class="dash-card-body"><div class="dash-card-num">'+formatMoney(curMonth)+'</div></div></div>'
+    +   '<div class="dash-card"><div class="dash-card-header">Total Expenditure (All Time)</div><div class="dash-card-body"><div class="dash-card-num gold">'+formatMoney(allTime)+'</div></div></div>'
+    +   '<div class="dash-card"><div class="dash-card-header">Requests Awaiting Approval</div><div class="dash-card-body"><div class="dash-card-num">'+pendingAll+'</div></div></div>'
     + '</div>'
-    + '<div class="section-heading">Consumption (Stock Actually Used — Separate from Expenditure)</div>'
-    + '<div class="kpi-row">'
-    +   '<div class="kpi-card"><div class="kpi-lbl">Consumed This Month</div><div class="kpi-val">'+consumptionThisMonth+' units</div></div>'
-    +   '<div class="kpi-card"><div class="kpi-lbl">Consumed (All Time)</div><div class="kpi-val" style="color:var(--color-success);">'+consumptionAllTime+' units</div></div>'
+    + '<div class="dash-section-title">Consumption (Stock Actually Used — Separate from Expenditure)</div>'
+    + '<div class="dash-grid">'
+    +   '<div class="dash-card"><div class="dash-card-header">Consumed This Month</div><div class="dash-card-body"><div class="dash-card-num">'+consumptionThisMonth+'<span style="font-size:14px; font-weight:600;"> units</span></div></div></div>'
+    +   '<div class="dash-card"><div class="dash-card-header">Consumed (All Time)</div><div class="dash-card-body"><div class="dash-card-num gold">'+consumptionAllTime+'<span style="font-size:14px; font-weight:600;"> units</span></div></div></div>'
     + '</div>'
     + (hasAnyRequests ?
       ('<div class="analytics-grid">'
-      +   '<div class="chart-card"><div class="chart-card-title">Monthly Expenditure &amp; Purchase Trend</div>'+svgBarChart(monthly)+'</div>'
-      +   '<div class="chart-card"><div class="chart-card-title">Category-wise Expenditure</div>'+renderDonutWithLegend(byCategory)+'</div>'
-      +   '<div class="chart-card"><div class="chart-card-title">Expenditure by Item Type</div>'+renderHBarList(byItemType)+'</div>'
-      +   '<div class="chart-card"><div class="chart-card-title">Requests by Status</div>'+renderDonutWithLegend(byStatus, 'No requests yet', v=>String(v))+'</div>'
+      +   '<div class="dash-chart-card"><div class="dash-card-header">Monthly Expenditure &amp; Purchase Trend</div><div class="dash-chart-body">'+svgBarChart(monthly)+'</div></div>'
+      +   '<div class="dash-chart-card"><div class="dash-card-header">Category-wise Expenditure</div><div class="dash-chart-body">'+renderDonutWithLegend(byCategory)+'</div></div>'
+      +   '<div class="dash-chart-card"><div class="dash-card-header">Expenditure by Item Type</div><div class="dash-chart-body">'+renderHBarList(byItemType)+'</div></div>'
+      +   '<div class="dash-chart-card"><div class="dash-card-header">Requests by Status</div><div class="dash-chart-body">'+renderDonutWithLegend(byStatus, 'No requests yet', v=>String(v))+'</div></div>'
       + '</div>')
-      : ('<div class="empty-analytics"><div class="empty-analytics-icon">'+iconBarChart(30,'var(--color-primary)')+'</div>'
+      : ('<div class="empty-analytics"><div class="empty-analytics-icon">'+iconBarChart(30,'var(--dashboard-navy)')+'</div>'
         + '<h3>No expenditure has been recorded for this month</h3>'
         + '<p>Once purchase requests are raised and processed, spending insights and trends will appear here automatically.</p></div>')
     )
@@ -3444,6 +3613,8 @@ function myActionTargetHash(){
   if(myPurchaseQueue().length) return '#/procurement/tasks';
   if(myReceiptQueue().length) return '#/procurement/receipt';
   if(myItemIssueQueue().length) return '#/procurement/issue';
+  if(myServiceApprovalQueue().length) return '#/service-procurement/approvals';
+  if(myServiceReceiptQueue().length) return '#/service-procurement/receipts';
   return '#/procurement/approvals';
 }
 /* The inventory record a request item is tied to, and by extension its live
@@ -4149,7 +4320,10 @@ function renderNewServiceRequestTab(){
     +   '<div id="svcr-asset-picker">'+(L.tiedTo==='assets' ? renderServiceAssetPickerHtml() : '')+'</div>'
     +   '<div class="field-row"><div class="field"><label>Category</label><select id="svcr-category"><option value="">— Select —</option>'+catOptions+'</select></div>'
     +     '<div class="field"><label>Sub-category</label><select id="svcr-subcategory">'+svcCatSubOptions(L.categoryId, L.subcategoryId)+'</select></div></div>'
-    +   '<div class="field"><label>Priority</label><select id="svcr-priority">'+priorities.map(p=>'<option '+(L.priority===p?'selected':'')+'>'+p+'</option>').join('')+'</select></div>'
+    +   '<div class="field-row"><div class="field"><label>Priority</label><select id="svcr-priority">'+priorities.map(p=>'<option '+(L.priority===p?'selected':'')+'>'+p+'</option>').join('')+'</select></div>'
+    +     '<div class="field"><label>Expected Completion Date</label><input type="date" id="svcr-expected-date"></div></div>'
+    +   '<div class="field"><label>Remarks / Service Description (required)</label><textarea id="svcr-remarks" rows="3" placeholder="Explain exactly what service is required and why — e.g. \'Printer is showing paper jam repeatedly.\'"></textarea></div>'
+    +   '<div class="field"><label>Photo (optional)</label><input type="file" id="svcr-photo" accept="image/*"><div class="field-hint" id="svcr-photo-hint"></div></div>'
     +   '</div>'
     + '</div>'
     + '<div class="req-action-bar"><button class="btn btn-outline" id="svcr-cancel-btn">Cancel</button><button class="btn btn-primary" id="svcr-submit-btn">Submit Service Request</button></div>';
@@ -4164,6 +4338,7 @@ function renderNewServiceRequestTab(){
     document.getElementById('svcr-subcategory').innerHTML = svcCatSubOptions(L.categoryId, '');
   });
   wireServiceAssetPicker();
+  wirePhotoPreviewHint('svcr-photo', 'svcr-photo-hint');
 
   document.getElementById('svcr-cancel-btn').addEventListener('click', ()=>{ newServiceLines = null; renderServiceProcurementPage(); toast('Request cleared','success'); });
   document.getElementById('svcr-submit-btn').addEventListener('click', async function(){
@@ -4175,18 +4350,33 @@ function renderNewServiceRequestTab(){
     const subcategoryId = document.getElementById('svcr-subcategory').value;
     if(!categoryId || !subcategoryId){ toast('Choose a Category and Sub-category','error'); return; }
     if(L.tiedTo==='assets' && !L.assetIds.length){ toast('Choose at least one asset, or switch Service tied to General','error'); return; }
+    const remarks = document.getElementById('svcr-remarks').value.trim();
+    if(!remarks){ toast('Remarks / Service Description is required','error'); return; }
     const priority = document.getElementById('svcr-priority').value;
+    const expectedCompletionDate = document.getElementById('svcr-expected-date').value || null;
+    const fileInput = document.getElementById('svcr-photo');
+    const file = fileInput.files && fileInput.files[0];
+    let photoFileId = null, photoFileName = null;
+    if(file){
+      btn.disabled = true; btn.textContent = 'Compressing photo…';
+      const compressed = await compressImageFile(file);
+      btn.textContent = 'Uploading photo…';
+      try{ photoFileId = await driveUploadBinary(compressed, CONFIG.UPLOADS_FOLDER_ID); photoFileName = compressed.name; }
+      catch(e){ toast('Photo upload failed: '+e.message, 'error'); btn.disabled = false; btn.textContent = 'Submit Service Request'; return; }
+    }
     const ok = await runSaveAction(btn, 'Submitting…', async ()=>{
       const sr = {
         id: nextId('svcreq'), serviceRequestNumber: nextServiceRequestNumber(), requestDate,
         requestedByStaffId: requestedByStaff.id, requestedByEmail: requestedByStaff.email, requestedByName: requestedByStaff.name,
         tiedTo: L.tiedTo, assetIds: L.tiedTo==='assets' ? L.assetIds.slice() : [],
-        categoryId, subcategoryId, priority,
+        categoryId, subcategoryId, priority, expectedCompletionDate,
+        remarks, photoFileId, photoFileName,
         approvalStatus: null, status: null,
         escalatedByEmail: null, escalatedByName: null, escalatedAt: null, escalationComment: null,
         checkedByEmail: null, checkedByName: null, serviceDate: null, serviceCharges: 0, taxes: 0, totalAmount: 0,
-        serviceStatus: null, closedAt: null, notes: [],
-        history: [{ stage:'Requested', action:'created', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark:'', timestamp:new Date().toISOString() }],
+        serviceStatus: null, closedAt: null,
+        receiptRemarks: null, receiptPhotoFileId: null, receiptPhotoFileName: null, notes: [],
+        history: [{ stage:'Requested', action:'created', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark: remarks, timestamp:new Date().toISOString() }],
         createdAt: new Date().toISOString()
       };
       initServiceApproval(sr);
@@ -4197,6 +4387,21 @@ function renderNewServiceRequestTab(){
     toast('Service request submitted','success');
     serviceProcTab = 'all';
     renderServiceProcurementPage();
+  });
+}
+/* Small, reusable "here's roughly what will be uploaded" hint — shows
+   original vs. compressed size as soon as a photo is picked, so the
+   automatic compression never happens silently. */
+function wirePhotoPreviewHint(inputId, hintId){
+  const input = document.getElementById(inputId);
+  const hint = document.getElementById(hintId);
+  if(!input || !hint) return;
+  input.addEventListener('change', async ()=>{
+    const file = input.files && input.files[0];
+    if(!file){ hint.textContent = ''; return; }
+    hint.textContent = 'Compressing…';
+    const compressed = await compressImageFile(file);
+    hint.textContent = 'Will upload as ~'+Math.round(compressed.size/1024)+'KB (original '+Math.round(file.size/1024)+'KB)';
   });
 }
 function renderServiceAssetPickerHtml(){
@@ -4384,8 +4589,11 @@ function openServiceReceiptModal(serviceRequestId){
     +   '<div class="spec-item"><label>Service tied to</label><div class="val">'+escapeHtml(tiedToLabel)+'</div></div>'
     +   '<div class="spec-item"><label>Category</label><div class="val">'+escapeHtml(svcCategoryName(sr.categoryId))+' / '+escapeHtml(svcSubcategoryName(sr.categoryId,sr.subcategoryId))+'</div></div>'
     +   '<div class="spec-item"><label>Priority</label><div class="val">'+escapeHtml(sr.priority)+'</div></div>'
+    +   '<div class="spec-item"><label>Expected Completion</label><div class="val">'+(sr.expectedCompletionDate?formatDateDMY(sr.expectedCompletionDate):'—')+'</div></div>'
     +   '<div class="spec-item"><label>Current Status</label><div class="val">'+serviceStatusLabel(sr.status)+'</div></div>'
     + '</div>'
+    + (sr.remarks ? '<div class="field-hint" style="margin-bottom:10px;"><strong>Requested:</strong> '+escapeHtml(sr.remarks)+'</div>' : '')
+    + (sr.photoFileId ? '<div style="margin-bottom:14px;">'+renderPhotoThumbHtml(sr.photoFileId, 'Request photo')+'</div>' : '')
     + '<div class="plain-divider"></div>'
     + '<div class="field"><label>Checked By</label><select id="svcrc-checkedby">'+staffOptions+'</select></div>'
     + '<div class="field"><label>Date</label><input type="date" id="svcrc-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
@@ -4396,7 +4604,9 @@ function openServiceReceiptModal(serviceRequestId){
     +   '<div class="radio-row"><label><input type="radio" name="svcrc-status" value="Satisfactory"> Satisfactory</label>'
     +     '<label><input type="radio" name="svcrc-status" value="Not Satisfactory"> Not Satisfactory</label>'
     +     '<label><input type="radio" name="svcrc-status" value="Under Observation"> Under Observation</label></div>'
-    + '</div>';
+    + '</div>'
+    + '<div class="field"><label>Remarks (required) — what was actually found/done</label><textarea id="svcrc-remarks" rows="3" placeholder="e.g. \'Printer roller replaced and paper-feed mechanism cleaned.\'">'+escapeHtml(sr.receiptRemarks||'')+'</textarea></div>'
+    + '<div class="field"><label>Photo (optional)</label><input type="file" id="svcrc-photo" accept="image/*"><div class="field-hint" id="svcrc-photo-hint"></div></div>';
   openModal('Confirm Service Receipt — '+escapeHtml(sr.serviceRequestNumber), body,
     '<button class="btn btn-outline" id="svcrc-close-plain-btn">Close</button>'
     + '<button class="btn btn-outline" id="svcrc-observation-btn">Mark for Observation</button>'
@@ -4408,7 +4618,24 @@ function openServiceReceiptModal(serviceRequestId){
   function recalc(){ totalEl.value = ((Number(chargesEl.value)||0)+(Number(taxEl.value)||0)).toFixed(2); }
   chargesEl.addEventListener('input', recalc); taxEl.addEventListener('input', recalc); recalc();
   document.getElementById('svcrc-close-plain-btn').addEventListener('click', closeModal);
+  wirePhotoPreviewHint('svcrc-photo', 'svcrc-photo-hint');
 
+  async function uploadReceiptPhotoIfAny(btn, busyLabel){
+    const fileInput = document.getElementById('svcrc-photo');
+    const file = fileInput.files && fileInput.files[0];
+    if(!file) return { photoFileId: sr.receiptPhotoFileId||null, photoFileName: sr.receiptPhotoFileName||null, ok:true };
+    btn.disabled = true; btn.textContent = 'Compressing photo…';
+    const compressed = await compressImageFile(file);
+    btn.textContent = 'Uploading photo…';
+    try{
+      const photoFileId = await driveUploadBinary(compressed, CONFIG.UPLOADS_FOLDER_ID);
+      return { photoFileId, photoFileName: compressed.name, ok:true };
+    }catch(e){
+      toast('Photo upload failed: '+e.message, 'error');
+      btn.disabled = false; btn.textContent = busyLabel;
+      return { ok:false };
+    }
+  }
   function collectReceiptFields(){
     const staffRec = staffById(document.getElementById('svcrc-checkedby').value);
     const statusRadio = document.querySelector('input[name="svcrc-status"]:checked');
@@ -4416,7 +4643,8 @@ function openServiceReceiptModal(serviceRequestId){
       checkedByEmail: staffRec ? staffRec.email : null, checkedByName: staffRec ? staffRec.name : null,
       serviceDate: document.getElementById('svcrc-date').value,
       serviceCharges: Number(chargesEl.value)||0, taxes: Number(taxEl.value)||0, totalAmount: Number(totalEl.value)||0,
-      serviceStatus: statusRadio ? statusRadio.value : null
+      serviceStatus: statusRadio ? statusRadio.value : null,
+      receiptRemarks: document.getElementById('svcrc-remarks').value.trim()
     };
   }
   document.getElementById('svcrc-observation-btn').addEventListener('click', async function(){
@@ -4424,11 +4652,15 @@ function openServiceReceiptModal(serviceRequestId){
     const f = collectReceiptFields();
     if(f.serviceStatus !== 'Under Observation'){ toast('Select "Under Observation" above to use this action','error'); return; }
     if(!f.checkedByEmail){ toast('Choose who checked this','error'); return; }
+    if(!f.receiptRemarks){ toast('Remarks are required','error'); return; }
+    const photoResult = await uploadReceiptPhotoIfAny(btn, 'Mark for Observation');
+    if(!photoResult.ok) return;
     const actorName = (myStaffRecord()||{}).name || currentUserEmail;
     const ok = await runSaveAction(btn, 'Saving…', async ()=>{
       Object.assign(sr, f);
+      sr.receiptPhotoFileId = photoResult.photoFileId; sr.receiptPhotoFileName = photoResult.photoFileName;
       sr.status = 'under_observation';
-      sr.history.push({ stage:'Under Observation', action:'marked for observation', actorEmail:currentUserEmail, actorName, remark:'Charges: ₹'+f.totalAmount, timestamp:new Date().toISOString() });
+      sr.history.push({ stage:'Under Observation', action:'marked for observation', actorEmail:currentUserEmail, actorName, remark:f.receiptRemarks+' (Charges: ₹'+f.totalAmount+')', timestamp:new Date().toISOString() });
       await saveDb();
     });
     if(!ok) return;
@@ -4442,18 +4674,22 @@ function openServiceReceiptModal(serviceRequestId){
     const f = collectReceiptFields();
     if(!f.serviceStatus || f.serviceStatus==='Under Observation'){ toast('Select Satisfactory or Not Satisfactory to use Close Service (use "Mark for Observation" for that status instead)','error'); return; }
     if(!f.checkedByEmail){ toast('Choose who checked this','error'); return; }
+    if(!f.receiptRemarks){ toast('Remarks are required'+(f.serviceStatus==='Not Satisfactory'?' — explain why the service was not satisfactory':''),'error'); return; }
+    const photoResult = await uploadReceiptPhotoIfAny(btn, 'Close Service');
+    if(!photoResult.ok) return;
     const actorName = (myStaffRecord()||{}).name || currentUserEmail;
     const ok = await runSaveAction(btn, 'Saving…', async ()=>{
       Object.assign(sr, f);
+      sr.receiptPhotoFileId = photoResult.photoFileId; sr.receiptPhotoFileName = photoResult.photoFileName;
       if(f.serviceStatus === 'Satisfactory'){
         sr.status = 'closed';
         sr.closedAt = new Date().toISOString();
-        sr.history.push({ stage:'Closed', action:'closed (satisfactory)', actorEmail:currentUserEmail, actorName, remark:'Charges: ₹'+f.totalAmount, timestamp:new Date().toISOString() });
+        sr.history.push({ stage:'Closed', action:'closed (satisfactory)', actorEmail:currentUserEmail, actorName, remark:f.receiptRemarks+' (Charges: ₹'+f.totalAmount+')', timestamp:new Date().toISOString() });
       } else {
         // Not Satisfactory — recorded, but deliberately NOT closed: stays
         // active in Service Details & Receipts until it's actually resolved.
         sr.status = 'not_satisfactory';
-        sr.history.push({ stage:'Service Checked', action:'recorded as not satisfactory', actorEmail:currentUserEmail, actorName, remark:'Charges: ₹'+f.totalAmount, timestamp:new Date().toISOString() });
+        sr.history.push({ stage:'Service Checked', action:'recorded as not satisfactory', actorEmail:currentUserEmail, actorName, remark:f.receiptRemarks+' (Charges: ₹'+f.totalAmount+')', timestamp:new Date().toISOString() });
       }
       await saveDb();
     });
@@ -4462,6 +4698,10 @@ function openServiceReceiptModal(serviceRequestId){
     closeModal();
     renderServiceProcurementPage();
   });
+}
+function renderPhotoThumbHtml(fileId, label){
+  if(!fileId) return '';
+  return '<div><div class="field-hint" style="margin-bottom:4px;">'+escapeHtml(label||'Photo')+'</div><a href="'+drivePreviewUrl(fileId)+'" target="_blank" rel="noopener"><img src="'+driveDownloadUrl(fileId)+'" style="max-width:220px; max-height:160px; border-radius:8px; border:1px solid var(--color-border); object-fit:cover;" loading="lazy"></a></div>';
 }
 
 /* ---------------- All Service Requests ---------------- */
@@ -4491,16 +4731,40 @@ function openServiceRequestModal(serviceRequestId){
   const sr = DB.serviceRequests.find(s=>s.id===serviceRequestId);
   if(!sr){ toast('Service request not found','error'); return; }
   const tiedToLabel = sr.tiedTo==='assets' ? (sr.assetIds||[]).map(describeServiceAssetRef).join(', ') : 'General';
+  const hasReceipt = !!sr.checkedByName;
   const body = '<div class="card-badge-row" style="margin-bottom:10px;">'+serviceStatusBadge(sr.status)+priorityChip(sr.priority)+'</div>'
-    + '<div class="spec-grid" style="margin-bottom:14px;">'
+
+    // What was requested — never overwritten by what happened afterward,
+    // so the two stay distinguishable even after a service is fully closed.
+    + '<div class="section-heading">Request Details</div>'
+    + '<div class="spec-grid" style="margin-bottom:10px;">'
     +   '<div class="spec-item"><label>Service Request No.</label><div class="val">'+escapeHtml(sr.serviceRequestNumber)+'</div></div>'
     +   '<div class="spec-item"><label>Requested By</label><div class="val">'+escapeHtml(sr.requestedByName)+'</div></div>'
     +   '<div class="spec-item"><label>Service tied to</label><div class="val">'+escapeHtml(tiedToLabel)+'</div></div>'
     +   '<div class="spec-item"><label>Category</label><div class="val">'+escapeHtml(svcCategoryName(sr.categoryId))+' / '+escapeHtml(svcSubcategoryName(sr.categoryId,sr.subcategoryId))+'</div></div>'
-    +   (sr.checkedByName ? '<div class="spec-item"><label>Checked By</label><div class="val">'+escapeHtml(sr.checkedByName)+'</div></div>' : '')
-    +   (sr.totalAmount ? '<div class="spec-item"><label>Total Amount</label><div class="val">'+formatMoney(sr.totalAmount)+'</div></div>' : '')
+    +   '<div class="spec-item"><label>Priority</label><div class="val">'+escapeHtml(sr.priority)+'</div></div>'
+    +   '<div class="spec-item"><label>Expected Completion</label><div class="val">'+(sr.expectedCompletionDate?formatDateDMY(sr.expectedCompletionDate):'—')+'</div></div>'
     + '</div>'
-    + '<div class="section-heading">Timeline</div>'
+    + (sr.remarks ? '<div class="field-hint" style="margin-bottom:8px;">'+escapeHtml(sr.remarks)+'</div>' : '')
+    + (sr.photoFileId ? renderPhotoThumbHtml(sr.photoFileId, 'Request photo') : '')
+
+    // What actually happened — kept as its own section so nobody mistakes
+    // the operator's findings for the original request, or vice versa.
+    + (hasReceipt ? (
+        '<div class="plain-divider"></div><div class="section-heading">Service Receipt</div>'
+        + '<div class="spec-grid" style="margin-bottom:10px;">'
+        +   '<div class="spec-item"><label>Checked By</label><div class="val">'+escapeHtml(sr.checkedByName)+'</div></div>'
+        +   '<div class="spec-item"><label>Actual Date</label><div class="val">'+(sr.serviceDate?formatDateDMY(sr.serviceDate):'—')+'</div></div>'
+        +   '<div class="spec-item"><label>Service Charges</label><div class="val">'+formatMoney(sr.serviceCharges)+'</div></div>'
+        +   '<div class="spec-item"><label>Taxes</label><div class="val">'+formatMoney(sr.taxes)+'</div></div>'
+        +   '<div class="spec-item"><label>Total Amount</label><div class="val">'+formatMoney(sr.totalAmount)+'</div></div>'
+        +   '<div class="spec-item"><label>Service Status</label><div class="val">'+escapeHtml(sr.serviceStatus||'—')+'</div></div>'
+        + '</div>'
+        + (sr.receiptRemarks ? '<div class="field-hint" style="margin-bottom:8px;">'+escapeHtml(sr.receiptRemarks)+'</div>' : '')
+        + (sr.receiptPhotoFileId ? renderPhotoThumbHtml(sr.receiptPhotoFileId, 'Service receipt photo') : '')
+      ) : '')
+
+    + '<div class="plain-divider"></div><div class="section-heading">Timeline</div>'
     + '<ul class="timeline">' + (sr.history||[]).map(h=>'<li><div class="t-title">'+escapeHtml(h.stage)+' — '+escapeHtml(h.action)+'</div><div class="t-meta">'+escapeHtml(h.actorName||h.actorEmail||'—')+' · '+formatDateTime(h.timestamp)+'</div>'+(h.remark?'<div class="t-remark">'+escapeHtml(h.remark)+'</div>':'')+'</li>').join('') + '</ul>';
   openModal(escapeHtml(sr.serviceRequestNumber), body, '<button class="btn btn-outline" id="modal-done-btn">Close</button>', 'module-service-procurement');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
@@ -4542,10 +4806,12 @@ function openConfirmReceiptModal(reqItemId){
   const staffOptions = DB.staff.filter(s=>!s.deleted && s.active!==false).map(s=>'<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>').join('');
   const mine = myStaffRecord();
   const body = '<div class="field"><label>Received By</label><select id="cr-received-by">'+staffOptions+'</select></div>'
+    + '<div class="field"><label>Date</label><input type="date" id="cr-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
     + '<div class="field"><label>Condition</label>'
     +   '<div class="radio-row"><label><input type="radio" name="cr-condition" value="OK" checked> Item OK</label><label><input type="radio" name="cr-condition" value="Not OK"> Not OK</label></div>'
     + '</div>'
-    + '<div class="field"><label id="cr-remarks-label">Remarks (optional)</label><textarea id="cr-remarks"></textarea></div>';
+    + '<div class="field"><label id="cr-remarks-label">Remarks (optional)</label><textarea id="cr-remarks"></textarea></div>'
+    + '<div class="field"><label>Photo (optional)</label><input type="file" id="cr-photo" accept="image/*"><div class="field-hint" id="cr-photo-hint"></div></div>';
   openModal(escapeHtml(r.itemName), body,
     '<button class="btn btn-outline" id="cr-close-btn">Close</button>'
     + '<button class="btn btn-outline" id="cr-print-btn">Print</button>'
@@ -4553,6 +4819,7 @@ function openConfirmReceiptModal(reqItemId){
     'module-procurement');
   const bySel = document.getElementById('cr-received-by');
   if(mine) bySel.value = mine.id;
+  wirePhotoPreviewHint('cr-photo', 'cr-photo-hint');
   document.querySelectorAll('input[name="cr-condition"]').forEach(radio=>{
     radio.addEventListener('change', ()=>{
       const notOk = document.querySelector('input[name="cr-condition"]:checked').value === 'Not OK';
@@ -4567,12 +4834,23 @@ function openConfirmReceiptModal(reqItemId){
     const condition = document.querySelector('input[name="cr-condition"]:checked').value;
     const remarks = document.getElementById('cr-remarks').value.trim();
     if(condition==='Not OK' && !remarks){ toast('Remarks are required when condition is Not OK','error'); return; }
+    const receivedDate = document.getElementById('cr-date').value;
     const staffRec = staffById(bySel.value);
     const receivedByName = staffRec ? staffRec.name : currentUserEmail;
     const receivedByEmail = staffRec ? staffRec.email : currentUserEmail;
     const pattern = itemPattern(r);
+    const fileInput = document.getElementById('cr-photo');
+    const file = fileInput.files && fileInput.files[0];
+    let photoFileId = null, photoFileName = null;
+    if(file){
+      btn.disabled = true; btn.textContent = 'Compressing photo…';
+      const compressed = await compressImageFile(file);
+      btn.textContent = 'Uploading photo…';
+      try{ photoFileId = await driveUploadBinary(compressed, CONFIG.UPLOADS_FOLDER_ID); photoFileName = compressed.name; }
+      catch(e){ toast('Photo upload failed: '+e.message, 'error'); btn.disabled = false; btn.textContent = 'Confirm Receipt'; return; }
+    }
     const ok = await runSaveAction(btn, 'Saving…', async ()=>{
-      r.receipt = { receivedDate: new Date().toISOString().slice(0,10), receivedByEmail, receivedByName, condition, remarks, recordedAt: new Date().toISOString() };
+      r.receipt = { receivedDate, receivedByEmail, receivedByName, condition, remarks, photoFileId, photoFileName, recordedAt: new Date().toISOString() };
       r.history.push({ stage:'Item Received', action:'received ('+condition+')', actorEmail: currentUserEmail, actorName: receivedByName, remark: remarks, timestamp:new Date().toISOString() });
       // Confirming receipt only records that stock arrived — it becomes
       // "available" inventory. What happens to it next is a separate
