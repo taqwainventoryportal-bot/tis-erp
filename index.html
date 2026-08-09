@@ -296,7 +296,12 @@ button{ font-family:inherit; cursor:pointer; }
 /* Home dashboard cards — navy header band + white body + muted gold for
    emphasis numbers, scoped to .home-dashboard-page only (set on Home's
    outer wrapper). Every other page keeps the plain card treatment above. */
-.home-dashboard-page{ background:var(--dashboard-page-bg); border-radius:14px; padding:18px; margin:0 0 20px; }
+.home-dashboard-page{ background:var(--dashboard-page-bg); }
+/* Dashboard heading matches the same navy used by the section-header
+   bars below it — text and its underline both, so it reads as one
+   consistent accent rather than the page-default blue clashing with it. */
+.home-dashboard-page .page-title h2{ color:var(--dashboard-navy); }
+.home-dashboard-page .page-title h2::after{ background:var(--dashboard-navy); }
 .dash-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(170px,1fr)); gap:14px; margin-bottom:20px; }
 .dash-card{ background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 2px rgba(15,42,71,0.06), 0 4px 14px -8px rgba(15,42,71,0.12); text-decoration:none; color:inherit; display:block; transition:transform var(--motion), box-shadow var(--motion); }
 a.dash-card:hover{ transform:translateY(-2px); box-shadow:0 4px 16px -6px rgba(15,42,71,0.22); }
@@ -708,7 +713,6 @@ tbody tr:hover{ background:#F8FAFC; }
   /* Grids collapse to one column outright on a phone rather than relying
      on auto-fit possibly leaving two cramped columns. */
   .stat-row, .dash-grid, .kpi-row, .card-grid, .approval-card-grid, .install-card-grid{ grid-template-columns:1fr !important; }
-  .home-dashboard-page{ padding:12px; }
 
   /* Modals: use the full width available and keep controls stacked and
      easy to tap rather than cramming a field-row side by side. */
