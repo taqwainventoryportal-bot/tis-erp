@@ -496,6 +496,14 @@ tbody tr:hover{ background:#F8FAFC; }
 }
 .field textarea{ resize:vertical; min-height:70px; }
 .field-hint{ font-size:11.5px; color:var(--color-ink-faint); margin-top:4px; }
+/* Inline field validation — red border + small message under the control,
+   so the operator sees exactly which field is wrong instead of relying on
+   a toast alone. Cleared automatically once the field becomes valid. */
+.field.has-error input, .field.has-error select, .field.has-error textarea{
+  border-color:var(--color-danger); box-shadow:0 0 0 3px color-mix(in srgb, var(--color-danger) 12%, transparent);
+}
+.field-error{ font-size:11.5px; color:var(--color-danger); margin-top:4px; font-weight:600; display:none; }
+.field.has-error .field-error{ display:block; }
 .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 @media (max-width:560px){ .field-row{ grid-template-columns:1fr; } }
 .form-error{ background:var(--color-danger-soft); color:var(--color-danger); padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:12px; }
@@ -4649,7 +4657,10 @@ function renderServiceReceiptsTab(){
 function openServiceReceiptModal(serviceRequestId){
   const sr = DB.serviceRequests.find(s=>s.id===serviceRequestId);
   if(!sr){ toast('Service request not found','error'); return; }
-  const staffOptions = DB.staff.filter(s=>!s.deleted && s.active!==false).map(s=>'<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>').join('');
+  // No option is pre-selected here — "— Select User —" is the only default,
+  // deliberately, so the system never assumes who actually checked a
+  // completed service. See collectReceiptFields()/validation below.
+  const staffOptions = '<option value="">— Select User —</option>' + DB.staff.filter(s=>!s.deleted && s.active!==false).map(s=>'<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>').join('');
   const tiedToLabel = sr.tiedTo==='assets' ? (sr.assetIds||[]).map(describeServiceAssetRef).join(', ') : 'General';
   const body = '<div class="spec-grid" style="margin-bottom:14px;">'
     +   '<div class="spec-item"><label>Service Request No.</label><div class="val">'+escapeHtml(sr.serviceRequestNumber)+'</div></div>'
@@ -4663,9 +4674,9 @@ function openServiceReceiptModal(serviceRequestId){
     + (sr.remarks ? '<div class="field-hint" style="margin-bottom:10px;"><strong>Requested:</strong> '+escapeHtml(sr.remarks)+'</div>' : '')
     + (sr.photoFileId ? '<div style="margin-bottom:14px;">'+renderPhotoThumbHtml(sr.photoFileId, 'Request photo')+'</div>' : '')
     + '<div class="plain-divider"></div>'
-    + '<div class="field"><label>Checked By</label><select id="svcrc-checkedby">'+staffOptions+'</select></div>'
+    + '<div class="field" id="svcrc-checkedby-field"><label>Checked By</label><select id="svcrc-checkedby">'+staffOptions+'</select><div class="field-error" id="svcrc-checkedby-error">Please select who checked this service.</div></div>'
     + '<div class="field"><label>Date</label><input type="date" id="svcrc-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
-    + '<div class="field-row"><div class="field"><label>Service Charges (₹)</label><input type="number" id="svcrc-charges" value="'+(sr.serviceCharges||0)+'"></div>'
+    + '<div class="field-row"><div class="field" id="svcrc-charges-field"><label>Service Charges (₹)</label><input type="number" id="svcrc-charges" value="'+(sr.serviceCharges||'')+'"><div class="field-error" id="svcrc-charges-error">Service charges must be greater than ₹0.</div></div>'
     +   '<div class="field"><label>Taxes (₹)</label><input type="number" id="svcrc-taxes" value="'+(sr.taxes||0)+'"></div></div>'
     + '<div class="field"><label>Total Amount (₹, auto)</label><input type="number" id="svcrc-total" value="'+(sr.totalAmount||0)+'" readonly></div>'
     + '<div class="field"><label>Service Status</label>'
@@ -4683,9 +4694,15 @@ function openServiceReceiptModal(serviceRequestId){
     'module-service-procurement', true);
   const svcrcPrintBtn = document.getElementById('svcrc-print-btn');
   if(svcrcPrintBtn) svcrcPrintBtn.addEventListener('click', ()=>openServiceRequestReportModal(sr));
-  const mine = myStaffRecord();
-  if(mine){ const sel=document.getElementById('svcrc-checkedby'); if([...sel.options].some(o=>o.value===mine.id)) sel.value = mine.id; }
+  const checkedByField = document.getElementById('svcrc-checkedby-field');
+  const checkedBySel = document.getElementById('svcrc-checkedby');
+  const chargesField = document.getElementById('svcrc-charges-field');
   const chargesEl = document.getElementById('svcrc-charges'), taxEl = document.getElementById('svcrc-taxes'), totalEl = document.getElementById('svcrc-total');
+  // Live-clear each field's error state as soon as it becomes valid, so the
+  // red state never lingers after the operator has actually fixed it —
+  // full validation still runs again on submit either way.
+  checkedBySel.addEventListener('change', ()=>{ if(checkedBySel.value) checkedByField.classList.remove('has-error'); });
+  chargesEl.addEventListener('input', ()=>{ if((Number(chargesEl.value)||0) > 0) chargesField.classList.remove('has-error'); });
   function recalc(){ totalEl.value = ((Number(chargesEl.value)||0)+(Number(taxEl.value)||0)).toFixed(2); }
   chargesEl.addEventListener('input', recalc); taxEl.addEventListener('input', recalc); recalc();
   document.getElementById('svcrc-close-plain-btn').addEventListener('click', closeModal);
@@ -4708,7 +4725,7 @@ function openServiceReceiptModal(serviceRequestId){
     }
   }
   function collectReceiptFields(){
-    const staffRec = staffById(document.getElementById('svcrc-checkedby').value);
+    const staffRec = staffById(checkedBySel.value);
     const statusRadio = document.querySelector('input[name="svcrc-status"]:checked');
     return {
       checkedByEmail: staffRec ? staffRec.email : null, checkedByName: staffRec ? staffRec.name : null,
@@ -4718,11 +4735,27 @@ function openServiceReceiptModal(serviceRequestId){
       receiptRemarks: document.getElementById('svcrc-remarks').value.trim()
     };
   }
+  // "Checked By" must always be explicitly chosen wherever a completed
+  // service is being recorded (both Mark for Observation and Close
+  // Service) — this is the one rule shared by both actions. Service
+  // Charges > ₹0 is deliberately Close-Service-only; see requireCharges.
+  function validateReceiptFields(f, requireCharges){
+    let firstInvalid = null;
+    checkedByField.classList.toggle('has-error', !f.checkedByEmail);
+    if(!f.checkedByEmail && !firstInvalid) firstInvalid = checkedBySel;
+    const chargesInvalid = requireCharges && !(f.serviceCharges > 0);
+    chargesField.classList.toggle('has-error', chargesInvalid);
+    if(chargesInvalid && !firstInvalid) firstInvalid = chargesEl;
+    if(firstInvalid) firstInvalid.focus();
+    return !firstInvalid;
+  }
   document.getElementById('svcrc-observation-btn').addEventListener('click', async function(){
     const btn = this;
     const f = collectReceiptFields();
     if(f.serviceStatus !== 'Under Observation'){ toast('Select "Under Observation" above to use this action','error'); return; }
-    if(!f.checkedByEmail){ toast('Choose who checked this','error'); return; }
+    // Mark for Observation intentionally does NOT require Service Charges >
+    // ₹0 — the service isn't finished yet, so a final charge may not exist.
+    if(!validateReceiptFields(f, false)) return;
     if(!f.receiptRemarks){ toast('Remarks are required','error'); return; }
     const photoResult = await uploadReceiptPhotoIfAny(btn, 'Mark for Observation');
     if(!photoResult.ok) return;
@@ -4744,7 +4777,9 @@ function openServiceReceiptModal(serviceRequestId){
     const btn = this;
     const f = collectReceiptFields();
     if(!f.serviceStatus || f.serviceStatus==='Under Observation'){ toast('Select Satisfactory or Not Satisfactory to use Close Service (use "Mark for Observation" for that status instead)','error'); return; }
-    if(!f.checkedByEmail){ toast('Choose who checked this','error'); return; }
+    // Close Service is the one action that requires BOTH Checked By and a
+    // positive Service Charges amount — this is the final, billed closure.
+    if(!validateReceiptFields(f, true)) return;
     if(!f.receiptRemarks){ toast('Remarks are required'+(f.serviceStatus==='Not Satisfactory'?' — explain why the service was not satisfactory':''),'error'); return; }
     const photoResult = await uploadReceiptPhotoIfAny(btn, 'Close Service');
     if(!photoResult.ok) return;
@@ -5476,6 +5511,39 @@ function pdfField(doc, x, y, maxWidth, label, value){
   doc.text(lines, x, y);
   return y + 12*lines.length + 8;
 }
+/* Fetches an already-uploaded Drive photo and converts it to a data URL +
+   its natural pixel dimensions, so a PDF report can embed the actual
+   attachment (never a placeholder) at the correct aspect ratio. Returns
+   null on any failure (no network, file removed, etc.) so the caller can
+   simply omit the Attachment section rather than show a broken image. */
+async function fetchImageForPdf(fileId){
+  if(!fileId) return null;
+  try{
+    const res = await fetch(driveDownloadUrl(fileId));
+    if(!res.ok) return null;
+    const blob = await res.blob();
+    if(!blob.type || !blob.type.startsWith('image/')) return null;
+    const dataUrl = await new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=>resolve(reader.result);
+      reader.onerror = ()=>reject(new Error('read failed'));
+      reader.readAsDataURL(blob);
+    });
+    const dims = await new Promise((resolve, reject)=>{
+      const img = new Image();
+      img.onload = ()=>resolve({ width:img.naturalWidth, height:img.naturalHeight });
+      img.onerror = ()=>reject(new Error('decode failed'));
+      img.src = dataUrl;
+    });
+    if(!dims.width || !dims.height) return null;
+    let format = 'JPEG';
+    if(blob.type.includes('png')) format = 'PNG';
+    else if(blob.type.includes('webp')) format = 'WEBP';
+    return { dataUrl, width:dims.width, height:dims.height, format };
+  }catch(e){
+    return null; // silently omit — never a broken image in the PDF
+  }
+}
 async function buildRequestItemReportPdf(r){
   await ensureJsPDFLoaded();
   const { jsPDF } = window.jspdf;
@@ -5652,6 +5720,21 @@ async function buildServiceRequestReportPdf(sr){
   section('Priority:', sr.priority);
   section('Expected Completion Date:', sr.expectedCompletionDate ? formatDateDMY(sr.expectedCompletionDate) : '—');
   if(sr.remarks) section('Request Remarks:', sr.remarks);
+
+  // Attachment — the actual uploaded photo for THIS service request (never
+  // a placeholder or filename stand-in). Fetched fresh from Drive; silently
+  // omitted (no empty box) if there's no photo or the fetch fails.
+  const requestPhoto = await fetchImageForPdf(sr.photoFileId);
+  if(requestPhoto){
+    const maxImgW = pageW-margin*2, maxImgH = 260;
+    const scale = Math.min(maxImgW/requestPhoto.width, maxImgH/requestPhoto.height, 1);
+    const imgW = requestPhoto.width*scale, imgH = requestPhoto.height*scale;
+    heading('Attachment');
+    ensureSpace(imgH + 14);
+    doc.addImage(requestPhoto.dataUrl, requestPhoto.format, margin, y, imgW, imgH);
+    y += imgH + 14;
+  }
+
   section('Current Status:', serviceStatusLabel(sr.status));
 
   if(sr.checkedByName){
