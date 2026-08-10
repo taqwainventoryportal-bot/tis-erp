@@ -206,19 +206,20 @@ button{ font-family:inherit; cursor:pointer; }
 .auth-box{ display:flex; align-items:center; gap:10px; padding-left:16px; border-left:1px solid var(--color-border); }
 .role-chip{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; background:var(--color-primary-light); color:var(--color-primary-dark); border:1px solid var(--color-border); padding:5px 11px 5px 8px; border-radius:999px; }
 .role-chip::before{ content:''; width:6px; height:6px; border-radius:50%; background:var(--color-gold); flex:none; }
-.btn{ font-weight:600; font-size:13.5px; padding:8px 14px; border-radius:var(--radius-sm); border:1.5px solid transparent; transition:background-color 150ms ease, border-color 150ms ease, color 150ms ease; white-space:nowrap; }
-.btn-primary{ background:var(--color-primary); color:#fff; }
-.btn-primary:hover{ background:var(--color-primary-dark); }
-.btn-gold{ background:var(--color-primary); color:#fff; }
-.btn-gold:hover{ background:var(--color-primary-dark); }
+.btn{ font-weight:600; font-size:13.5px; padding:8px 14px; border-radius:var(--radius-sm); border:1.5px solid transparent; transition:background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms ease; white-space:nowrap; }
+.btn-primary{ background:var(--color-primary); color:#fff; box-shadow:0 1px 2px rgba(15,23,42,0.08); }
+.btn-primary:hover{ background:var(--color-primary-dark); box-shadow:0 3px 8px -2px rgba(15,23,42,0.22); transform:translateY(-1px); }
+.btn-primary:active{ transform:translateY(0); box-shadow:0 1px 2px rgba(15,23,42,0.08); }
+.btn-gold{ background:var(--color-primary); color:#fff; box-shadow:0 1px 2px rgba(15,23,42,0.08); }
+.btn-gold:hover{ background:var(--color-primary-dark); box-shadow:0 3px 8px -2px rgba(15,23,42,0.22); transform:translateY(-1px); }
 .btn-outline{ background:transparent; border-color:var(--color-border); color:var(--color-ink); }
-.btn-outline:hover{ border-color:var(--color-primary); color:var(--color-primary); }
+.btn-outline:hover{ border-color:var(--color-primary); color:var(--color-primary); background:var(--color-surface-2); }
 .btn-danger{ background:transparent; border-color:var(--color-danger); color:var(--color-danger); }
 .btn-danger:hover{ background:var(--color-danger); color:#fff; }
 .btn-sm{ padding:5px 10px; font-size:12.5px; }
 .btn-ghost-dark{ background:transparent; border-color:var(--color-border); color:var(--color-ink-soft); }
 .btn-ghost-dark:hover{ background:var(--color-surface-2); color:var(--color-primary); }
-.btn:disabled{ opacity:.5; cursor:not-allowed; }
+.btn:disabled{ opacity:.5; cursor:not-allowed; transform:none !important; box-shadow:none !important; }
 
 
 /* ---- Dashboard header subtitle ---- */
@@ -296,14 +297,14 @@ button{ font-family:inherit; cursor:pointer; }
 
 /* ---- Compact dashboard stat cards ---- */
 .stat-row{ display:grid; grid-template-columns:repeat(auto-fit, minmax(190px,1fr)); gap:12px; margin:0 0 4px; }
-.stat-card{ background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:12px 14px; display:flex; align-items:center; gap:11px; transition:box-shadow .18s ease, transform .18s ease; text-decoration:none; cursor:pointer; }
-.stat-card:hover{ box-shadow:var(--shadow); transform:translateY(-1px); }
-.stat-icon{ width:34px; height:34px; border-radius:9px; background:var(--color-primary-light); display:flex; align-items:center; justify-content:center; flex:none; }
-.stat-num{ font-size:19px; font-weight:700; color:var(--color-ink); line-height:1.15; letter-spacing:-.01em; }
-.stat-lbl{ font-size:11px; color:var(--color-ink-faint); margin-top:1px; }
+.stat-card{ background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius); box-shadow:var(--shadow-sm); padding:13px 15px; display:flex; align-items:center; gap:12px; transition:box-shadow .18s ease, transform .18s ease, border-color .18s ease; text-decoration:none; cursor:pointer; }
+.stat-card:hover{ box-shadow:var(--shadow); transform:translateY(-1px); border-color:var(--color-border); }
+.stat-icon{ width:36px; height:36px; border-radius:10px; background:var(--color-primary-light); display:flex; align-items:center; justify-content:center; flex:none; }
+.stat-num{ font-size:21px; font-weight:800; color:var(--color-ink); line-height:1.15; letter-spacing:-.015em; }
+.stat-lbl{ font-size:11px; color:var(--color-ink-faint); margin-top:1px; font-weight:500; }
 
 /* ---- Section heading + KPI row ---- */
-.section-heading{ font-size:12.5px; font-weight:700; color:var(--color-ink-soft); text-transform:uppercase; letter-spacing:.04em; margin:22px 0 10px; }
+.section-heading{ font-size:12.5px; font-weight:700; color:var(--color-ink-soft); text-transform:uppercase; letter-spacing:.04em; margin:24px 0 12px; }
 .kpi-row{ display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:12px; }
 
 /* Home dashboard cards — navy header band + white body + muted gold for
@@ -333,7 +334,7 @@ a.dash-card:hover{ transform:translateY(-2px); box-shadow:0 4px 16px -6px rgba(1
 .dash-card-attention{ border-color:var(--dashboard-gold); box-shadow:0 1px 2px rgba(15,42,71,0.06), 0 4px 14px -8px rgba(15,42,71,0.12), 0 0 0 3px var(--dashboard-gold-soft); }
 .dash-card-attention .dash-card-body{ background:var(--dashboard-gold-soft); }
 .dash-card-attention .dash-card-sub{ color:var(--dashboard-gold); }
-.dash-section-title{ font-size:13px; font-weight:700; color:var(--dashboard-navy); text-transform:uppercase; letter-spacing:.04em; margin:24px 0 12px; }
+.dash-section-title{ font-size:12.5px; font-weight:700; color:var(--dashboard-navy); text-transform:uppercase; letter-spacing:.04em; margin:24px 0 12px; }
 .dash-chart-card{ background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 2px rgba(15,42,71,0.06), 0 4px 14px -8px rgba(15,42,71,0.12); }
 .dash-chart-card .dash-card-header{ font-size:11px; }
 .dash-chart-card .dash-chart-body{ padding:16px; }
@@ -345,14 +346,14 @@ a.dash-card:hover{ transform:translateY(-2px); box-shadow:0 4px 16px -6px rgba(1
 .activity-carousel::-webkit-scrollbar{ height:6px; }
 .activity-carousel::-webkit-scrollbar-thumb{ background:var(--color-border); border-radius:3px; }
 .activity-card{
-  flex:none; width:220px; background:var(--color-surface); border:1px solid var(--color-border); border-radius:10px;
-  padding:12px; text-decoration:none; color:inherit; transition:box-shadow var(--motion), transform var(--motion), border-color var(--motion);
+  flex:none; width:216px; background:var(--color-surface); border:1px solid var(--color-border); border-radius:10px;
+  padding:13px 14px; text-decoration:none; color:inherit; transition:box-shadow var(--motion), transform var(--motion), border-color var(--motion);
 }
 .activity-card:hover{ box-shadow:var(--shadow); transform:translateY(-1px); border-color:var(--color-primary); }
-.activity-card-icon{ font-size:18px; margin-bottom:6px; }
-.activity-card-title{ font-size:12.5px; font-weight:700; color:var(--color-ink); line-height:1.3; margin-bottom:3px; }
-.activity-card-meta{ font-size:11px; color:var(--color-ink-soft); margin-bottom:4px; }
-.activity-card-time{ font-size:10.5px; color:var(--color-ink-faint); }
+.activity-card-icon{ width:26px; height:26px; border-radius:7px; background:var(--color-surface-2); display:flex; align-items:center; justify-content:center; font-size:14px; margin-bottom:8px; }
+.activity-card-title{ font-size:12.5px; font-weight:700; color:var(--color-ink); line-height:1.35; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.activity-card-meta{ font-size:11px; color:var(--color-ink-soft); margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.activity-card-time{ font-size:10.5px; color:var(--color-ink-faint); font-weight:600; }
 .activity-nav-btn{
   flex:none; width:30px; height:30px; border-radius:50%; border:1px solid var(--color-border); background:var(--color-surface);
   color:var(--color-ink-soft); font-size:16px; line-height:1; cursor:pointer; transition:background var(--motion), color var(--motion), border-color var(--motion);
@@ -414,10 +415,14 @@ a.dash-card:hover{ transform:translateY(-2px); box-shadow:0 4px 16px -6px rgba(1
 /* ---- Inventory category tiles (Round 2 polish) ---- */
 .cat-tile{ display:flex; height:100%; }
 .cat-card{ padding:22px 20px; border:1px solid var(--color-border); box-shadow:none; transition:transform 180ms ease, border-color 180ms ease, background-color 180ms ease; display:flex; flex-direction:column; width:100%; }
-.cat-tile:hover .cat-card{ transform:translateY(-2px); border-color:var(--color-border); background:#FAFBFC; cursor:pointer; }
+.cat-tile:hover .cat-card{ transform:translateY(-2px); border-color:var(--color-border); background:#FAFBFC; cursor:pointer; box-shadow:var(--shadow); }
 .cat-card-icon{ width:46px; height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
 .cat-card-title{ font-size:15px; font-weight:700; color:var(--color-ink); margin-bottom:4px; letter-spacing:-.01em; }
 .cat-card-meta{ font-size:12px; color:var(--color-ink-faint); font-weight:500; }
+/* Admin Settings cards reuse the same cat-card shell but aren't wrapped in
+   a .cat-tile link, so they get their own hover/base treatment here. */
+.admin-settings-card{ width:100%; text-align:left; cursor:pointer; border:1px solid var(--color-border); background:var(--color-surface); transition:transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+.admin-settings-card:hover{ transform:translateY(-2px); border-color:var(--module-admin); box-shadow:var(--shadow); }
 .card-title{ font-weight:700; font-size:15.5px; color:var(--color-primary-dark); margin-bottom:2px; }
 .card-meta{ font-size:12.5px; color:var(--color-ink-faint); }
 .card-badge-row{ display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
@@ -509,10 +514,11 @@ tbody tr:hover{ background:#F8FAFC; }
 
 /* ---- Modal ---- */
 .modal-overlay{ position:fixed; inset:0; background:rgba(11,40,30,0.55); display:none; align-items:flex-start; justify-content:center; z-index:200; overflow-y:auto; padding:40px 16px; }
-.modal{ background:#fff; border-radius:var(--radius-lg); width:100%; max-width:560px; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+.modal{ background:#fff; border-radius:var(--radius-lg); width:100%; max-width:560px; box-shadow:0 20px 60px rgba(0,0,0,.3); border-top:3px solid var(--color-primary); overflow:hidden; }
 .modal-header{ padding:18px 22px; border-bottom:1px solid var(--color-border); display:flex; align-items:center; justify-content:space-between; }
-.modal-header h3{ font-size:18px; }
-.modal-close{ background:none; border:none; font-size:20px; color:var(--color-ink-faint); line-height:1; padding:4px; }
+.modal-header h3{ font-size:17.5px; font-weight:700; letter-spacing:-.01em; }
+.modal-close{ background:none; border:none; font-size:20px; color:var(--color-ink-faint); line-height:1; padding:4px; border-radius:6px; transition:background-color 150ms ease, color 150ms ease; }
+.modal-close:hover{ background:var(--color-surface-2); color:var(--color-ink); }
 .modal-body{ padding:20px 22px; max-height:64vh; overflow-y:auto; }
 .modal-footer{ padding:16px 22px; border-top:1px solid var(--color-border); display:flex; justify-content:flex-end; gap:10px; }
 
@@ -588,8 +594,9 @@ tbody tr:hover{ background:#F8FAFC; }
 
 /* Action colours — fixed regardless of module. Approve is never
    "Procurement orange" just because the page underline is. */
-.btn-approve{ background:var(--action-approve); color:#fff; border-color:transparent; }
-.btn-approve:hover{ background:var(--action-approve-dark); }
+.btn-approve{ background:var(--action-approve); color:#fff; border-color:transparent; box-shadow:0 1px 2px rgba(15,23,42,0.08); }
+.btn-approve:hover{ background:var(--action-approve-dark); box-shadow:0 3px 8px -2px rgba(15,23,42,0.22); transform:translateY(-1px); }
+.btn-approve:active{ transform:translateY(0); box-shadow:0 1px 2px rgba(15,23,42,0.08); }
 .btn-cancel{ background:transparent; border-color:var(--action-cancel); color:var(--action-cancel); }
 .btn-cancel:hover{ background:var(--action-cancel-soft); }
 
@@ -691,7 +698,8 @@ tbody tr:hover{ background:#F8FAFC; }
 
 /* ---- Search ---- */
 .search-box{ position:relative; }
-.search-box input{ width:190px; padding:8px 12px 8px 32px; border-radius:8px; border:1.5px solid var(--color-border); background:var(--color-surface-2); color:var(--color-ink); font-size:13px; }
+.search-box input{ width:190px; padding:8px 12px 8px 32px; border-radius:8px; border:1.5px solid var(--color-border); background:var(--color-surface-2); color:var(--color-ink); font-size:13px; transition:border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease; }
+.search-box input:focus{ outline:none; border-color:var(--color-primary); background:var(--color-surface); box-shadow:0 0 0 3px color-mix(in srgb, var(--color-primary) 15%, transparent); }
 .search-box input::placeholder{ color:var(--color-ink-faint); }
 .search-box svg{ position:absolute; left:9px; top:50%; transform:translateY(-50%); width:14px; height:14px; opacity:.55; }
 .search-results{ position:absolute; top:calc(100% + 6px); left:0; width:320px; max-height:360px; overflow-y:auto; background:#fff; border-radius:10px; box-shadow:0 12px 30px rgba(0,0,0,.25); z-index:60; }
@@ -1070,6 +1078,19 @@ function iconCoffee(size,color){
 }
 function iconFolderTag(size,color){
   return outlineIcon('<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>', size, color);
+}
+/* ---- Admin Settings icons ---- */
+function iconUsers(size,color){
+  return outlineIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', size, color);
+}
+function iconBuilding(size,color){
+  return outlineIcon('<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>', size, color);
+}
+function iconArchive(size,color){
+  return outlineIcon('<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>', size, color);
+}
+function iconWrench(size,color){
+  return outlineIcon('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>', size, color);
 }
 /* Per-category identity: icon + soft-tinted accent, used everywhere within that
    category's own Inventory pages (browse card, detail page, item page). */
@@ -2401,18 +2422,18 @@ function renderAdminSettingsPage(){
   const app = document.getElementById('app');
   if(!canManageStaff()){ app.innerHTML = '<div class="content wrap"><div class="empty-state"><h3>Not available</h3></div></div>'; return; }
   const cards = [
-    { id:'staff', icon:'👥', title:'Manage Staff', desc:'Roles, permissions, active/inactive status.', show:true },
-    { id:'buildings', icon:'🏢', title:'Manage Buildings', desc:'Buildings and rooms used for asset locations.', show:true },
-    { id:'item-cats', icon:'📦', title:'Manage Categories & Items', desc:'Item Procurement catalog, policies and value tiers.', show:true },
-    { id:'service-cats', icon:'🛠️', title:'Manage Service Categories', desc:'Service categories, sub-categories and approval policy.', show:true },
-    { id:'archive', icon:'🗄️', title:'Archive', desc:'Deleted records, restorable at any time.', show:isAdmin() }
+    { id:'staff', icon:iconUsers, title:'Manage Staff', desc:'Roles, permissions, active/inactive status.', show:true },
+    { id:'buildings', icon:iconBuilding, title:'Manage Buildings', desc:'Buildings and rooms used for asset locations.', show:true },
+    { id:'item-cats', icon:iconPackage, title:'Manage Categories & Items', desc:'Item Procurement catalog, policies and value tiers.', show:true },
+    { id:'service-cats', icon:iconWrench, title:'Manage Service Categories', desc:'Service categories, sub-categories and approval policy.', show:true },
+    { id:'archive', icon:iconArchive, title:'Archive', desc:'Deleted records, restorable at any time.', show:isAdmin() }
   ].filter(c=>c.show);
   app.innerHTML = '<div class="content wrap module-admin">'
     + '<div class="page-title"><h2>Admin Settings</h2></div>'
     + '<div class="page-subtitle-inline">Configuration for staff, locations, and the item &amp; service catalogs.</div>'
     + '<div class="card-grid">' + cards.map(c=>
-        '<button class="card cat-card" data-admin-card="'+c.id+'" style="width:100%; text-align:left; cursor:pointer; border:1px solid var(--color-border); background:var(--color-surface);">'
-          + '<div class="cat-card-icon" style="background:var(--color-primary-light); color:var(--color-primary-dark);">'+c.icon+'</div>'
+        '<button class="card cat-card admin-settings-card" data-admin-card="'+c.id+'">'
+          + '<div class="cat-card-icon" style="background:var(--module-admin-soft); color:var(--module-admin-dark);">'+c.icon(22, 'var(--module-admin-dark)')+'</div>'
           + '<div class="cat-card-title">'+c.title+'</div>'
           + '<div class="cat-card-meta">'+c.desc+'</div>'
         + '</button>'
