@@ -315,14 +315,24 @@ button{ font-family:inherit; cursor:pointer; }
    consistent accent rather than the page-default blue clashing with it. */
 .home-dashboard-page .page-title h2{ color:var(--dashboard-navy); }
 .home-dashboard-page .page-title h2::after{ background:var(--dashboard-navy); }
-.dash-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(170px,1fr)); gap:14px; margin-bottom:20px; }
-.dash-card{ background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 2px rgba(15,42,71,0.06), 0 4px 14px -8px rgba(15,42,71,0.12); text-decoration:none; color:inherit; display:block; transition:transform var(--motion), box-shadow var(--motion); }
+.dash-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(170px,1fr)); gap:14px; margin-bottom:20px; align-items:stretch; }
+.dash-card{ background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 2px rgba(15,42,71,0.06), 0 4px 14px -8px rgba(15,42,71,0.12); text-decoration:none; color:inherit; display:flex; flex-direction:column; transition:transform var(--motion), box-shadow var(--motion), border-color var(--motion); border:1px solid transparent; }
 a.dash-card:hover{ transform:translateY(-2px); box-shadow:0 4px 16px -6px rgba(15,42,71,0.22); }
-.dash-card-header{ background:var(--dashboard-navy); color:#fff; padding:9px 14px; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; display:flex; align-items:center; justify-content:space-between; }
-.dash-card-body{ padding:16px 14px; }
-.dash-card-num{ font-size:26px; font-weight:800; color:var(--dashboard-navy); line-height:1; }
+/* min-height keeps 1-line and 2-line titles (e.g. "Purchase Assignment" vs
+   "Pending Service Requests") occupying the same header height, so every
+   card's number/status lines up on the same baseline across a row. */
+.dash-card-header{ background:var(--dashboard-navy); color:#fff; padding:10px 16px; min-height:48px; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; line-height:1.3; display:flex; align-items:center; }
+.dash-card-body{ padding:18px 16px 16px; display:flex; flex-direction:column; gap:5px; flex:1; justify-content:center; }
+.dash-card-num{ font-size:29px; font-weight:800; color:var(--dashboard-navy); line-height:1; letter-spacing:-.01em; }
 .dash-card-num.gold{ color:var(--dashboard-gold); }
-.dash-card-sub{ font-size:11.5px; color:var(--color-ink-faint); margin-top:4px; }
+.dash-card-sub{ font-size:11.5px; color:var(--color-ink-faint); font-weight:600; }
+/* Subtle "this needs action" treatment for Pending Work cards whose count
+   is above zero — a soft gold ring + faint tinted body using the portal's
+   existing gold accent, deliberately calmer than a red/error state. Cards
+   at zero ("all clear") keep the plain white card untouched. */
+.dash-card-attention{ border-color:var(--dashboard-gold); box-shadow:0 1px 2px rgba(15,42,71,0.06), 0 4px 14px -8px rgba(15,42,71,0.12), 0 0 0 3px var(--dashboard-gold-soft); }
+.dash-card-attention .dash-card-body{ background:var(--dashboard-gold-soft); }
+.dash-card-attention .dash-card-sub{ color:var(--dashboard-gold); }
 .dash-section-title{ font-size:13px; font-weight:700; color:var(--dashboard-navy); text-transform:uppercase; letter-spacing:.04em; margin:24px 0 12px; }
 .dash-chart-card{ background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 1px 2px rgba(15,42,71,0.06), 0 4px 14px -8px rgba(15,42,71,0.12); }
 .dash-chart-card .dash-card-header{ font-size:11px; }
@@ -2136,16 +2146,20 @@ function recentActivityEvents(days){
   return events.slice(0, 30);
 }
 function renderRecentActivityHtml(){
-  const events = recentActivityEvents(3);
-  if(!events.length) return '';
+  // Strictly the last 24 hours by actual event timestamp — not just "the
+  // most recent N records" — so an admin never sees stale activity framed
+  // as current, and sees a clean empty state when nothing happened today.
+  const events = recentActivityEvents(1);
   return '<div class="section-heading">Recent Activity</div>'
-    + '<div class="activity-carousel-wrap">'
-    +   '<button class="activity-nav-btn" id="activity-nav-left" aria-label="Scroll left">‹</button>'
-    +   '<div class="activity-carousel" id="activity-carousel">'
-    +     events.map(e=>'<a class="activity-card" href="'+e.href+'"><div class="activity-card-icon">'+e.icon+'</div><div class="activity-card-title">'+escapeHtml(e.title)+'</div><div class="activity-card-meta">'+escapeHtml(e.subtitle)+'</div><div class="activity-card-time">'+formatRelativeTime(e.timestamp)+'</div></a>').join('')
-    +   '</div>'
-    +   '<button class="activity-nav-btn" id="activity-nav-right" aria-label="Scroll right">›</button>'
-    + '</div>';
+    + (events.length ? (
+      '<div class="activity-carousel-wrap">'
+      +   '<button class="activity-nav-btn" id="activity-nav-left" aria-label="Scroll left">‹</button>'
+      +   '<div class="activity-carousel" id="activity-carousel">'
+      +     events.map(e=>'<a class="activity-card" href="'+e.href+'"><div class="activity-card-icon">'+e.icon+'</div><div class="activity-card-title">'+escapeHtml(e.title)+'</div><div class="activity-card-meta">'+escapeHtml(e.subtitle)+'</div><div class="activity-card-time">'+formatRelativeTime(e.timestamp)+'</div></a>').join('')
+      +   '</div>'
+      +   '<button class="activity-nav-btn" id="activity-nav-right" aria-label="Scroll right">›</button>'
+      + '</div>'
+    ) : '<div class="empty-state" style="padding:22px;"><div class="icon">🗒️</div><h3>No recent activity</h3></div>');
 }
 function wireActivityCarousel(){
   const track = document.getElementById('activity-carousel');
@@ -2302,7 +2316,7 @@ function renderHomePage(){
     + (pendingWork.length ? (
       '<div class="dash-section-title">Pending Work</div>'
       + '<div class="dash-grid">' + pendingWork.map(p=>
-          '<a class="dash-card" href="'+p.href+'"><div class="dash-card-header">'+p.label+'</div><div class="dash-card-body"><div class="dash-card-num'+(p.count>0?' gold':'')+'">'+p.count+'</div><div class="dash-card-sub">'+(p.count>0?'needs attention':'all clear')+'</div></div></a>'
+          '<a class="dash-card'+(p.count>0?' dash-card-attention':'')+'" href="'+p.href+'"><div class="dash-card-header">'+p.label+'</div><div class="dash-card-body"><div class="dash-card-num'+(p.count>0?' gold':'')+'">'+p.count+'</div><div class="dash-card-sub">'+(p.count>0?'needs attention':'all clear')+'</div></div></a>'
         ).join('') + '</div>'
       ) : '')
 
@@ -4430,7 +4444,7 @@ function wirePhotoPreviewButton(inputId, btnId){
     if(!file) return;
     if(objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = URL.createObjectURL(file);
-    openImageLightbox(objectUrl, file.name);
+    openImageLightbox(objectUrl);
   });
 }
 function renderServiceAssetPickerHtml(){
@@ -4535,7 +4549,7 @@ function renderServiceApprovalsTab(){
     const approveBtn = card.querySelector('[data-svc-approve-one]');
     if(approveBtn) approveBtn.addEventListener('click', ()=>submitServiceApprovalAction(sr, 'approve', approveBtn));
     const viewPhotoBtn = card.querySelector('[data-svc-view-photo]');
-    if(viewPhotoBtn) viewPhotoBtn.addEventListener('click', ()=>openImageLightbox(driveDownloadUrl(sr.photoFileId), sr.photoFileName||'Request photo'));
+    if(viewPhotoBtn) viewPhotoBtn.addEventListener('click', ()=>openImageLightbox(driveDownloadUrl(sr.photoFileId)));
     const canEscalate = sr.approvalStatus==='pending_coordinator' && hasRole('coordinator');
     card.querySelectorAll('[data-action-toggle]').forEach(toggleBtn=>{
       toggleBtn.addEventListener('click', ()=>{
@@ -4743,9 +4757,14 @@ function renderPhotoThumbHtml(fileId, label){
    mode (closeable by outside click / X / Close button) purely for viewing
    an image, never for data entry. `url` can be a blob: URL (unsaved local
    file) or a Drive download URL (already-uploaded photo). */
-function openImageLightbox(url, label){
-  const body = '<div style="text-align:center;"><img src="'+url+'" alt="'+escapeHtml(label||'Photo')+'" style="max-width:100%; max-height:70vh; border-radius:8px; border:1px solid var(--color-border);"></div>';
-  openModal(escapeHtml(label||'Photo Preview'), body, '<button class="btn btn-outline" id="lightbox-close-btn">Close</button>', '', false);
+/* Generic image lightbox — reuses the existing modal system in view-only
+   mode (closeable by outside click / X / Close button) purely for viewing
+   an image, never for data entry. `url` can be a blob: URL (unsaved local
+   file) or a Drive download URL (already-uploaded photo). Always titled
+   "Attachment" — raw filenames are never surfaced in this UI. */
+function openImageLightbox(url){
+  const body = '<div style="text-align:center;"><img src="'+url+'" alt="Attachment" style="max-width:100%; max-height:70vh; border-radius:8px; border:1px solid var(--color-border);"></div>';
+  openModal('Attachment', body, '<button class="btn btn-outline" id="lightbox-close-btn">Close</button>', '', false);
   const closeBtn = document.getElementById('lightbox-close-btn');
   if(closeBtn) closeBtn.addEventListener('click', closeModal);
 }
