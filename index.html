@@ -243,7 +243,20 @@ button{ font-family:inherit; cursor:pointer; }
 .landing-trust-list{ list-style:none; margin:18px 0 0; padding:14px 0 0; border-top:1px solid var(--color-border); text-align:left; display:flex; flex-direction:column; gap:9px; }
 .landing-trust-list li{ font-size:12px; color:var(--color-ink-soft); }
 @media (max-width:900px){ .landing-hero-split{ grid-template-columns:1fr; } .landing-hero-right{ justify-content:flex-start; } }
-@media (max-width:640px){ .landing-banner{ min-height:auto; } .landing-hero-left h1{ font-size:26px; } }
+@media (max-width:640px){ .landing-hero-left h1{ font-size:26px; } }
+
+/* Clean, minimal login homepage — no background photo, no operational
+   stats; just the pitch, sign-in, and school branding, per the supplied
+   reference design (badge pill, two-tone heading, centered seal). */
+.landing-clean{ background:var(--color-bg); padding:36px 0 56px; }
+.landing-badge-pill{ display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid var(--color-border); border-radius:999px; padding:6px 14px; font-size:12px; font-weight:600; color:var(--color-ink-soft); margin-bottom:18px; box-shadow:var(--shadow-sm); }
+.landing-h1-accent{ color:var(--color-primary); }
+.landing-emblem-block{ margin-top:28px; text-align:center; max-width:280px; }
+.landing-emblem-img{ width:150px; height:150px; object-fit:contain; }
+.landing-emblem-tagline{ margin-top:10px; font-style:italic; font-size:13px; color:var(--color-ink-soft); }
+.landing-signin-divider{ display:flex; align-items:center; gap:10px; margin:16px 0; color:var(--color-ink-faint); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+.landing-signin-divider::before, .landing-signin-divider::after{ content:''; flex:1; height:1px; background:var(--color-border); }
+@media (max-width:900px){ .landing-emblem-block{ margin-left:auto; margin-right:auto; } }
 
 /* ---- Workflow diagram ---- */
 .landing-workflow-section{ background:var(--color-surface); border-bottom:1px solid var(--color-border); padding:34px 0 30px; }
@@ -1653,7 +1666,7 @@ function renderTopbar(){
   slot.innerHTML =
     '<div class="brand-band"><div class="wrap brand-band-inner">'
     + '<a href="#/" class="brand">'+'<img class="brand-logo-img" src="'+LOGO_DATA_URI+'" alt="Taqwa Group of Schools">'
-    +   '<span class="brand-divider"></span><span class="brand-sub">Inventory &amp; Notesheet Portal</span></a>'
+    +   '<span class="brand-divider"></span><span class="brand-sub">Inventory &amp; Procurement Portal</span></a>'
     + '<div class="header-right">'
     +   (isSignedIn() ? ('<div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
     +     '<input id="global-search" placeholder="Search…" autocomplete="off"><div id="search-results-slot"></div></div>') : '')
@@ -1732,7 +1745,7 @@ function renderFooter(){
     + '<div class="footer-col"><strong>&copy; '+year+' Taqwa Islamic School</strong><br>All rights reserved.</div>'
     + '<div class="footer-col">+91 93351 45818, 63881 05929</div>'
     + '<div class="footer-col">taqwa.allahabad@gmail.com<br>A-506, GTB Nagar, Kareli, Prayagraj (Allahabad)</div>'
-    + '<div class="footer-col">Version 1.0.0<br>Inventory &amp; Notesheet Portal</div>'
+    + '<div class="footer-col">Version 1.0.0<br>Inventory &amp; Procurement Portal</div>'
     + '</div>';
 }
 function renderStaticInfoPage(title, bodyHtml){
@@ -1741,15 +1754,19 @@ function renderStaticInfoPage(title, bodyHtml){
 }
 function renderAboutPage(){
   renderStaticInfoPage('About the Portal',
-    '<p>The Taqwa Islamic School Inventory &amp; Notesheet Portal brings inventory management, procurement, notesheet approvals and reporting into one place for school staff.</p>'
-    + '<p>Purchase requests move through a proper approval workflow — Coordinator, with escalation to Principal or Chairman when needed — with a full, permanent record of every decision. Once approved, purchases are tracked from Purchase Order through Item Receipt and Item Issue, and stock updates automatically.</p>'
-    + '<p>Access is limited to authorised school staff, signing in with their Google account.</p>');
+    '<p>The Taqwa Islamic School Inventory &amp; Procurement Portal brings inventory management, Item and Service procurement, approvals, and reporting into one secure platform for school staff.</p>'
+    + '<p>Purchase and Service requests move through a structured approval workflow, with the Coordinator handling approvals and escalation to the Principal or Chairman when required. Every decision is permanently recorded for accountability. Once approved, purchases are tracked from Purchase Order through Item Receipt / Service Receipt and Item Issue, with inventory updated automatically.</p>'
+    + '<p>Access is restricted to authorised school staff through secure Google account authentication.</p>');
 }
 function renderHelpPage(){
   renderStaticInfoPage('Help',
     '<p><strong>Signing in:</strong> use the "Sign in with Google" button on the homepage with your authorised school Gmail account. If you can\'t sign in, contact the Admin to be added as staff.</p>'
-    + '<p><strong>Raising a purchase request:</strong> once signed in, go to Procurement → New Request, choose a category and item from the catalog, fill in the quantity and reason, and submit.</p>'
-    + '<p><strong>Checking on a request:</strong> Procurement → All Requests shows every request and its current status and history.</p>'
+    + '<p><strong>Item Procurement:</strong> go to Item Procurement → New Request, choose a category and item from the catalog, fill in the quantity and reason, and submit. From there the request moves through Approval (where a category requires it) → Purchase Assignment → Item Receipt → Item Issue / Return, with every stage permanently recorded.</p>'
+    + '<p><strong>Service Procurement:</strong> go to Service Procurement → New Request, describe the service needed (tied to a specific asset or general), choose a Category and Sub-category, and submit. The request moves through Approval (where required) → Service Details &amp; Receipts, where the completed work is recorded and the service is either closed, marked Not Satisfactory, or placed Under Observation until resolved.</p>'
+    + '<p><strong>Inventory:</strong> Inventory → Browse by Category to see stock by category, or the Consumables and Assets tabs for stock levels, installed/spare/disposed assets, and full item history. Opening any item shows its purchase, receipt, installation, disposal and service history in one place.</p>'
+    + '<p><strong>Search:</strong> the search box in the top bar looks across inventory items, categories, requests and purchase orders at once.</p>'
+    + '<p><strong>Dashboard:</strong> the Home page shows Pending Work across both Item and Service Procurement, along with expenditure and recent activity, so you can see what needs attention without opening every module.</p>'
+    + '<p><strong>Reports:</strong> most request and service records have a Print or Generate Report option that produces a printable PDF with the full record.</p>'
     + '<p>For anything else, use the Contact details below.</p>');
 }
 function renderContactPage(){
@@ -1763,7 +1780,7 @@ function renderContactPage(){
 /* ============================================================
    Modal
    ============================================================ */
-function openModal(title, bodyHtml, footerHtml, moduleClass){
+function openModal(title, bodyHtml, footerHtml, moduleClass, isDataEntry){
   const box = document.getElementById('modal-box');
   box.className = 'modal' + (moduleClass ? ' '+moduleClass : '');
   box.innerHTML =
@@ -1771,10 +1788,17 @@ function openModal(title, bodyHtml, footerHtml, moduleClass){
     + '<div class="modal-body">'+bodyHtml+'</div>'
     + (footerHtml ? '<div class="modal-footer">'+footerHtml+'</div>' : '');
   document.getElementById('modal-overlay').style.display = 'flex';
+  // Data-entry modals never close on an accidental outside click — only
+  // their own explicit Close/X/Cancel action can dismiss them, so in-
+  // progress typed data is never lost by a stray click. View-only modals
+  // keep the convenience of closing on outside click.
+  document.getElementById('modal-overlay').setAttribute('data-entry-modal', isDataEntry ? '1' : '0');
   document.getElementById('modal-close-btn').addEventListener('click', closeModal);
 }
 function closeModal(){ document.getElementById('modal-overlay').style.display = 'none'; document.getElementById('modal-box').innerHTML=''; }
-document.getElementById('modal-overlay').addEventListener('click', (e)=>{ if(e.target.id==='modal-overlay') closeModal(); });
+document.getElementById('modal-overlay').addEventListener('click', (e)=>{
+  if(e.target.id==='modal-overlay' && document.getElementById('modal-overlay').getAttribute('data-entry-modal')!=='1') closeModal();
+});
 
 /* ============================================================
    Router
@@ -2185,50 +2209,37 @@ function dashboardMetrics(){
 function renderHomePage(){
   const app = document.getElementById('app');
   if(!isSignedIn()){
-    const totalItemsCount = DB.inventoryItems.filter(i=>!i.deleted).length;
-    const catCount = DB.categories.filter(c=>!c.deleted).length;
-    const bldgCount = DB.buildings.filter(b=>!b.deleted).length;
-    const processedCount = DB.requestItems.filter(r=>!r.deleted).length;
-
     const googleIcon = '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
 
-    const featureBadges = [
+    // Clean, minimal login homepage — description, sign-in, trust
+    // messaging, and school branding only. No background photo and no
+    // post-login operational/dashboard content; those numbers belong on
+    // the Dashboard once someone's actually signed in, not here.
+    const featureChips = [
       ['📦','Inventory','Management'],
-      ['🛒','Procurement','Workflow'],
-      ['📝','Notesheet','Approval'],
-      ['📊','Reports &','Analytics']
+      ['🛒','Item &amp; Service','Procurement'],
+      ['📊','Reports &amp;','Analytics']
     ].map(f=>'<div class="landing-feature-badge"><span class="landing-feature-icon">'+f[0]+'</span><span>'+f[1]+'<br>'+f[2]+'</span></div>').join('');
 
-    const workflowSteps = [
-      ['📋','Need','Identified','admin'],
-      ['📝','Purchase','Request','procurement'],
-      ['📄','Notesheet','Created','reports'],
-      ['✅','Approval','Process','inventory'],
-      ['🛒','Purchase','Order','dashboard'],
-      ['📦','Receiving &','Verification','inventory'],
-      ['🏠','Inventory','Updated','procurement'],
-      ['👥','Department','Issue','reports']
-    ];
-    const workflowHtml = workflowSteps.map((s,i)=>
-      '<div class="workflow-step"><div class="workflow-step-icon accent-'+s[3]+'">'+s[0]+'</div><div class="workflow-step-label">'+s[1]+'<br>'+s[2]+'</div></div>'
-      + (i<workflowSteps.length-1 ? '<div class="workflow-arrow">→</div>' : '')
-    ).join('');
-
     app.innerHTML =
-      '<div class="landing-banner" style="background-image:url(\''+BANNER_DATA_URI+'\');">'
-      + '<div class="landing-white-overlay"></div>'
+      '<div class="landing-clean">'
       + '<div class="wrap landing-hero-split">'
       +   '<div class="landing-hero-left">'
-      +     '<h1>Inventory &amp; Procurement Portal</h1>'
-      +     '<h2>Taqwa Islamic School</h2>'
-      +     '<p>Manage inventory, procurement, notesheets and approvals from one integrated platform.</p>'
-      +     '<div class="landing-feature-row">'+featureBadges+'</div>'
+      +     '<div class="landing-badge-pill">🛡️ Secure &bull; Simple &bull; Smart</div>'
+      +     '<h1>Inventory &amp; Procurement<br><span class="landing-h1-accent">Portal</span></h1>'
+      +     '<p>Manage inventory, Item &amp; Service procurement, track approvals, and generate insightful reports — all in one secure platform.</p>'
+      +     '<div class="landing-feature-row">'+featureChips+'</div>'
+      +     '<div class="landing-emblem-block">'
+      +       '<img class="landing-emblem-img" src="'+LOGO_DATA_URI+'" alt="Taqwa Islamic School">'
+      +       '<div class="landing-emblem-tagline">Education for Both the Worlds</div>'
+      +     '</div>'
       +   '</div>'
       +   '<div class="landing-hero-right">'
       +     '<div class="landing-signin-card">'
       +       '<h3>Welcome Back!</h3>'
-      +       '<p class="landing-signin-sub">Secure login for authorised school staff</p>'
+      +       '<p class="landing-signin-sub">Sign in to access the Inventory &amp; Procurement Portal</p>'
       +       '<button class="landing-signin-btn" id="landing-login-btn">'+googleIcon+'<span>Sign in with Google</span></button>'
+      +       '<div class="landing-signin-divider"><span>or</span></div>'
       +       '<ul class="landing-trust-list">'
       +         '<li>🛡️ Secure Google Authentication</li>'
       +         '<li>👤 School Staff Access Only</li>'
@@ -2237,24 +2248,9 @@ function renderHomePage(){
       +     '</div>'
       +   '</div>'
       + '</div>'
-      + '</div>'
-      + '<div class="landing-workflow-section">'
-      +   '<div class="wrap">'
-      +     '<div class="landing-section-heading">How Procurement Works</div>'
-      +     '<div class="workflow-row">'+workflowHtml+'</div>'
-      +   '</div>'
-      + '</div>'
-      + '<div class="landing-stats-section wrap">'
-      +   '<div class="landing-stats-grid">'
-      +     '<div class="landing-stat-card"><div class="landing-stat-icon accent-inventory">📦</div><div><div class="landing-stat-num" data-count="'+totalItemsCount+'">0</div><div class="landing-stat-lbl">Inventory Items</div></div></div>'
-      +     '<div class="landing-stat-card"><div class="landing-stat-icon accent-procurement">🗂️</div><div><div class="landing-stat-num" data-count="'+catCount+'">0</div><div class="landing-stat-lbl">Categories</div></div></div>'
-      +     '<div class="landing-stat-card"><div class="landing-stat-icon accent-dashboard">🏢</div><div><div class="landing-stat-num" data-count="'+bldgCount+'">0</div><div class="landing-stat-lbl">Buildings</div></div></div>'
-      +     '<div class="landing-stat-card"><div class="landing-stat-icon accent-reports">📄</div><div><div class="landing-stat-num" data-count="'+processedCount+'">0</div><div class="landing-stat-lbl">Purchase Requests Processed</div></div></div>'
-      +   '</div>'
       + '</div>';
     const landingBtn = document.getElementById('landing-login-btn');
     if(landingBtn) landingBtn.addEventListener('click', login);
-    animateLandingCounters();
     return;
   }
   const totalItems = DB.inventoryItems.length;
@@ -2478,7 +2474,7 @@ function openConsumeModal(itemId){
     + '<div class="field"><label>Date</label><input type="date" id="consume-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
     + '<div class="field-row"><div class="field"><label>Building (where it went)</label><select id="consume-building"><option value="">— Not specified —</option>'+buildings.map(b=>'<option value="'+b.id+'">'+escapeHtml(b.name)+'</option>').join('')+'</select></div><div class="field"><label>Room (optional)</label><select id="consume-room"><option value="">— None —</option></select></div></div>'
     + '<div class="field"><label>Remarks / Purpose</label><textarea id="consume-remarks" placeholder="e.g. Used for Class 5 art project"></textarea></div>';
-  openModal('Record Consumption — '+escapeHtml(item.name), body, '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-primary" id="consume-submit-btn">Record</button>', 'module-inventory');
+  openModal('Record Consumption — '+escapeHtml(item.name), body, '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-primary" id="consume-submit-btn">Record</button>', 'module-inventory', true);
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   const cbSel = document.getElementById('consume-building');
   function refreshConsumeRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===cbSel.value); document.getElementById('consume-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
@@ -2580,7 +2576,7 @@ function openInstallAssetModalForItem(itemId){
     + '<div class="field"><label>Room (optional)</label><select id="ia-room"><option value="">— None —</option></select></div></div>'
     + '<div class="field"><label>Remarks (optional)</label><textarea id="ia-remarks"></textarea></div>';
   openModal('Install Asset — '+escapeHtml(item.name), body,
-    '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-primary" id="ia-submit-btn">Install</button>', 'module-inventory');
+    '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-primary" id="ia-submit-btn">Install</button>', 'module-inventory', true);
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   const bSel = document.getElementById('ia-building');
   function refreshRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===bSel.value); document.getElementById('ia-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
@@ -2622,7 +2618,7 @@ function openDisposeAssetModal(itemId){
     + '<div class="field" id="da-other-wrap" style="display:none;"><label>Reason (specify)</label><input type="text" id="da-other-text"></div>'
     + '<div class="field"><label>Remarks (optional)</label><textarea id="da-remarks"></textarea></div>';
   openModal('Dispose — '+escapeHtml(item.name), body,
-    '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-danger" id="da-submit-btn">Submit Disposal</button>', 'module-inventory');
+    '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-danger" id="da-submit-btn">Submit Disposal</button>', 'module-inventory', true);
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   if(mine){ const byS=document.getElementById('da-by'); if([...byS.options].some(o=>o.value===mine.id)) byS.value=mine.id; }
   const locSel = document.getElementById('da-location');
@@ -2689,7 +2685,7 @@ function renderManageServiceCategoriesModalBody(){
     + '<h4>Add Category</h4>'
     + '<div class="field-row"><div class="field"><input type="text" id="new-svccat-name" placeholder="Category name"></div><div class="field" style="flex:none;"><button class="btn btn-primary btn-sm" id="add-svccat-btn">+ Add Category</button></div></div>';
 
-  openModal('Manage Service Categories', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-service-procurement');
+  openModal('Manage Service Categories', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-service-procurement', true);
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
 
   document.getElementById('add-svccat-btn').addEventListener('click', async function(){
@@ -2801,7 +2797,7 @@ function renderManageDeptsModalBody(){
         + '<div class="field-hint" style="margin-bottom:8px; color:var(--color-danger);">One-time cleanup: permanently remove everything above and replace it with the standard 9-category structure. This cannot be undone — old categories/items will not appear in Archive.</div>'
         + '<button class="btn btn-outline btn-sm" id="reset-cats-btn" style="border-color:var(--color-danger); color:var(--color-danger);">Permanently Remove Old Categories &amp; Reset</button>') : '');
 
-  openModal('Manage Categories &amp; Items', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-inventory');
+  openModal('Manage Categories &amp; Items', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-inventory', true);
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   const resetBtn = document.getElementById('reset-cats-btn');
   if(resetBtn) resetBtn.addEventListener('click', async ()=>{
@@ -3249,7 +3245,7 @@ function openItemModal(catId, item){
   }
 
   openModal(item?'Edit Item':'Add Item', body,
-    '<button class="btn btn-outline" id="cancel-item-btn">Cancel</button><button class="btn btn-primary" id="save-item-btn">Save</button>', 'module-inventory');
+    '<button class="btn btn-outline" id="cancel-item-btn">Cancel</button><button class="btn btn-primary" id="save-item-btn">Save</button>', 'module-inventory', true);
   document.getElementById('cancel-item-btn').addEventListener('click', closeModal);
   if(!item){
     const catSel = document.getElementById('it-cat');
@@ -3503,7 +3499,7 @@ function openAddExistingStockModal(pattern){
     + '<div class="field"><label>Reference (optional)</label><input type="text" id="aes-ref" placeholder="e.g. old invoice no., donor, etc."></div></div>'
     + '<div class="field"><label>Remarks (optional)</label><textarea id="aes-remarks"></textarea></div>'
     + '<div class="field"><label>Photo (optional'+(pattern==='asset'?', recommended for identification':'')+')</label><input type="file" id="aes-photo" accept="image/*"></div>';
-  openModal(title, body, '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-primary" id="aes-submit-btn">Add</button>', 'module-inventory');
+  openModal(title, body, '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-primary" id="aes-submit-btn">Add</button>', 'module-inventory', true);
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   document.getElementById('aes-submit-btn').addEventListener('click', async function(){
     const btn = this;
@@ -4613,9 +4609,12 @@ function openServiceReceiptModal(serviceRequestId){
     + '<div class="field"><label>Photo (optional)</label><input type="file" id="svcrc-photo" accept="image/*"><div class="field-hint" id="svcrc-photo-hint"></div></div>';
   openModal('Confirm Service Receipt — '+escapeHtml(sr.serviceRequestNumber), body,
     '<button class="btn btn-outline" id="svcrc-close-plain-btn">Close</button>'
+    + '<button class="btn btn-outline" id="svcrc-print-btn">Print</button>'
     + '<button class="btn btn-outline" id="svcrc-observation-btn">Mark for Observation</button>'
     + '<button class="btn btn-primary" id="svcrc-close-service-btn">Close Service</button>',
-    'module-service-procurement');
+    'module-service-procurement', true);
+  const svcrcPrintBtn = document.getElementById('svcrc-print-btn');
+  if(svcrcPrintBtn) svcrcPrintBtn.addEventListener('click', ()=>openServiceRequestReportModal(sr));
   const mine = myStaffRecord();
   if(mine){ const sel=document.getElementById('svcrc-checkedby'); if([...sel.options].some(o=>o.value===mine.id)) sel.value = mine.id; }
   const chargesEl = document.getElementById('svcrc-charges'), taxEl = document.getElementById('svcrc-taxes'), totalEl = document.getElementById('svcrc-total');
@@ -4713,11 +4712,21 @@ function renderAllServiceRequestsTab(){
   const panel = document.getElementById('svc-panel');
   const list = DB.serviceRequests.filter(s=>!s.deleted).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   if(!list.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">🗒️</div><h3>No service requests yet</h3></div>'; return; }
-  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Request</th><th>Requested By</th><th>Category</th><th>Priority</th><th>Status</th><th>Raised</th>'+(isAdmin()?'<th></th>':'')+'</tr></thead><tbody>'
-    + list.map(sr=>'<tr class="row-clickable" data-open-svc="'+sr.id+'"><td>'+escapeHtml(sr.serviceRequestNumber)+'</td><td>'+escapeHtml(sr.requestedByName)+'</td><td>'+escapeHtml(svcCategoryName(sr.categoryId))+'</td><td>'+priorityChip(sr.priority)+'</td><td>'+serviceStatusBadge(sr.status)+'</td><td>'+formatDate(sr.createdAt)+'</td>'+(isAdmin()?'<td><button class="btn btn-danger btn-sm" data-delete-svc="'+sr.id+'">Archive / Delete</button></td>':'')+'</tr>').join('')
+  // Generate Report is available to every authorised user who can see this
+  // tab — not gated to Admin, unlike Archive/Delete which stays Admin-only.
+  panel.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Request</th><th>Requested By</th><th>Category</th><th>Priority</th><th>Status</th><th>Raised</th><th></th></tr></thead><tbody>'
+    + list.map(sr=>'<tr class="row-clickable" data-open-svc="'+sr.id+'"><td>'+escapeHtml(sr.serviceRequestNumber)+'</td><td>'+escapeHtml(sr.requestedByName)+'</td><td>'+escapeHtml(svcCategoryName(sr.categoryId))+'</td><td>'+priorityChip(sr.priority)+'</td><td>'+serviceStatusBadge(sr.status)+'</td><td>'+formatDate(sr.createdAt)+'</td>'
+      + '<td style="white-space:nowrap;"><button class="btn btn-outline btn-sm" data-report-svc="'+sr.id+'">Generate Report</button>'+(isAdmin()?' <button class="btn btn-danger btn-sm" data-delete-svc="'+sr.id+'">Archive / Delete</button>':'')+'</td></tr>').join('')
     + '</tbody></table></div>';
   panel.querySelectorAll('[data-open-svc]').forEach(row=>{
     row.addEventListener('click', ()=>openServiceRequestModal(row.getAttribute('data-open-svc')));
+  });
+  panel.querySelectorAll('[data-report-svc]').forEach(btn=>{
+    btn.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      const sr = DB.serviceRequests.find(x=>x.id===btn.getAttribute('data-report-svc'));
+      if(sr) openServiceRequestReportModal(sr);
+    });
   });
   panel.querySelectorAll('[data-delete-svc]').forEach(btn=>{
     btn.addEventListener('click', async (ev)=>{
@@ -4770,8 +4779,12 @@ function openServiceRequestModal(serviceRequestId){
 
     + '<div class="plain-divider"></div><div class="section-heading">Timeline</div>'
     + '<ul class="timeline">' + (sr.history||[]).map(h=>'<li><div class="t-title">'+escapeHtml(h.stage)+' — '+escapeHtml(h.action)+'</div><div class="t-meta">'+escapeHtml(h.actorName||h.actorEmail||'—')+' · '+formatDateTime(h.timestamp)+'</div>'+(h.remark?'<div class="t-remark">'+escapeHtml(h.remark)+'</div>':'')+'</li>').join('') + '</ul>';
-  openModal(escapeHtml(sr.serviceRequestNumber), body, '<button class="btn btn-outline" id="modal-done-btn">Close</button>', 'module-service-procurement');
+  openModal(escapeHtml(sr.serviceRequestNumber), body,
+    '<button class="btn btn-outline" id="modal-done-btn">Close</button><button class="btn btn-outline" id="svc-detail-report-btn">Generate Report</button>',
+    'module-service-procurement');
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+  const svcDetailReportBtn = document.getElementById('svc-detail-report-btn');
+  if(svcDetailReportBtn) svcDetailReportBtn.addEventListener('click', ()=>openServiceRequestReportModal(sr));
 }
 /* Service history for a specific asset, used on the Inventory item detail
    page — matched by real asset identity (item.id inside assetIds refs),
@@ -4820,7 +4833,7 @@ function openConfirmReceiptModal(reqItemId){
     '<button class="btn btn-outline" id="cr-close-btn">Close</button>'
     + '<button class="btn btn-outline" id="cr-print-btn">Print</button>'
     + '<button class="btn btn-primary" id="cr-confirm-btn">Confirm Receipt</button>',
-    'module-procurement');
+    'module-procurement', true);
   const bySel = document.getElementById('cr-received-by');
   if(mine) bySel.value = mine.id;
   wirePhotoPreviewHint('cr-photo', 'cr-photo-hint');
@@ -4904,7 +4917,7 @@ function openItemIssueModal(reqItemId){
 
   openModal(escapeHtml(r.itemName), body,
     '<button class="btn btn-outline" id="ii-close-btn">Close</button><button class="btn btn-primary" id="ii-submit-btn">Save</button>',
-    'module-procurement');
+    'module-procurement', true);
   const bSel = document.getElementById('ii-building');
   function refreshRooms(){ const rs = DB.rooms.filter(x=>x.buildingId===bSel.value); document.getElementById('ii-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.name)+'</option>').join(''); }
   bSel.addEventListener('change', refreshRooms); refreshRooms();
@@ -5077,7 +5090,7 @@ function renderItemDetailModalBody(r){
   const footerBtns = '<button class="btn btn-outline" id="modal-done-btn">Close</button>'
     + (r.purchase ? '<button class="btn btn-outline" id="modal-print-btn">Print / Export Report</button>' : '')
     + (r.purchase && linkedPo ? '<button class="btn btn-outline" id="modal-print-po-btn">Print PO ('+escapeHtml(linkedPo.poNumber)+')</button>' : '');
-  openModal(escapeHtml(r.itemName), body, footerBtns, 'module-procurement');
+  openModal(escapeHtml(r.itemName), body, footerBtns, 'module-procurement', true);
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   const printBtn = document.getElementById('modal-print-btn');
   if(printBtn) printBtn.addEventListener('click', ()=>openRequestItemReportModal(r));
@@ -5263,7 +5276,7 @@ function renderManageStaffModalBody(){
     + '<div class="field"><label>Role</label><select id="new-staff-role">'+roleOptions+'</select></div>'
     + '<button class="btn btn-primary btn-sm" id="add-staff-btn">+ Add Staff</button>';
 
-  openModal('Manage Staff', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-admin');
+  openModal('Manage Staff', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-admin', true);
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   document.getElementById('add-staff-btn').addEventListener('click', async function(){
     const btn = this;
@@ -5510,6 +5523,121 @@ async function openRequestItemReportModal(r){
   render();
 }
 
+/* Mirrors buildRequestItemReportPdf / openRequestItemReportModal exactly —
+   same letterhead, same preview-before-download modal — just for Service
+   Procurement's own record shape. Available to any authorised user who can
+   already view the service request, not just Admin. */
+async function buildServiceRequestReportPdf(sr){
+  await ensureJsPDFLoaded();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'pt', format:'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 40;
+  let y = margin;
+
+  const ensureSpace = (needed)=>{ if(y + needed > pageH - margin){ doc.addPage(); y = margin; } };
+  const section = (label, value)=>{
+    const maxWidth = pageW-margin*2;
+    ensureSpace(pdfFieldHeight(doc, maxWidth, value));
+    y = pdfField(doc, margin, y, maxWidth, label, value);
+  };
+  const heading = (text)=>{
+    ensureSpace(24);
+    doc.setFont('helvetica','bold'); doc.setFontSize(12);
+    doc.text(text, margin, y);
+    y += 16;
+  };
+
+  try { doc.addImage(LOGO_DATA_URI, 'PNG', margin, y, 90, 45); } catch(e){}
+  doc.setFont('helvetica','bold'); doc.setFontSize(15);
+  doc.text('Taqwa Islamic School', margin+100, y+18);
+  doc.setFont('helvetica','normal'); doc.setFontSize(11);
+  doc.text('Service Request Report — '+sr.serviceRequestNumber, margin+100, y+36);
+  y += 62;
+  doc.setDrawColor(74,125,151); doc.setLineWidth(1.5);
+  doc.line(margin, y, pageW-margin, y);
+  y += 20;
+
+  const tiedToLabel = sr.tiedTo==='assets' ? (sr.assetIds||[]).map(describeServiceAssetRef).join(', ') : 'General';
+  heading('Request Details');
+  section('Service Request No.:', sr.serviceRequestNumber);
+  section('Request Date:', formatDateDMY(sr.requestDate));
+  section('Requested By:', sr.requestedByName || sr.requestedByEmail);
+  section('Service tied to:', tiedToLabel);
+  section('Category:', svcCategoryName(sr.categoryId)+' / '+svcSubcategoryName(sr.categoryId, sr.subcategoryId));
+  section('Priority:', sr.priority);
+  section('Expected Completion Date:', sr.expectedCompletionDate ? formatDateDMY(sr.expectedCompletionDate) : '—');
+  if(sr.remarks) section('Request Remarks:', sr.remarks);
+  section('Current Status:', serviceStatusLabel(sr.status));
+
+  if(sr.checkedByName){
+    heading('Service Receipt');
+    section('Checked By:', sr.checkedByName);
+    section('Actual Date:', sr.serviceDate ? formatDateDMY(sr.serviceDate) : '—');
+    section('Service Charges:', formatMoney(sr.serviceCharges));
+    section('Taxes:', formatMoney(sr.taxes));
+    section('Total Amount:', formatMoney(sr.totalAmount));
+    section('Service Status:', sr.serviceStatus || '—');
+    if(sr.receiptRemarks) section('Receipt Remarks:', sr.receiptRemarks);
+  }
+
+  heading('Permanent Timeline');
+  (sr.history||[]).forEach(h=>{
+    section(h.stage+' — '+h.action+'  ('+(h.actorName||h.actorEmail||'—')+', '+formatDateDMY(h.timestamp)+')', h.remark||'');
+  });
+
+  const totalPages = doc.internal.getNumberOfPages();
+  for(let p=1; p<=totalPages; p++){
+    doc.setPage(p);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(140,140,140);
+    doc.text('Page '+p+' / '+totalPages, pageW-margin-60, pageH-20);
+    doc.setTextColor(0,0,0);
+  }
+  return doc;
+}
+async function openServiceRequestReportModal(sr){
+  const fileNameBase = 'Service_Report_'+sr.serviceRequestNumber.replace(/[^a-z0-9]+/gi,'_');
+  openModal(
+    'Service Request Report',
+    '<div id="pdf-report-status" class="field-hint">Generating report…</div><div id="pdf-report-preview" style="margin-top:10px;"></div>',
+    '<button class="btn btn-outline" id="pdf-report-close-btn">Close</button>'
+    + '<button class="btn btn-outline" id="pdf-report-regenerate-btn">Regenerate</button>'
+    + '<button class="btn btn-primary" id="pdf-report-download-btn" disabled>Download</button>',
+    'module-service-procurement'
+  );
+  const modalEl = document.querySelector('#modal-overlay .modal');
+  if(modalEl) modalEl.style.maxWidth = '820px';
+  document.getElementById('pdf-report-close-btn').addEventListener('click', closeModal);
+
+  let currentBlobUrl = null;
+  const render = async ()=>{
+    const statusEl = document.getElementById('pdf-report-status');
+    const previewEl = document.getElementById('pdf-report-preview');
+    const downloadBtn = document.getElementById('pdf-report-download-btn');
+    if(!statusEl || !previewEl) return;
+    statusEl.textContent = 'Generating report…';
+    downloadBtn.disabled = true;
+    try{
+      const doc = await buildServiceRequestReportPdf(sr);
+      const blob = doc.output('blob');
+      if(currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+      currentBlobUrl = URL.createObjectURL(blob);
+      const totalPages = doc.internal.getNumberOfPages();
+      statusEl.textContent = 'Page 1 / '+totalPages;
+      previewEl.innerHTML = '<iframe src="'+currentBlobUrl+'" style="width:100%; height:60vh; border:1px solid var(--color-border); border-radius:6px;"></iframe>';
+      downloadBtn.disabled = false;
+      downloadBtn.onclick = ()=>{
+        const a = document.createElement('a');
+        a.href = currentBlobUrl; a.download = fileNameBase+'.pdf';
+        document.body.appendChild(a); a.click(); a.remove();
+      };
+    }catch(e){ statusEl.textContent = 'Could not generate report: '+e.message; }
+  };
+  document.getElementById('pdf-report-regenerate-btn').addEventListener('click', render);
+  render();
+}
+
 function openArchiveModal(){ renderArchiveModalBody(); }
 function renderArchiveModalBody(){
   const entries = DB.archiveLog.slice().filter(e=>!e.restored).sort((a,b)=>(b.deletedAt||'').localeCompare(a.deletedAt||''));
@@ -5559,7 +5687,7 @@ function renderManageBuildingsModalBody(){
     + '<div class="plain-divider"></div>'
     + '<div class="field"><label>New Building Name</label><input type="text" id="new-bldg-name"></div>'
     + '<button class="btn btn-primary btn-sm" id="add-bldg-btn">+ Add Building</button>';
-  openModal('Manage Buildings &amp; Rooms', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-admin');
+  openModal('Manage Buildings &amp; Rooms', body, '<button class="btn btn-outline" id="modal-done-btn">Done</button>', 'module-admin', true);
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
   document.getElementById('add-bldg-btn').addEventListener('click', async function(){
     const btn = this;
