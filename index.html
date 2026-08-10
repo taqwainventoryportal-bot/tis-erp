@@ -4323,7 +4323,7 @@ function renderNewServiceRequestTab(){
     +   '<div class="field-row"><div class="field"><label>Priority</label><select id="svcr-priority">'+priorities.map(p=>'<option '+(L.priority===p?'selected':'')+'>'+p+'</option>').join('')+'</select></div>'
     +     '<div class="field"><label>Expected Completion Date</label><input type="date" id="svcr-expected-date"></div></div>'
     +   '<div class="field"><label>Remarks / Service Description (required)</label><textarea id="svcr-remarks" rows="3" placeholder="Explain exactly what service is required and why — e.g. \'Printer is showing paper jam repeatedly.\'"></textarea></div>'
-    +   '<div class="field"><label>Photo (optional)</label><input type="file" id="svcr-photo" accept="image/*"><div class="field-hint" id="svcr-photo-hint"></div></div>'
+    +   '<div class="field"><label>Photo (optional)</label><div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;"><input type="file" id="svcr-photo" accept="image/*"><button type="button" class="btn btn-outline btn-sm" id="svcr-photo-preview-btn" style="display:none;">Preview</button></div><div class="field-hint" id="svcr-photo-hint"></div></div>'
     +   '</div>'
     + '</div>'
     + '<div class="req-action-bar"><button class="btn btn-outline" id="svcr-cancel-btn">Cancel</button><button class="btn btn-primary" id="svcr-submit-btn">Submit Service Request</button></div>';
@@ -4339,6 +4339,7 @@ function renderNewServiceRequestTab(){
   });
   wireServiceAssetPicker();
   wirePhotoPreviewHint('svcr-photo', 'svcr-photo-hint');
+  wirePhotoPreviewButton('svcr-photo', 'svcr-photo-preview-btn');
 
   document.getElementById('svcr-cancel-btn').addEventListener('click', ()=>{ newServiceLines = null; renderServiceProcurementPage(); toast('Request cleared','success'); });
   document.getElementById('svcr-submit-btn').addEventListener('click', async function(){
@@ -4402,6 +4403,28 @@ function wirePhotoPreviewHint(inputId, hintId){
     hint.textContent = 'Compressing…';
     const compressed = await compressImageFile(file);
     hint.textContent = 'Will upload as ~'+Math.round(compressed.size/1024)+'KB (original '+Math.round(file.size/1024)+'KB)';
+  });
+}
+/* Shows/hides a "Preview" button beside a file input as soon as a photo is
+   selected, and opens it in the image lightbox on click — purely for
+   viewing the not-yet-uploaded selection before submission. Does not touch
+   compression or upload behaviour at all. */
+function wirePhotoPreviewButton(inputId, btnId){
+  const input = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
+  if(!input || !btn) return;
+  let objectUrl = null;
+  input.addEventListener('change', ()=>{
+    const file = input.files && input.files[0];
+    if(objectUrl){ URL.revokeObjectURL(objectUrl); objectUrl = null; }
+    btn.style.display = file ? 'inline-block' : 'none';
+  });
+  btn.addEventListener('click', ()=>{
+    const file = input.files && input.files[0];
+    if(!file) return;
+    if(objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(file);
+    openImageLightbox(objectUrl, file.name);
   });
 }
 function renderServiceAssetPickerHtml(){
@@ -4505,6 +4528,8 @@ function renderServiceApprovalsTab(){
     const card = panel.querySelector('[data-svc-approval-card="'+sr.id+'"]');
     const approveBtn = card.querySelector('[data-svc-approve-one]');
     if(approveBtn) approveBtn.addEventListener('click', ()=>submitServiceApprovalAction(sr, 'approve', approveBtn));
+    const viewPhotoBtn = card.querySelector('[data-svc-view-photo]');
+    if(viewPhotoBtn) viewPhotoBtn.addEventListener('click', ()=>openImageLightbox(driveDownloadUrl(sr.photoFileId), sr.photoFileName||'Request photo'));
     const canEscalate = sr.approvalStatus==='pending_coordinator' && hasRole('coordinator');
     card.querySelectorAll('[data-action-toggle]').forEach(toggleBtn=>{
       toggleBtn.addEventListener('click', ()=>{
@@ -4536,6 +4561,8 @@ function renderServiceApprovalCard(sr){
     +   '<div class="approval-card-row"><label>Request No:</label><span>'+escapeHtml(sr.serviceRequestNumber)+'</span></div>'
     +   '<div class="approval-card-row"><label>Service tied to:</label><span>'+escapeHtml(tiedToLabel)+'</span></div>'
     +   '<div class="approval-card-row"><label>Requisitioner:</label><span>'+escapeHtml(sr.requestedByName)+'</span></div>'
+    +   (sr.remarks ? '<div class="approval-card-row"><label>Remark:</label><span>'+escapeHtml(sr.remarks)+'</span></div>' : '')
+    +   (sr.photoFileId ? '<div class="approval-card-row"><label>Attachment:</label><span><button type="button" class="btn btn-outline btn-sm" data-svc-view-photo="'+sr.id+'">View Photo</button></span></div>' : '')
     + '</div>'
     + (sr.approvalStatus==='pending_principal' ? '<div class="approval-card-hint">Escalated by '+escapeHtml(sr.escalatedByName||'—')+(sr.escalationComment?': "'+escapeHtml(sr.escalationComment)+'"':'')+'</div>' : '')
     + '<div class="approval-card-divider"></div>'
@@ -4705,6 +4732,16 @@ function openServiceReceiptModal(serviceRequestId){
 function renderPhotoThumbHtml(fileId, label){
   if(!fileId) return '';
   return '<div><div class="field-hint" style="margin-bottom:4px;">'+escapeHtml(label||'Photo')+'</div><a href="'+drivePreviewUrl(fileId)+'" target="_blank" rel="noopener"><img src="'+driveDownloadUrl(fileId)+'" style="max-width:220px; max-height:160px; border-radius:8px; border:1px solid var(--color-border); object-fit:cover;" loading="lazy"></a></div>';
+}
+/* Generic image lightbox — reuses the existing modal system in view-only
+   mode (closeable by outside click / X / Close button) purely for viewing
+   an image, never for data entry. `url` can be a blob: URL (unsaved local
+   file) or a Drive download URL (already-uploaded photo). */
+function openImageLightbox(url, label){
+  const body = '<div style="text-align:center;"><img src="'+url+'" alt="'+escapeHtml(label||'Photo')+'" style="max-width:100%; max-height:70vh; border-radius:8px; border:1px solid var(--color-border);"></div>';
+  openModal(escapeHtml(label||'Photo Preview'), body, '<button class="btn btn-outline" id="lightbox-close-btn">Close</button>', '', false);
+  const closeBtn = document.getElementById('lightbox-close-btn');
+  if(closeBtn) closeBtn.addEventListener('click', closeModal);
 }
 
 /* ---------------- All Service Requests ---------------- */
