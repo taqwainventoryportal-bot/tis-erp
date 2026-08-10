@@ -3915,7 +3915,14 @@ function myReceiptQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.sta
 // someone decides what happens to it (installed / consumed / kept spare).
 // A request can sit here across multiple visits if only part of the
 // received quantity is processed at a time.
-function myItemIssueQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='received' && canReceiveAction()); }
+// Item Issue / Return is only a meaningful decision for assets (install vs.
+// keep spare) — a consumable's stock is already live in Inventory →
+// Consumables the moment it's received, with no separate "issue" decision
+// pending. Filtering on itemPattern (not just status) also means any
+// consumable requests already sitting at status:'received' from before this
+// behaviour existed disappear from the queue immediately, with no manual
+// data migration needed.
+function myItemIssueQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='received' && itemPattern(r)!=='consumable' && canReceiveAction()); }
 /* Where the "Awaiting My Action" dashboard card should send someone —
    whichever of their queues actually has something in it. */
 function myActionTargetHash(){
@@ -3932,7 +3939,16 @@ function myActionTargetHash(){
    available quantity — the SAME record used by Inventory Management → Stock
    Consumption. Item Issue always reads/writes through here, never a separate
    procurement-side count, so there is exactly one source of truth. */
-function linkedInventoryItem(r){ return DB.inventoryItems.find(i=>i.linkedRequestItemId===r.id && !i.deleted) || null; }
+// Resolves a request's CURRENT inventory row by the same category+name
+// identity that syncConsumableStock()/syncAssetToInventory() use to decide
+// whether to merge into an existing row or create a new one. A single
+// `linkedRequestItemId` set only at row-creation time isn't enough — every
+// later request for the same item merges into that same row without ever
+// re-pointing the link, which used to make Item Issue/Return wrongly think
+// there was "nothing available" for any request after the first.
+function linkedInventoryItem(r){
+  return DB.inventoryItems.find(i=> !i.deleted && i.categoryId===r.categoryId && (i.name||'').toLowerCase()===(r.itemName||'').toLowerCase()) || null;
+}
 
 /* Live "something just changed here" highlight — tied to real state
    transitions (both same-user actions and, on the next background poll,
@@ -5249,18 +5265,29 @@ function openConfirmReceiptModal(reqItemId){
     const ok = await runSaveAction(btn, 'Saving…', async ()=>{
       r.receipt = { receivedDate, receivedByEmail, receivedByName, condition, remarks, photoFileId, photoFileName, recordedAt: new Date().toISOString() };
       r.history.push({ stage:'Item Received', action:'received ('+condition+')', actorEmail: currentUserEmail, actorName: receivedByName, remark: remarks, timestamp:new Date().toISOString() });
-      // Confirming receipt only records that stock arrived — it becomes
-      // "available" inventory. What happens to it next is a separate
-      // decision made in Item Issue / Return, never assumed here.
-      if(pattern==='consumable') syncConsumableStock(r);
-      else syncAssetToInventory(r, receivedByEmail, receivedByName);
-      r.status = 'received';
+      if(pattern==='consumable'){
+        // Consumables have no separate "issue" decision to make — the stock
+        // is already live in Inventory > Consumables the instant it's
+        // received, so the request completes right here rather than sitting
+        // in Item Issue / Return with nothing left to decide. Ongoing use is
+        // then recorded generically via Inventory > Consumables > Consume,
+        // exactly like any other consumable regardless of how it arrived.
+        syncConsumableStock(r);
+        r.history.push({ stage:'Item Issue', action:'added directly to Consumables stock', actorEmail: currentUserEmail, actorName: receivedByName, remark:'No Item Issue step needed for consumables — available immediately in Inventory > Consumables.', timestamp:new Date().toISOString() });
+        r.status = 'completed';
+      } else {
+        // Confirming receipt only records that stock arrived — it becomes
+        // "available" inventory. What happens to it next (install vs. keep
+        // spare) is a separate decision made in Item Issue / Return.
+        syncAssetToInventory(r, receivedByEmail, receivedByName);
+        r.status = 'received';
+      }
       await saveDb();
     });
     if(!ok) return;
-    toast('Receipt confirmed','success');
+    toast(pattern==='consumable' ? 'Receipt confirmed — stock added directly to Consumables' : 'Receipt confirmed','success');
     closeModal();
-    flagTabAttention('issue');
+    if(pattern!=='consumable') flagTabAttention('issue');
     renderProcurementPage();
   });
 }
@@ -5377,12 +5404,16 @@ function renderProcurementStepper(r){
     const withWhom = r.approvalStatus==='pending_principal' ? 'Principal' : 'Coordinator';
     return '<div class="circ-status circ-status-current">● Pending — currently with <strong>'+withWhom+'</strong></div>';
   }
-  // Post-approval lifecycle: Purchase → Item Receipt → Item Issue → Closed.
-  // "Assignment" is deliberately not a stage name here — Item Issue covers
-  // install/consume/spare for both consumables and assets alike now.
+  // Post-approval lifecycle: Purchase → Item Receipt → (Item Issue, assets
+  // only) → Closed. Consumables skip the Item Issue stage entirely — their
+  // stock is already live in Consumables the moment it's received, so
+  // there's no separate issue decision left to show as a step.
   const pattern = itemPattern(r);
   const steps = [{ key:'purchase', label:'Purchase' }];
-  if(pattern!=='service'){ steps.push({ key:'receive', label:'Item Receipt' }); steps.push({ key:'issue', label:'Item Issue' }); }
+  if(pattern!=='service'){
+    steps.push({ key:'receive', label:'Item Receipt' });
+    if(pattern!=='consumable') steps.push({ key:'issue', label:'Item Issue' });
+  }
   steps.push({ key:'closed', label:'Closed' });
   let curIdx = 0;
   if(r.status==='purchase_pending') curIdx = 0;
