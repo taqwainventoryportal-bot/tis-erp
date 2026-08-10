@@ -505,6 +505,13 @@ tbody tr:hover{ background:#F8FAFC; }
 .field-error{ font-size:11.5px; color:var(--color-danger); margin-top:4px; font-weight:600; display:none; }
 .field.has-error .field-error{ display:block; }
 .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+/* Opt-in alignment fix for field-row pairs where one label wraps to two
+   lines and its sibling doesn't (e.g. "Purchase / Reference Date
+   (optional)" next to "Reference (optional)") — reserves two lines' worth
+   of label height so both inputs start at the same vertical position,
+   without adding extra height to the many other field-rows in the app
+   whose labels already match. */
+.field-row.align-labels .field label{ min-height:36px; }
 @media (max-width:560px){ .field-row{ grid-template-columns:1fr; } }
 .form-error{ background:var(--color-danger-soft); color:var(--color-danger); padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:12px; }
 
@@ -2479,6 +2486,8 @@ let consumptionCategoryFilter = '';
 function wireAddExistingStockBtn(pattern){
   const btn = document.getElementById(pattern==='asset' ? 'add-existing-asset-btn' : 'add-existing-consumable-btn');
   if(btn) btn.addEventListener('click', ()=>openAddExistingStockModal(pattern));
+  const importBtn = document.getElementById(pattern==='asset' ? 'import-existing-asset-csv-btn' : 'import-existing-consumable-csv-btn');
+  if(importBtn) importBtn.addEventListener('click', ()=>openImportStockCSVModal(pattern));
 }
 function renderConsumptionTab(){
   const panel = document.getElementById('inv-page-panel');
@@ -2486,7 +2495,7 @@ function renderConsumptionTab(){
   // (even ones sitting spare with quantity > 0) never appear here; they
   // live under the Assets tab instead.
   const allItems = DB.inventoryItems.filter(i=>!i.deleted && itemPatternOf(i)==='consumable');
-  const addBtnHtml = '<div style="display:flex; justify-content:flex-end; margin-bottom:10px;"><button class="btn btn-outline btn-sm" id="add-existing-consumable-btn">+ Add Existing Stock</button></div>';
+  const addBtnHtml = '<div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:10px;"><button class="btn btn-outline btn-sm" id="import-existing-consumable-csv-btn">Import CSV</button><button class="btn btn-outline btn-sm" id="add-existing-consumable-btn">+ Add Existing Stock</button></div>';
   if(!allItems.length){ panel.innerHTML = addBtnHtml + '<div class="empty-state"><div class="icon">📉</div><h3>No consumable stock yet</h3></div>'; wireAddExistingStockBtn('consumable'); return; }
   const cats = DB.categories.filter(c=>!c.deleted);
   const items = allItems.filter(i=>!consumptionCategoryFilter || i.categoryId===consumptionCategoryFilter).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
@@ -2584,7 +2593,7 @@ function renderInstalledAssetsSubTab(){
 function renderSpareAssetsSubTab(){
   const panel = document.getElementById('assets-subpanel');
   const items = assetItems().filter(i=>Number(i.quantity)>0).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  const addBtnHtml = '<div style="display:flex; justify-content:flex-end; margin-bottom:10px;"><button class="btn btn-outline btn-sm" id="add-existing-asset-btn">+ Add Existing Asset</button></div>';
+  const addBtnHtml = '<div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:10px;"><button class="btn btn-outline btn-sm" id="import-existing-asset-csv-btn">Import CSV</button><button class="btn btn-outline btn-sm" id="add-existing-asset-btn">+ Add Existing Asset</button></div>';
   if(!items.length){ panel.innerHTML = addBtnHtml + '<div class="empty-state"><div class="icon">📦</div><h3>No spare assets right now</h3></div>'; wireAddExistingStockBtn('asset'); return; }
   panel.innerHTML = addBtnHtml
     + '<div class="table-wrap"><table><thead><tr><th>Item</th><th>Item Code</th><th>Qty Spare</th><th></th></tr></thead><tbody>'
@@ -3261,6 +3270,23 @@ function catalogItemOptionsForCategory(categoryId, selectedId){
   if(!items.length) return '<option value="">— No items in catalog for this category, ask Admin to add one —</option>';
   return '<option value="">— Select an item —</option>' + items.map(i=>'<option value="'+i.id+'" '+(selectedId===i.id?'selected':'')+'>'+escapeHtml(i.code)+' — '+escapeHtml(i.name)+'</option>').join('');
 }
+/* Controlled Unit list — used by the Add/Edit Item modal's Unit dropdown.
+   Legacy items may hold a free-text unit that predates this list; that
+   value is preserved and appended as a selectable "(existing)" option
+   rather than silently dropped or overwritten (see renderUnitOptions). */
+const STANDARD_UNITS = ['Each (EA)','Packet (Pck)','Box (Box)','Kilogram (kg)','Gram (g)','Litre (L)','Metre (m)','Pair (Pair)','Set (Set)','Dozen (Doz)','Ream (Rm)','Roll (Roll)','Bottle (Bottle)','Can (Can)','Bag (Bag)','Piece (Pc)'];
+function renderUnitOptions(selectedValue){
+  let matched = false;
+  let opts = '<option value="">— Select Unit —</option>' + STANDARD_UNITS.map(u=>{
+    const sel = selectedValue===u;
+    if(sel) matched = true;
+    return '<option value="'+escapeHtml(u)+'" '+(sel?'selected':'')+'>'+escapeHtml(u)+'</option>';
+  }).join('');
+  if(selectedValue && !matched){
+    opts += '<option value="'+escapeHtml(selectedValue)+'" selected>'+escapeHtml(selectedValue)+' (existing)</option>';
+  }
+  return opts;
+}
 function openItemModal(catId, item){
   const cats = DB.categories.filter(c=>!c.deleted);
   const defaultCatId = item ? item.categoryId : (catId || (cats[0]||{}).id);
@@ -3274,7 +3300,7 @@ function openItemModal(catId, item){
       +   '<div class="field"><label>Catalog Item</label><select id="it-catalog-item" data-add-item-select>'+catalogItemOptionsForCategory(defaultCatId,'')+'</select></div>'
       + '</div>'
       + '<div class="field-row"><div class="field"><label>Quantity</label><input type="number" id="it-qty" value="0"></div>'
-      +   '<div class="field"><label>Unit</label><input type="text" id="it-unit" placeholder="pcs, box, litre…" value=""></div></div>'
+      +   '<div class="field"><label>Unit</label><select id="it-unit">'+renderUnitOptions('')+'</select></div></div>'
       + '<div class="field-row"><div class="field"><label>Cost / Value (₹)</label><input type="number" id="it-cost" value="0"></div>'
       +   '<div class="field"><label>Reorder Threshold</label><input type="number" id="it-reorder" value="0"></div></div>'
       + '<div class="field-row"><div class="field"><label>Purchase Date</label><input type="date" id="it-date" value=""></div>'
@@ -3285,7 +3311,7 @@ function openItemModal(catId, item){
       '<div class="field"><label>Item Name</label><input type="text" id="it-name" value="'+escapeHtml(item.name)+'"></div>'
       + '<div class="field"><label>Category</label><select id="it-cat">'+cats.map(c=>'<option value="'+c.id+'" '+(item.categoryId===c.id?'selected':'')+'>'+escapeHtml(c.name)+'</option>').join('')+'</select></div>'
       + '<div class="field-row"><div class="field"><label>Quantity</label><input type="number" id="it-qty" value="'+item.quantity+'"></div>'
-      +   '<div class="field"><label>Unit</label><input type="text" id="it-unit" placeholder="pcs, box, litre…" value="'+escapeHtml(item.unit)+'"></div></div>'
+      +   '<div class="field"><label>Unit</label><select id="it-unit">'+renderUnitOptions(item.unit||'')+'</select></div></div>'
       + '<div class="field-row"><div class="field"><label>Cost / Value (₹)</label><input type="number" id="it-cost" value="'+item.cost+'"></div>'
       +   '<div class="field"><label>Reorder Threshold</label><input type="number" id="it-reorder" value="'+(item.reorderThreshold||0)+'"></div></div>'
       + '<div class="field-row"><div class="field"><label>Purchase Date</label><input type="date" id="it-date" value="'+(item.purchaseDate?item.purchaseDate:'')+'"></div>'
@@ -3544,7 +3570,7 @@ function openAddExistingStockModal(pattern){
   const body = '<div class="field-hint" style="margin-bottom:10px;">For stock that\'s already physically at school but never went through this portal\'s Procurement workflow.</div>'
     + '<div class="field"><label>Item</label><select id="aes-item"><option value="">— Select a catalog item —</option>'+catalogOptions+'</select></div>'
     + '<div class="field"><label>Quantity</label><input type="number" id="aes-qty" min="1" value="1"></div>'
-    + '<div class="field-row"><div class="field"><label>Purchase / Reference Date (optional)</label><input type="date" id="aes-date"></div>'
+    + '<div class="field-row align-labels"><div class="field"><label>Purchase / Reference Date (optional)</label><input type="date" id="aes-date"></div>'
     + '<div class="field"><label>Reference (optional)</label><input type="text" id="aes-ref" placeholder="e.g. old invoice no., donor, etc."></div></div>'
     + '<div class="field"><label>Remarks (optional)</label><textarea id="aes-remarks"></textarea></div>'
     + '<div class="field"><label>Photo (optional'+(pattern==='asset'?', recommended for identification':'')+')</label><input type="file" id="aes-photo" accept="image/*"></div>';
@@ -3574,6 +3600,242 @@ function openAddExistingStockModal(pattern){
     });
     if(!ok) return;
     toast('Existing stock added','success'); closeModal(); renderInventoryPage();
+  });
+}
+
+/* ============================================================
+   Bulk CSV import — "Add Existing Stock" (consumables) and "Add Existing
+   Asset" (spare assets) both funnel through the SAME addExistingStock()
+   used by the manual single-record form above, so an imported row behaves
+   identically to a manually-added one: same stock math, same catalog
+   linkage, same attachment handling, same audit trail. This is deliberately
+   NOT a parallel import pipeline.
+   ============================================================ */
+/* Minimal CSV parser: handles quoted fields (embedded commas and escaped ""
+   quotes) and both \r\n and \n line endings. Good enough for the flat,
+   Excel-exported style sheet this import expects — not a full RFC4180
+   implementation. */
+function parseCSVText(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0; i<text.length; i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){ if(text[i+1] === '"'){ field += '"'; i++; } else inQuotes = false; }
+      else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\r'){ /* skip, \n handles the line break */ }
+      else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else field += c;
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(cell => (cell||'').trim() !== ''));
+}
+/* Accepts the template's dd-mm-yyyy, or an already-ISO yyyy-mm-dd (in case
+   the sheet was re-saved by Excel). Returns: '' for blank/omitted (valid,
+   optional field), a yyyy-mm-dd string for a valid date, or undefined for
+   an unparseable one (the caller treats undefined as a validation error). */
+function parseCSVDateToISO(str){
+  const s = (str||'').trim();
+  if(!s) return '';
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m){ const d = new Date(s+'T00:00:00'); return isNaN(d.getTime()) ? undefined : s; }
+  m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if(!m) return undefined;
+  const dd = Number(m[1]), mm = Number(m[2]), yyyy = Number(m[3]);
+  const d = new Date(yyyy, mm-1, dd);
+  if(d.getFullYear()!==yyyy || d.getMonth()!==mm-1 || d.getDate()!==dd) return undefined;
+  const p = n=>String(n).padStart(2,'0');
+  return yyyy+'-'+p(mm)+'-'+p(dd);
+}
+/* ITEM must resolve to an existing catalog entry of the right type (asset
+   vs consumable) by exact name or code match — CSV import never creates a
+   new catalog item on the fly. */
+function findCatalogItemForImport(catalogItems, nameOrCode){
+  const needle = (nameOrCode||'').trim().toLowerCase();
+  if(!needle) return null;
+  return catalogItems.find(ci => (ci.name||'').trim().toLowerCase()===needle)
+      || catalogItems.find(ci => (ci.code||'').trim().toLowerCase()===needle)
+      || null;
+}
+function downloadStockImportCSVTemplate(pattern){
+  const sampleRows = pattern==='asset'
+    ? ['Ceiling Fan,5,10-05-2026,Old Purchase Record,Stored in spare room,fan.jpg', 'CFL Bulb,20,,,Existing spare stock,bulbs.jpg']
+    : ['A4 Sheets (Ream),10,15-06-2026,Old Invoice 123,Existing stock,photo1.jpg', 'Fevicol,5,,,Found during stock verification,photo2.jpg'];
+  const csv = 'ITEM,QUANTITY,PURCHASE / REFERENCE DATE,REFERENCE,REMARKS,PHOTO\n' + sampleRows.join('\n') + '\n';
+  const blob = new Blob([csv], { type:'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = (pattern==='asset' ? 'spare_asset_import_template.csv' : 'existing_stock_import_template.csv');
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+/* Builds one validated row record from a raw CSV line. Never mutates the
+   DB — this is pure validation so the preview step can run it repeatedly
+   as the person fixes their file. */
+function buildImportStockRow(rawCells, headerMap, catalogItems, photoFilesByName){
+  const cell = (key)=> (rawCells[headerMap[key]]||'').trim();
+  const itemText = cell('item');
+  const qtyText = cell('quantity');
+  const dateText = cell('date');
+  const reference = cell('reference');
+  const remarks = cell('remarks');
+  const photoText = cell('photo');
+
+  const errors = [];
+  const catalogItem = findCatalogItemForImport(catalogItems, itemText);
+  if(!itemText) errors.push('Missing required ITEM');
+  else if(!catalogItem) errors.push('Item not found in catalogue');
+
+  let qty = null;
+  if(!qtyText) errors.push('Invalid quantity');
+  else {
+    qty = Number(qtyText);
+    if(!Number.isFinite(qty) || qty<=0) errors.push('Quantity must be greater than 0');
+  }
+
+  const refDateISO = parseCSVDateToISO(dateText);
+  if(refDateISO === undefined) errors.push('Invalid date');
+
+  let photoFile = null;
+  if(photoText){
+    photoFile = photoFilesByName.get(photoText.trim().toLowerCase()) || null;
+    if(!photoFile) errors.push('Missing photo: '+photoText);
+  }
+
+  return {
+    itemText, qtyText, dateText, reference, remarks, photoText,
+    catalogItem, qty, refDateISO: refDateISO||'', photoFile,
+    errors
+  };
+}
+function openImportStockCSVModal(pattern){
+  const title = pattern==='asset' ? 'Import Spare Assets from CSV' : 'Import Existing Stock from CSV';
+  const catalogItems = DB.itemCatalog.filter(ci=>!ci.deleted && itemPattern({itemTypeId:ci.itemTypeId})===pattern);
+  const body = '<div class="field-hint" style="margin-bottom:12px;">Bring in several existing-stock records at once — for stock that\'s already physically at school but never went through this portal\'s Procurement workflow.</div>'
+    + '<div class="field-hint" style="margin-bottom:10px;"><strong>Required:</strong> ITEM, QUANTITY<br><strong>Optional:</strong> Purchase / Reference Date, Reference, Remarks, Photo</div>'
+    + '<button class="btn btn-outline btn-sm" id="csv-template-btn" style="margin-bottom:16px;">Download CSV Template</button>'
+    + '<div class="plain-divider"></div>'
+    + '<div class="field"><label>Select CSV</label><input type="file" id="csv-file-input" accept=".csv,text/csv"></div>'
+    + '<div class="field"><label>Select Photos (optional)</label><input type="file" id="csv-photos-input" accept="image/*" multiple><div class="field-hint">Select every image file referenced in the CSV\'s PHOTO column — they\'ll be matched up by filename.</div></div>'
+    + '<div class="field-error" id="csv-parse-error" style="display:block; color:var(--color-danger); font-weight:600;"></div>';
+  openModal(title, body,
+    '<button class="btn btn-outline" id="csv-cancel-btn">Cancel</button>'
+    + '<button class="btn btn-primary" id="csv-preview-btn">Parse &amp; Preview</button>',
+    'module-inventory', true);
+  document.getElementById('csv-cancel-btn').addEventListener('click', closeModal);
+  document.getElementById('csv-template-btn').addEventListener('click', ()=>downloadStockImportCSVTemplate(pattern));
+
+  document.getElementById('csv-preview-btn').addEventListener('click', async function(){
+    const btn = this;
+    const errEl = document.getElementById('csv-parse-error');
+    errEl.textContent = '';
+    const csvFile = document.getElementById('csv-file-input').files[0];
+    if(!csvFile){ errEl.textContent = 'Choose a CSV file first.'; return; }
+    const photoFiles = Array.from(document.getElementById('csv-photos-input').files || []);
+    const photoFilesByName = new Map(photoFiles.map(f=>[f.name.trim().toLowerCase(), f]));
+
+    btn.disabled = true; btn.textContent = 'Parsing…';
+    let text;
+    try{ text = await csvFile.text(); }
+    catch(e){ errEl.textContent = 'Could not read that file.'; btn.disabled = false; btn.textContent = 'Parse & Preview'; return; }
+
+    const rows = parseCSVText(text);
+    if(rows.length < 1){ errEl.textContent = 'That CSV looks empty.'; btn.disabled = false; btn.textContent = 'Parse & Preview'; return; }
+    const header = rows[0].map(h=>(h||'').trim().toLowerCase());
+    const findCol = (...names)=> header.findIndex(h => names.includes(h));
+    const headerMap = {
+      item: findCol('item'),
+      quantity: findCol('quantity', 'qty'),
+      date: findCol('purchase / reference date', 'purchase / reference date (optional)', 'date'),
+      reference: findCol('reference', 'reference (optional)'),
+      remarks: findCol('remarks', 'remarks (optional)'),
+      photo: findCol('photo', 'photo (optional)')
+    };
+    if(headerMap.item===-1 || headerMap.quantity===-1){
+      errEl.textContent = 'The CSV must have ITEM and QUANTITY columns — download the template above for the exact format.';
+      btn.disabled = false; btn.textContent = 'Parse & Preview';
+      return;
+    }
+    const dataRows = rows.slice(1).map(r => buildImportStockRow(r, headerMap, catalogItems, photoFilesByName));
+    openImportStockPreviewModal(pattern, dataRows);
+  });
+}
+function openImportStockPreviewModal(pattern, dataRows){
+  const title = pattern==='asset' ? 'Import Spare Assets — Preview' : 'Import Existing Stock — Preview';
+  const invalidCount = dataRows.filter(r=>r.errors.length).length;
+  const summaryHtml = invalidCount
+    ? '<div class="field-error" style="display:block; margin-bottom:10px;">'+invalidCount+' row'+(invalidCount===1?'':'s')+' require'+(invalidCount===1?'s':'')+' attention — fix the CSV and re-select it. No records have been imported yet.</div>'
+    : '<div class="field-hint" style="margin-bottom:10px; color:var(--action-approve); font-weight:600;">All rows look good — ready to import.</div>';
+  const rowsHtml = dataRows.map(r=>{
+    const ok = !r.errors.length;
+    return '<tr'+(ok?'':' style="background:var(--color-danger-soft);"')+'>'
+      + '<td>'+escapeHtml(r.itemText||'—')+'</td>'
+      + '<td>'+escapeHtml(r.qtyText||'—')+'</td>'
+      + '<td>'+(r.refDateISO?escapeHtml(formatDateDMY(r.refDateISO)):'—')+'</td>'
+      + '<td>'+escapeHtml(r.reference||'—')+'</td>'
+      + '<td>'+escapeHtml(r.remarks||'—')+'</td>'
+      + '<td>'+(r.photoText ? (r.photoFile ? '✓' : '✗ '+escapeHtml(r.photoText)) : '—')+'</td>'
+      + '<td>'+(ok ? '<span style="color:var(--action-approve); font-weight:600;">Ready</span>' : '<span style="color:var(--color-danger); font-weight:600;">'+escapeHtml(r.errors.join('; '))+'</span>')+'</td>'
+      + '</tr>';
+  }).join('');
+  const body = summaryHtml
+    + '<div class="table-wrap" style="max-height:360px;"><table><thead><tr><th>Item</th><th>Qty</th><th>Date</th><th>Reference</th><th>Remarks</th><th>Photo</th><th>Status</th></tr></thead><tbody>'
+    + rowsHtml + '</tbody></table></div>';
+  openModal(title, body,
+    '<button class="btn btn-outline" id="csv-back-btn">Back</button>'
+    + '<button class="btn btn-primary" id="csv-import-btn" '+(invalidCount?'disabled':'')+'>Import Stock</button>',
+    'module-inventory', true);
+  const modalEl = document.querySelector('#modal-overlay .modal');
+  if(modalEl) modalEl.style.maxWidth = '760px';
+  document.getElementById('csv-back-btn').addEventListener('click', ()=>openImportStockCSVModal(pattern));
+  const importBtn = document.getElementById('csv-import-btn');
+  if(invalidCount) return; // nothing else to wire — button stays disabled until the CSV is fixed
+
+  importBtn.addEventListener('click', async function(){
+    const btn = this;
+    const actorName = (myStaffRecord()||{}).name || currentUserEmail;
+    let photosAttached = 0;
+    btn.disabled = true;
+    try{
+      // Upload + compress any photos first (outside the DB-mutating step),
+      // so a failed upload never leaves a half-imported batch — all rows
+      // commit together, or none do, per the all-or-nothing import rule.
+      const uploaded = [];
+      for(let i=0; i<dataRows.length; i++){
+        const r = dataRows[i];
+        btn.textContent = 'Uploading photos… ('+(i+1)+'/'+dataRows.length+')';
+        if(r.photoFile){
+          const compressed = await compressImageFile(r.photoFile);
+          const photoFileId = await driveUploadBinary(compressed, CONFIG.UPLOADS_FOLDER_ID);
+          uploaded.push({ photoFileId, photoFileName: compressed.name });
+          photosAttached++;
+        } else uploaded.push(null);
+      }
+      btn.textContent = 'Importing…';
+      const ok = await runSaveAction(btn, 'Importing…', async ()=>{
+        dataRows.forEach((r, i)=>{
+          const photo = uploaded[i];
+          addExistingStock(r.catalogItem, r.catalogItem.categoryId, r.qty, r.refDateISO, r.reference, r.remarks, currentUserEmail, actorName, photo?photo.photoFileId:null, photo?photo.photoFileName:null);
+        });
+        await saveDb();
+      });
+      if(!ok) return;
+    }catch(e){
+      toast('Import failed: '+e.message, 'error');
+      btn.disabled = false; btn.textContent = 'Import Stock';
+      return;
+    }
+    const withoutPhotos = dataRows.length - photosAttached;
+    const summary = photosAttached
+      ? dataRows.length+' stock records imported — '+photosAttached+' with photos, '+withoutPhotos+' without'
+      : dataRows.length+' stock record'+(dataRows.length===1?'':'s')+' imported successfully';
+    toast(summary, 'success');
+    closeModal();
+    renderInventoryPage();
   });
 }
 
