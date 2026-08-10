@@ -1505,7 +1505,13 @@ async function driveUploadBinary(file, parentId){
   await driveSetPublicReadable(fileId);
   return fileId;
 }
-function driveDownloadUrl(fileId){ return 'https://drive.google.com/uc?export=download&id='+fileId; }
+// Uses the Drive v3 "files/{id}?alt=media" endpoint with the API key rather
+// than the old drive.google.com/uc?export=download hotlink, which Google now
+// frequently serves as an HTML interstitial instead of raw image bytes,
+// breaking <img src> embeds. alt=media returns the actual bytes directly for
+// any file already made publicly readable via driveSetPublicReadable(), no
+// sign-in required to view it.
+function driveDownloadUrl(fileId){ return DRIVE_FILES_URL+'/'+fileId+'?alt=media&key='+encodeURIComponent(CONFIG.DRIVE_API_KEY); }
 function drivePreviewUrl(fileId){ return 'https://drive.google.com/file/d/'+fileId+'/preview'; }
 
 /* ============================================================
