@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Staff Training Guide — Taqwa Inventory &amp; Procurement Portal</title>
+<style>
+  :root{
+    --navy:#0F2A47; --navy-dark:#0A1D33; --teal:#0F8A6B; --teal-soft:#E3F5EF;
+    --indigo:#4F46E5; --indigo-soft:#EEEDFC; --gold:#B8860B; --gold-soft:#FDF3DC;
+    --ink:#0F172A; --ink-soft:#3F4A5A; --ink-faint:#6B7686; --border:#E2E6EB; --bg:#F6F8FA; --surface:#fff;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+  .wrap{ max-width:920px; margin:0 auto; padding:0 20px; }
+  header.hero{ background:linear-gradient(135deg,var(--navy),var(--navy-dark)); color:#fff; padding:44px 0 36px; }
+  header.hero h1{ margin:0 0 8px; font-size:28px; }
+  header.hero p{ margin:0; color:#C9D6E5; font-size:15px; }
+  nav.toc{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px 24px; margin:28px 0; box-shadow:0 1px 2px rgba(15,23,42,.05); }
+  nav.toc h2{ margin-top:0; font-size:15px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-faint); }
+  nav.toc ol{ columns:2; column-gap:32px; padding-left:20px; margin:0; }
+  nav.toc li{ margin-bottom:6px; break-inside:avoid; }
+  nav.toc a{ color:var(--navy); text-decoration:none; font-size:14px; }
+  nav.toc a:hover{ text-decoration:underline; }
+  main{ padding-bottom:80px; }
+  section{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:28px 30px; margin:22px 0; scroll-margin-top:20px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+  section > h2{ margin-top:0; font-size:21px; padding-bottom:10px; border-bottom:2px solid var(--border); }
+  section.module-inventory > h2{ color:var(--teal); border-bottom-color:var(--teal); }
+  section.module-procurement > h2{ color:var(--teal); border-bottom-color:var(--teal); }
+  section.module-service > h2{ color:var(--indigo); border-bottom-color:var(--indigo); }
+  section.module-admin > h2{ color:var(--navy); border-bottom-color:var(--navy); }
+  section.module-home > h2{ color:var(--navy); border-bottom-color:var(--navy); }
+  h3{ font-size:16.5px; margin:26px 0 8px; color:var(--ink); }
+  h3:first-of-type{ margin-top:10px; }
+  p{ margin:8px 0; font-size:14.5px; color:var(--ink-soft); }
+  ul, ol.steps{ font-size:14.5px; color:var(--ink-soft); padding-left:22px; }
+  ul li, ol.steps li{ margin-bottom:5px; }
+  .path{ display:inline-block; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:2px 8px; font-family:'SF Mono',Consolas,monospace; font-size:12.5px; color:var(--ink); }
+  .example{ background:var(--teal-soft); border-left:4px solid var(--teal); border-radius:0 8px 8px 0; padding:12px 16px; margin:14px 0; font-size:14px; }
+  .example.indigo{ background:var(--indigo-soft); border-left-color:var(--indigo); }
+  .example.gold{ background:var(--gold-soft); border-left-color:var(--gold); }
+  .example strong{ display:block; margin-bottom:4px; color:var(--ink); font-size:12.5px; text-transform:uppercase; letter-spacing:.03em; }
+  .note{ background:#FEF9E7; border:1px solid #F0DBA0; border-radius:8px; padding:10px 14px; font-size:13.5px; margin:14px 0; }
+  .warn{ background:#FEF2F2; border:1px solid #F5C2C2; border-radius:8px; padding:10px 14px; font-size:13.5px; margin:14px 0; color:#8A2020; }
+  table{ width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px; }
+  th, td{ text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); }
+  th{ color:var(--ink-faint); text-transform:uppercase; font-size:11.5px; letter-spacing:.03em; }
+  code{ background:var(--bg); border-radius:4px; padding:1px 5px; font-size:13px; }
+  .back-top{ display:inline-block; margin-top:10px; font-size:12.5px; color:var(--ink-faint); text-decoration:none; }
+  .back-top:hover{ text-decoration:underline; }
+  footer{ text-align:center; padding:30px 0 50px; color:var(--ink-faint); font-size:13px; }
+  @media print{
+    header.hero{ background:var(--navy) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    nav.toc{ break-after:page; }
+    section{ break-inside:avoid; box-shadow:none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <h1>Staff Training Guide</h1>
+    <p>Taqwa Islamic School — Inventory &amp; Procurement Portal · every module, explained with examples</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="toc" id="top">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#signing-in">1. Signing In &amp; Roles</a></li>
+      <li><a href="#dashboard">2. Dashboard</a></li>
+      <li><a href="#inventory">3. Inventory</a></li>
+      <li><a href="#item-procurement">4. Item Procurement</a></li>
+      <li><a href="#service-procurement">5. Service Procurement</a></li>
+      <li><a href="#admin-settings">6. Admin Settings</a></li>
+      <li><a href="#search">7. Search</a></li>
+      <li><a href="#alerts">8. Alerts &amp; Notifications</a></li>
+      <li><a href="#roles-table">9. Roles &amp; Permissions Reference</a></li>
+      <li><a href="#faq">10. Tips &amp; Troubleshooting</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <section class="module-home" id="signing-in">
+      <h2>1. Signing In &amp; Roles</h2>
+      <p>Open the portal and click <strong>Sign in with Google</strong>, using your authorised school Gmail account. If sign-in fails, it usually means your account hasn't been added as staff yet — contact an Admin.</p>
+      <p>Every account has exactly one role, set by an Admin under <span class="path">Admin Settings → Manage Staff</span>:</p>
+      <ul>
+        <li><strong>Admin</strong> — full access, including catalog, buildings, staff management, and Archive.</li>
+        <li><strong>Chairman</strong> / <strong>Principal</strong> — final-stage approvers for escalated requests.</li>
+        <li><strong>Coordinator</strong> — first-stage approver for both Item and Service requests.</li>
+        <li><strong>Staff cum Portal User</strong> — can raise requests, receive purchases, and manage day-to-day inventory, but cannot approve or edit the catalog.</li>
+        <li><strong>Staff</strong> — read-only / requesting access only, depending on what an Admin enables.</li>
+      </ul>
+      <p>Your role decides which tabs and buttons you see — this is normal, not a bug. See the <a href="#roles-table">Roles &amp; Permissions Reference</a> for the full breakdown.</p>
+      <a class="back-top" href="#top">↑ Back to contents</a>
+    </section>
+
+    <section class="module-home" id="dashboard">
+      <h2>2. Dashboard</h2>
+      <p>The Home page is your at-a-glance status screen. Nothing here needs to be clicked into to understand it — a one-second scan should tell you if anything needs attention.</p>
+      <h3>Top KPI row</h3>
+      <ul>
+        <li><strong>Inventory Items</strong> — total distinct catalog items currently tracked in stock.</li>
+        <li><strong>Low Stock Alerts</strong> — items at or below their reorder threshold right now.</li>
+        <li><strong>Requests Pending</strong> — all requests anywhere in the portal still awaiting an approval decision.</li>
+        <li><strong>Awaiting My Action</strong> — everything specifically waiting on <em>you</em>, based on your role, added up across every queue below.</li>
+      </ul>
+      <h3>Pending Work</h3>
+      <p>Six cards, one per queue. A card only counts items that are actually <em>yours</em> to act on (based on your role) — an "all clear" card doesn't mean nothing is happening company-wide, just that nothing there needs you specifically.</p>
+      <div class="example">
+        <strong>Example</strong>
+        If you're a Coordinator, "Pending Approvals" shows purchase requests waiting on you, but "Item Receipt" only lights up once you (or anyone with receiving rights) actually needs to confirm a delivery.
+      </div>
+      <h3>Procurement &amp; Expenses at a Glance</h3>
+      <p>Rolling counts and totals — requests raised today/this week, and money actually spent today/this week/this month. "Expenses" only count <em>recorded</em> purchases and <em>closed</em> services — a request still sitting in Approval contributes ₹0 until it's actually purchased.</p>
+      <h3>Recent Activity</h3>
+      <p>A scrollable strip of everything that happened in the <strong>last 24 hours</strong> — not just the last few records. If nothing happened today, it shows a clean "No recent activity" message instead of stale entries from days ago.</p>
+      <div class="note">The Dashboard refreshes itself in the background roughly every 30 seconds, and does an extra check the moment you land on it — so if a colleague approves or closes something, you'll see it update without needing to reload the page.</div>
+      <a class="back-top" href="#top">↑ Back to contents</a>
+    </section>
+
+    <section class="module-inventory" id="inventory">
+      <h2>3. Inventory</h2>
+      <p><span class="path">Inventory</span> is where all physical stock — consumables and assets — actually lives, independent of how it arrived (bought through Procurement, or added as pre-existing stock).</p>
+
+      <h3>3.1 Browse by Category</h3>
+      <p>The default tab — a grid of every category (Stationery, Kitchen/Pantry, Electrical, Furniture, etc.), each showing item count. Click into any category to see its item list, current stock, and (for Admins) <strong>+ Add Item</strong> to create a brand-new catalog item.</p>
+
+      <h3>3.2 Consumables tab</h3>
+      <p>A flat table of every consumable across all categories, each with a <strong>Consume</strong> button — the way you record stock actually being used up (e.g. handed out, used in class, used up in the kitchen).</p>
+      <div class="example">
+        <strong>Example — recording use</strong>
+        The kitchen used 2 litres of Milk this morning. Open Inventory → Consumables, find Milk, click Consume, enter Quantity <code>2</code>, optionally note the Building/Room and a purpose ("Staff breakfast"), and submit. Milk's stock count drops by 2 immediately, and it's logged permanently in that item's Stock Ledger.
+      </div>
+      <p><strong>+ Add Existing Stock</strong> is for stock that's physically already at school but never went through the Procurement workflow (e.g. donated items, or stock found during a physical count). Pick the catalog item it matches, enter the quantity, and optionally a purchase/reference date, reference note, remarks, and a photo.</p>
+      <p><strong>Import CSV</strong> lets you add many existing-stock records at once instead of one at a time:</p>
+      <ol class="steps">
+        <li>Click <strong>Import CSV</strong>, then <strong>Download CSV Template</strong> to get the exact column format.</li>
+        <li>Fill in ITEM, QUANTITY (required) and Purchase/Reference Date, Reference, Remarks, PHOTO (all optional) — ITEM must match an existing catalog item exactly by name.</li>
+        <li>If any rows have a PHOTO filename, also select those image files (in addition to the CSV) using "Select Photos" — they're matched to rows by filename.</li>
+        <li>Click <strong>Parse &amp; Preview</strong>. Every row is validated and shown in a table — invalid rows are flagged in red with the specific problem (unknown item, bad quantity, bad date, missing photo).</li>
+        <li><strong>Import Stock</strong> only becomes clickable once every row is valid — nothing is imported while any row still has an error.</li>
+      </ol>
+      <div class="example">
+        <strong>Example — bulk import</strong>
+        A stock-take finds 10 reams of A4 paper and 5 bottles of Fevicol that were never logged. Instead of adding them one at a time, build a two-row CSV, import it, fix any flagged rows, and import both in one go — they behave exactly like manually-added stock afterwards.
+      </div>
+
+      <h3>3.3 Assets tab</h3>
+      <p>Three sub-tabs:</p>
+      <ul>
+        <li><strong>Installed Assets</strong> — everything currently placed somewhere in the school, grouped by item, each with a Dispose action.</li>
+        <li><strong>Spare Assets</strong> — assets sitting in storage, not yet installed anywhere, each with an Install Asset action (choose a building, optionally a room).</li>
+        <li><strong>Disposed-Off Assets</strong> — permanently removed assets, kept for audit history.</li>
+      </ul>
+      <div class="example">
+        <strong>Example — installing a spare fan</strong>
+        Spare Assets shows "Ceiling Fan — Qty Spare: 3". Click Install Asset, choose Quantity 1, Building "Main Building", Room "Room 12", add a remark if useful, and submit. The fan moves from Spare (now 2) to Installed, tagged to that exact location.
+      </div>
+      <p><strong>Updating an asset's location:</strong> open the asset's item detail page (click its name from any Assets list) — each active installation card has an <strong>Update Location</strong> button. This is for assets that physically move after being installed (a fan relocated to a different classroom, for example) — it keeps full history at both the old and new location rather than silently overwriting where it used to be.</p>
+
+      <h3>3.4 Item detail page</h3>
+      <p>Clicking any item name opens its full record: current stock, reorder threshold, average purchase cost, photo, installation/disposal history (assets), purchase history, the complete <strong>Stock Ledger</strong>, pending requests, attachments, and a full audit log.</p>
+      <h3>Stock Ledger &amp; Adjustments</h3>
+      <p>The Stock Ledger is the permanent, chronological record of every quantity change for that item — Goods Receipt, Install, Dispose, Move, Issue (consumption) — each with a running balance. It's the one place to see exactly how an item's current stock number was arrived at.</p>
+      <p><strong>Record Adjustment</strong> (Admin only) is the correction tool for anything that doesn't fit those normal flows — a physical recount finding a discrepancy, damage discovered later, or fixing a data-entry mistake. Enter a signed quantity (<code>+5</code> or <code>-3</code>) and a required reason; it's logged to the ledger just like any other transaction, never a silent edit.</p>
+      <div class="warn">Adjustments should be the exception, not the routine way stock changes — use Consume, Receipt, Install, or Dispose for anything that actually happened through a normal process, so the audit trail stays meaningful.</div>
+
+      <h3>3.5 Low Stock Alerts</h3>
+      <p>Set the <strong>Reorder Threshold</strong> on any item via its Edit button (in its category's item list). Once stock falls to or below that number, a red alert banner appears at the top of the Dashboard for everyone. It clears automatically once stock is topped back up above the threshold — and will reappear on its own if it drops low again later, so it's never a one-time thing. Only an Admin can manually dismiss an active alert.</p>
+      <a class="back-top" href="#top">↑ Back to contents</a>
+    </section>
+
+    <section class="module-procurement" id="item-procurement">
+      <h2>4. Item Procurement</h2>
+      <p>The full lifecycle for buying items — from request to the stock actually landing in Inventory. Every stage is permanently tracked.</p>
+
+      <h3>4.1 New Request</h3>
+      <ol class="steps">
+        <li>Choose a Category, then an Item from that category's locked catalog (you can't type a free-text item name — this keeps stock names consistent).</li>
+        <li>Enter Quantity, Priority, and a Reason.</li>
+        <li>Add more items to the same request with <strong>+ Add Another Item</strong> if needed.</li>
+        <li>Submit — the request either goes straight to Purchase Assignment (if that category doesn't require approval) or into the Approval queue.</li>
+      </ol>
+      <div class="example">
+        <strong>Example</strong>
+        A teacher needs 5 whiteboard markers. New Request → Category "Stationery Items" → Item "Whiteboard Marker" → Quantity 5 → Reason "Classroom Requirements" → Submit. Stationery doesn't require approval, so it goes straight to Purchase Assignment.
+      </div>
+
+      <h3>4.2 Approvals</h3>
+      <p>Requests needing approval land with whoever holds the Coordinator role. From there: <strong>Approve</strong> (moves on to Purchase Assignment), <strong>Decline</strong> (a comment is required, explaining why), or <strong>Escalate</strong> to the Principal for a second opinion.</p>
+
+      <h3>4.3 Purchase Assignment</h3>
+      <p>Once approved, someone records the actual purchase: supplier, invoice number, purchase date, unit price, tax, and optionally a bill/receipt photo. <strong>Unit Price must be a genuine positive amount</strong> — zero or negative values are rejected, since ₹0 isn't a real purchase.</p>
+
+      <h3>4.4 Item Receipt</h3>
+      <p>Confirms the goods have physically arrived, with condition, remarks, and an optional photo. What happens next depends on the item type:</p>
+      <ul>
+        <li><strong>Consumables</strong> go straight into Inventory → Consumables' current stock — the request is complete at this point, no further step needed.</li>
+        <li><strong>Assets</strong> move to <strong>Item Issue / Return</strong> to decide where they go.</li>
+      </ul>
+
+      <h3>4.5 Item Issue / Return</h3>
+      <p>Only shown for assets. Decide whether the received asset is installed immediately at a location, or kept as spare stock for later.</p>
+
+      <h3>4.6 Purchase Orders &amp; All Requests</h3>
+      <p>Purchase Orders lists every generated PO, printable individually. All Requests is the full, filterable history of every Item Procurement request ever raised, whatever stage it's at.</p>
+      <a class="back-top" href="#top">↑ Back to contents</a>
+    </section>
+
+    <section class="module-service" id="service-procurement">
+      <h2>5. Service Procurement</h2>
+      <p>For work done by outside contractors or vendors — repairs, maintenance, installations — as opposed to buying physical stock.</p>
+
+      <h3>5.1 New Request</h3>
+      <ol class="steps">
+        <li>Choose whether the service is tied to a specific asset, or general.</li>
+        <li>Choose a Category and Sub-category (e.g. "Maintenance &amp; Repairs → Electrical").</li>
+        <li>Set Priority and an Expected Completion Date.</li>
+        <li>Describe the problem in Remarks, and optionally attach a photo — click "Preview" beside the file picker to check the photo before submitting.</li>
+      </ol>
+      <div class="example indigo">
+        <strong>Example</strong>
+        A classroom fan is making a grinding noise. New Request → General → Category "Maintenance &amp; Repairs" / "Electrical" → Priority Medium → Remarks "Fan making a loud grinding noise, needs inspection" → attach a photo of the fan → Submit.
+      </div>
+
+      <h3>5.2 Approvals</h3>
+      <p>Same Coordinator → Principal approval flow as Item Procurement. Every approver on the request can see the requester's remark and attached photo directly on the approval card, not just a summary.</p>
+
+      <h3>5.3 Service Details &amp; Receipts</h3>
+      <p>Once approved, the request sits here until the work is actually done and confirmed. Open <strong>Confirm Service Receipt</strong>:</p>
+      <ul>
+        <li><strong>Checked By</strong> — must be explicitly chosen; nobody is pre-selected, since the system never assumes who actually checked the work.</li>
+        <li><strong>Service Charges</strong> — must be a genuine positive amount to close the service; ₹0, blank, or negative values are rejected.</li>
+        <li><strong>Total Amount</strong> auto-calculates from Charges + Taxes as you type.</li>
+        <li><strong>Service Status</strong> — Satisfactory, Not Satisfactory, or Under Observation.</li>
+      </ul>
+      <p>Three outcomes:</p>
+      <table>
+        <tr><th>Action</th><th>Result</th></tr>
+        <tr><td><strong>Close Service</strong> (Satisfactory)</td><td>Request closes permanently, counted in expenditure.</td></tr>
+        <tr><td><strong>Close Service</strong> (Not Satisfactory)</td><td>Recorded, but stays active here for follow-up rather than closing.</td></tr>
+        <tr><td><strong>Mark for Observation</strong></td><td>Stays open for a trial period before final closure — Service Charges isn't required yet, since the job isn't finished.</td></tr>
+      </table>
+
+      <h3>5.4 All Service Requests &amp; Generate Report</h3>
+      <p>All Service Requests is the full filterable history. Any individual request has a <strong>Generate Report</strong> option producing a PDF with the complete record — request details, the requester's remark, the actual uploaded photo (if any) under an "Attachment" heading, and the full receipt/closure details.</p>
+      <a class="back-top" href="#top">↑ Back to contents</a>
+    </section>
+
+    <section class="module-admin" id="admin-settings">
+      <h2>6. Admin Settings</h2>
+      <p>Admin-only configuration for the whole portal.</p>
+
+      <h3>6.1 Manage Staff</h3>
+      <p>Add staff, set their role, and toggle active/inactive. A staff member's email here is what all approval and receipt actions get attributed to, and what email alerts (see <a href="#alerts">Alerts &amp; Notifications</a>) are sent to.</p>
+
+      <h3>6.2 Manage Buildings</h3>
+      <p>The building/room list used everywhere assets get a location — Item Issue, Install Asset, and Update Location.</p>
+
+      <h3>6.3 Manage Categories &amp; Items</h3>
+      <p>The locked catalog every request and stock entry is built from. For each item you can set:</p>
+      <ul>
+        <li><strong>Item Type</strong> — Consumable, Asset, or Repair-type — controls which workflow the item follows.</li>
+        <li><strong>Value Classification</strong> — Low / Medium / High / Emergency.</li>
+        <li><strong>Approval requirement</strong> — toggle whether requests for this item need Coordinator approval at all.</li>
+      </ul>
+      <div class="note">New categories/items can be added at the bottom of each category card. Deleting an item here doesn't affect existing historical requests/stock — they keep their name as a permanent record.</div>
+
+      <h3>6.4 Manage Service Categories</h3>
+      <p>Mirrors Categories &amp; Items, but for Service Procurement's categories/sub-categories and their approval requirement.</p>
+
+      <h3>6.5 Archive</h3>
+      <p>Anything deleted (categories, items, staff) lands here rather than disappearing — restorable at any time.</p>
+      <a class="back-top" href="#top">↑ Back to contents</a>
+    </section>
+
+    <section class="module-home" id="search">
+      <h2>7. Search</h2>
+      <p>The search box in the top bar looks across inventory items (by name or item code), categories, procurement requests (by item name, code, or request number), and Purchase Orders — all at once, live as you type.</p>
+      <div class="example">
+        <strong>Example</strong>
+        Typing <code>PR-2026-0024</code> jumps straight to that request's detail page, regardless of which module or stage it's currently sitting in.
+      </div>
+      <a class="back-top" href="#top">↑ Back to contents</a>
+    </section>
+
+    <section class="module-home" id="alerts">
+      <h2>8. Alerts &amp; Notifications</h2>
+      <p>Two kinds of automatic notification, in addition to what you see live inside the portal:</p>
+      <ul>
+        <li><strong>Low stock banner</strong> (on the Dashboard) — see <a href="#inventory">3.5 Low Stock Alerts</a>.</li>
+        <li><strong>Email alerts</strong> — when a request needs approval, when an approval decision is made (approved/declined/escalated), and when a receipt is confirmed, an email goes out to everyone who's been involved in that request's history, plus all Admins. A daily expenditure summary is also emailed each morning to everyone holding an approver role (Coordinator/Principal/Chairman).</li>
+      </ul>
+      <div class="note">Email alerts only reach people whose email is correctly set under Manage Staff — if you're not receiving them, check that first with an Admin.</div>
+      <a class="back-top" href="#top">↑ Back to contents</a>
+    </section>
+
+    <section class="module-home" id="roles-table">
+      <h2>9. Roles &amp; Permissions Reference</h2>
+      <table>
+        <tr><th>Role</th><th>Approve requests</th><th>Purchase / Receive</th><th>Manage catalog / staff</th><th>Consume / Install stock</th></tr>
+        <tr><td>Admin</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+        <tr><td>Chairman</td><td>✓ (final stage)</td><td>✓</td><td>—</td><td>✓</td></tr>
+        <tr><td>Principal</td><td>✓ (final stage)</td><td>✓</td><td>—</td><td>✓</td></tr>
+        <tr><td>Coordinator</td><td>✓ (first stage)</td><td>✓</td><td>—</td><td>✓</td></tr>
+        <tr><td>Staff cum Portal User</td><td>—</td><td>✓</td><td>—</td><td>if enabled</td></tr>
+        <tr><td>Staff</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+      </table>
+      <p>If a button or tab you expect to see is missing, it's almost always your role — ask an Admin to confirm what's set for your account under Manage Staff.</p>
+      <a class="back-top" href="#top">↑ Back to contents</a>
+    </section>
+
+    <section class="module-home" id="faq">
+      <h2>10. Tips &amp; Troubleshooting</h2>
+      <ul>
+        <li><strong>A dropdown or field looks locked/blank</strong> — try refreshing the page. If it persists, tell an Admin exactly which item/screen it was on.</li>
+        <li><strong>I can't see a queue I expect to act on</strong> — check your role (see above); most action buttons are role-gated by design.</li>
+        <li><strong>Numbers on the Dashboard look out of date</strong> — it self-refreshes roughly every 30 seconds, and again the moment you open it; a manual page reload always forces the latest.</li>
+        <li><strong>A PDF/report seems to be missing a photo</strong> — only requests that actually had a photo uploaded will show one; nothing is faked or left as a broken image.</li>
+        <li><strong>I made a mistake on stock count</strong> — don't try to "fix" it by editing history; use Record Adjustment on that item's page instead, with a clear reason.</li>
+        <li>For anything not covered here, use the Contact page in the portal, or ask an Admin directly.</li>
+      </ul>
+      <a class="back-top" href="#top">↑ Back to contents</a>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  Taqwa Islamic School — Inventory &amp; Procurement Portal · Staff Training Guide
+</footer>
+
+</body>
+</html>

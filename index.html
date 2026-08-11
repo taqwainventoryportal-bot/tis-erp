@@ -206,7 +206,7 @@ button{ font-family:inherit; cursor:pointer; }
 .auth-box{ display:flex; align-items:center; gap:10px; padding-left:16px; border-left:1px solid var(--color-border); }
 .role-chip{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; background:var(--color-primary-light); color:var(--color-primary-dark); border:1px solid var(--color-border); padding:5px 11px 5px 8px; border-radius:999px; }
 .role-chip::before{ content:''; width:6px; height:6px; border-radius:50%; background:var(--color-gold); flex:none; }
-.btn{ font-weight:600; font-size:13.5px; padding:8px 14px; border-radius:var(--radius-sm); border:1.5px solid transparent; transition:background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms ease; white-space:nowrap; }
+.btn{ font-weight:600; font-size:13.5px; padding:8px 14px; border-radius:var(--radius-sm); border:1.5px solid transparent; transition:background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 150ms ease; white-space:nowrap; text-decoration:none; display:inline-block; cursor:pointer; }
 .btn-primary{ background:var(--color-primary); color:#fff; box-shadow:0 1px 2px rgba(15,23,42,0.08); }
 .btn-primary:hover{ background:var(--color-primary-dark); box-shadow:0 3px 8px -2px rgba(15,23,42,0.22); transform:translateY(-1px); }
 .btn-primary:active{ transform:translateY(0); box-shadow:0 1px 2px rgba(15,23,42,0.08); }
@@ -839,8 +839,8 @@ const CONFIG = {
   // same secret you set in Code.gs's SHARED_SECRET below. Leave ALERTS_WEBAPP_URL
   // blank to disable alerts entirely — every call site checks this first and
   // silently no-ops, so the rest of the app behaves identically either way.
-  ALERTS_WEBAPP_URL: "",
-  ALERTS_SHARED_SECRET: ""
+  ALERTS_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbxFQGcdGqnd6DzRfOR1UwOF7y6eZizclSexBiQxCK3eIy3deWzIZVLEEwSySnLqUGK9fQ/exec",
+  ALERTS_SHARED_SECRET: "@Shahida16"
 };
 
 // Cost-tier thresholds (INR)
@@ -1890,14 +1890,17 @@ function renderAboutPage(){
 }
 function renderHelpPage(){
   renderStaticInfoPage('Help',
-    '<p><strong>Signing in:</strong> use the "Sign in with Google" button on the homepage with your authorised school Gmail account. If you can\'t sign in, contact the Admin to be added as staff.</p>'
-    + '<p><strong>Item Procurement:</strong> go to Item Procurement → New Request, choose a category and item from the catalog, fill in the quantity and reason, and submit. From there the request moves through Approval (where a category requires it) → Purchase Assignment → Item Receipt → Item Issue / Return, with every stage permanently recorded.</p>'
-    + '<p><strong>Service Procurement:</strong> go to Service Procurement → New Request, describe the service needed (tied to a specific asset or general), choose a Category and Sub-category, and submit. The request moves through Approval (where required) → Service Details &amp; Receipts, where the completed work is recorded and the service is either closed, marked Not Satisfactory, or placed Under Observation until resolved.</p>'
-    + '<p><strong>Inventory:</strong> Inventory → Browse by Category to see stock by category, or the Consumables and Assets tabs for stock levels, installed/spare/disposed assets, and full item history. Opening any item shows its purchase, receipt, installation, disposal and service history in one place.</p>'
-    + '<p><strong>Search:</strong> the search box in the top bar looks across inventory items, categories, requests and purchase orders at once.</p>'
-    + '<p><strong>Dashboard:</strong> the Home page shows Pending Work across both Item and Service Procurement, along with expenditure and recent activity, so you can see what needs attention without opening every module.</p>'
-    + '<p><strong>Reports:</strong> most request and service records have a Print or Generate Report option that produces a printable PDF with the full record.</p>'
-    + '<p>For anything else, use the Contact details below.</p>');
+    '<div style="background:var(--color-primary-light); border:1px solid var(--color-primary); border-radius:10px; padding:16px 18px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">'
+    +   '<div><strong style="display:block; margin-bottom:2px;">Full Staff Training Guide</strong><span class="field-hint">Every module explained in detail, with worked examples — for onboarding and reference.</span></div>'
+    +   '<a class="btn btn-primary btn-sm" href="staff-guide.html" target="_blank" rel="noopener">Open Training Guide →</a>'
+    + '</div>'
+    + '<p><strong>Signing in:</strong> use "Sign in with Google" with your authorised school Gmail account. If you can\'t sign in, contact the Admin to be added as staff.</p>'
+    + '<p><strong>Item Procurement:</strong> New Request → Approval (where required) → Purchase Assignment → Item Receipt → Item Issue / Return (assets only) — every stage permanently recorded.</p>'
+    + '<p><strong>Service Procurement:</strong> New Request → Approval (where required) → Service Details &amp; Receipts, where completed work is confirmed and the service is closed, marked Not Satisfactory, or placed Under Observation.</p>'
+    + '<p><strong>Inventory:</strong> Browse by Category, or the Consumables and Assets tabs for stock levels and full item history — including bulk CSV import for existing stock.</p>'
+    + '<p><strong>Search:</strong> the top bar searches inventory, categories, requests, and purchase orders at once.</p>'
+    + '<p><strong>Dashboard:</strong> Pending Work across both Item and Service Procurement, plus expenditure and the last 24 hours of activity.</p>'
+    + '<p>For anything not covered above, open the full Training Guide, or use the Contact details below.</p>');
 }
 function renderContactPage(){
   renderStaticInfoPage('Contact',
@@ -1947,7 +1950,17 @@ function renderRoute(){
   renderTopbar();
   const hash = location.hash || '#/';
   const parts = hash.replace('#/','').split('/').filter(Boolean);
-  if(!parts.length) return renderHomePage();
+  if(!parts.length){
+    renderHomePage();
+    // Landing on the dashboard is a deliberate "let me check what needs
+    // attention" moment, not just idle browsing — nudge a background
+    // refresh right away instead of leaving it to the next scheduled 30s
+    // tick, so these numbers feel as current as every other live part of
+    // the portal. Still safely skipped (same as the timer) if a modal's
+    // open or something's mid-edit; never blocks this render either way.
+    autoRefreshTick();
+    return;
+  }
   if(parts[0]==='about') return renderAboutPage();
   if(parts[0]==='help') return renderHelpPage();
   if(parts[0]==='contact') return renderContactPage();
@@ -2015,21 +2028,24 @@ function wireAlertDismissButtons(){
 /* ============================================================
    Home page
    ============================================================ */
+// Deliberately built as the exact union of the six individual queue
+// functions below (not a separate re-implementation of their filters) —
+// that's what the "Awaiting My Action" dashboard number is a total OF, so
+// it can never silently drift out of sync with what the six Pending Work
+// tiles show, the way it used to (e.g. after myItemIssueQueue() picked up
+// a consumable-vs-asset distinction this function didn't independently
+// know to apply, some legacy items were counted here but invisible in
+// every underlying tile).
 function pendingForMe(){
   if(!isSignedIn()) return [];
-  const out = [];
-  DB.requestItems.forEach(r=>{
-    if(r.deleted) return;
-    if(r.status==='pending_approval' && canActOnApproval(r)) out.push(r);
-    else if(r.status==='purchase_pending' && canPurchaseAction()) out.push(r);
-    else if((r.status==='purchased' || r.status==='received') && canReceiveAction()) out.push(r);
-  });
-  DB.serviceRequests.forEach(sr=>{
-    if(sr.deleted) return;
-    if(sr.status==='pending_approval' && canActOnServiceApproval(sr)) out.push(sr);
-    else if(['approved','under_observation','not_satisfactory'].includes(sr.status) && canManageServiceReceipts()) out.push(sr);
-  });
-  return out;
+  return [
+    ...myApprovalQueue(),
+    ...myPurchaseQueue(),
+    ...myReceiptQueue(),
+    ...myItemIssueQueue(),
+    ...myServiceApprovalQueue(),
+    ...myServiceReceiptQueue()
+  ];
 }
 /* ============================================================
    Analytics — spend computations (based on purchase records on request items)
@@ -2954,8 +2970,18 @@ function openManageDeptsModal(){
 
 }
 function renderManageDeptsModalBody(){
-  const typeOptions = DB.itemTypes.map(t=>'<option value="'+t.id+'">'+escapeHtml(t.name)+'</option>').join('');
-  const valueClassOptions = ['low','medium','high','emergency'].map(v=>'<option value="'+v+'">'+valueClassLabel(v)+'</option>').join('');
+  // Per-item option lists, built fresh for each row rather than injecting
+  // "selected" into a shared template string via .replace() — the old
+  // approach could silently fail to mark anything selected (leaving a
+  // dropdown effectively blank/unset in the browser) whenever an item's
+  // stored itemTypeId/valueClass didn't exactly match a known option, e.g.
+  // after older data or a partial edit left it slightly out of sync.
+  function typeOptionsFor(selectedId){
+    return DB.itemTypes.map(t=>'<option value="'+t.id+'" '+(t.id===selectedId?'selected':'')+'>'+escapeHtml(t.name)+'</option>').join('');
+  }
+  function valueClassOptionsFor(selectedValue){
+    return ['low','medium','high','emergency'].map(v=>'<option value="'+v+'" '+(v===selectedValue?'selected':'')+'>'+valueClassLabel(v)+'</option>').join('');
+  }
   const cats = DB.categories.filter(c=>!c.deleted);
   const rows = cats.map(c=>{
     const items = DB.itemCatalog.filter(i=>i.categoryId===c.id && !i.deleted).sort((a,b)=>a.code.localeCompare(b.code));
@@ -2970,8 +2996,8 @@ function renderManageDeptsModalBody(){
           '<div class="cat-policy-row">'
           + '<div class="cat-policy-name"><span class="badge badge-status">'+escapeHtml(i.code)+'</span> '+escapeHtml(i.name)+' <button data-del-item="'+i.id+'" title="Delete item" style="border:none;background:none;cursor:pointer;color:var(--color-danger);font-weight:700;">&times;</button></div>'
           + '<div class="cat-policy-controls">'
-          +   '<select data-item-type="'+i.id+'" title="Item Type">'+typeOptions.replace('value="'+i.itemTypeId+'"','value="'+i.itemTypeId+'" selected')+'</select>'
-          +   '<select data-item-valueclass="'+i.id+'" title="Value Classification">'+valueClassOptions.replace('value="'+i.valueClass+'"','value="'+i.valueClass+'" selected')+'</select>'
+          +   '<select data-item-type="'+i.id+'" title="Item Type">'+typeOptionsFor(i.itemTypeId)+'</select>'
+          +   '<select data-item-valueclass="'+i.id+'" title="Value Classification">'+valueClassOptionsFor(i.valueClass)+'</select>'
           +   '<button class="policy-toggle '+(i.procurementPolicy==='required'?'on':'off')+'" data-item-policy-toggle="'+i.id+'" title="Toggle whether this item requires approval">'
           +     (i.procurementPolicy==='required' ? 'Requires Approval' : 'No Approval Required')
           +   '</button>'
@@ -3052,20 +3078,42 @@ function renderManageDeptsModalBody(){
       toast('Item added','success'); renderManageDeptsModalBody(); renderRoute();
     });
   });
+  // NOTE: these two use their own inline busy-state instead of
+  // runSaveAction() — runSaveAction sets `btn.textContent = busyLabel`,
+  // which is fine for a <button> but DESTROYS a <select>'s <option>
+  // children when applied to one, wiping the dropdown back to nothing and
+  // making `sel.value` read as empty right when it's needed. That's what
+  // was actually behind changes here silently failing to save.
   document.querySelectorAll('[data-item-type]').forEach(sel=>{
     sel.addEventListener('change', async ()=>{
       const i = DB.itemCatalog.find(x=>x.id===sel.getAttribute('data-item-type'));
       if(!i) return;
-      const ok = await runSaveAction(sel, '…', async ()=>{ i.itemTypeId = sel.value; await saveDb(); });
-      if(ok) toast('Item Type updated','success');
+      const prevValue = i.itemTypeId, newValue = sel.value;
+      sel.disabled = true;
+      i.itemTypeId = newValue;
+      try{
+        await saveDb();
+        toast('Item Type updated','success');
+      }catch(e){
+        i.itemTypeId = prevValue; sel.value = prevValue;
+        toast(e.message || 'Something went wrong — please try again', 'error');
+      } finally { sel.disabled = false; }
     });
   });
   document.querySelectorAll('[data-item-valueclass]').forEach(sel=>{
     sel.addEventListener('change', async ()=>{
       const i = DB.itemCatalog.find(x=>x.id===sel.getAttribute('data-item-valueclass'));
       if(!i) return;
-      const ok = await runSaveAction(sel, '…', async ()=>{ i.valueClass = sel.value; await saveDb(); });
-      if(ok) toast('Value Classification updated','success');
+      const prevValue = i.valueClass, newValue = sel.value;
+      sel.disabled = true;
+      i.valueClass = newValue;
+      try{
+        await saveDb();
+        toast('Value Classification updated','success');
+      }catch(e){
+        i.valueClass = prevValue; sel.value = prevValue;
+        toast(e.message || 'Something went wrong — please try again', 'error');
+      } finally { sel.disabled = false; }
     });
   });
   document.querySelectorAll('[data-item-policy-toggle]').forEach(btn=>{
