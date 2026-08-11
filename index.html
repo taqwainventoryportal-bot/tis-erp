@@ -524,6 +524,7 @@ tbody tr:hover{ background:#F8FAFC; }
 .install-card-row{ display:flex; gap:6px; font-size:12px; margin-top:2px; }
 .install-card-row label{ flex:none; font-weight:600; color:var(--color-ink-faint); }
 .install-card-row span{ color:var(--color-ink-soft); }
+.install-card-actions{ margin-top:10px; padding-top:10px; border-top:1px solid var(--color-border); }
 .spec-item label{ display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--color-ink-faint); margin-bottom:3px; }
 .spec-item .val{ font-size:14.5px; color:var(--color-ink); font-weight:500; }
 
@@ -688,10 +689,19 @@ tbody tr:hover{ background:#F8FAFC; }
 
 
 /* ---- Alerts ---- */
-.alert-stack{ display:flex; flex-direction:column; gap:8px; margin:16px 0; }
-.alert-item{ display:flex; align-items:center; gap:10px; background:var(--color-gold-soft); border:1px solid var(--color-gold); color:#5c4413; padding:10px 14px; border-radius:10px; font-size:13px; }
-.alert-item strong{ font-weight:700; }
+.alert-stack{ display:flex; flex-direction:column; gap:10px; margin:16px 0; }
+.alert-item{
+  display:flex; align-items:flex-start; gap:10px; background:var(--color-danger-soft);
+  border:1px solid var(--color-danger); border-left:4px solid var(--color-danger); border-radius:10px;
+  color:var(--color-danger); padding:12px 16px; font-size:13px; position:relative;
+}
+.alert-item .alert-icon{ flex:none; margin-top:1px; }
+.alert-item > span:not(.spacer){ display:flex; flex-direction:column; gap:1px; }
+.alert-item strong{ font-weight:700; display:block; }
+.alert-item .alert-msg{ color:var(--color-ink-soft); font-size:12.5px; }
 .alert-item .spacer{ flex:1; }
+.alert-item-close{ background:none; border:none; color:var(--color-ink-faint); font-size:15px; line-height:1; cursor:pointer; padding:3px 5px; border-radius:5px; flex:none; }
+.alert-item-close:hover{ background:rgba(0,0,0,0.06); color:var(--color-ink); }
 
 /* ---- Empty state ---- */
 .empty-state{ text-align:center; padding:44px 20px; color:var(--color-ink-faint); }
@@ -1960,9 +1970,16 @@ function computeActiveAlerts(){
   DB.inventoryItems.forEach(item=>{
     const threshold = Number(item.reorderThreshold);
     if(threshold>0 && Number(item.quantity) <= threshold){
-      const key = 'lowstock_'+item.id;
+      // Keyed to the CURRENT quantity, not just the item — dismissing only
+      // silences this alert for as long as stock stays at this exact low
+      // level. If stock is topped back up above threshold (the item drops
+      // out of this list entirely, live) and later falls low again, that's
+      // a different quantity value, so a fresh alert reappears
+      // automatically — exactly the "goes away on restock, comes back if
+      // it happens again" behaviour, with no separate reset step needed.
+      const key = 'lowstock_'+item.id+'_'+item.quantity;
       if(!DB.dismissedAlerts.includes(key)){
-        alerts.push({ key, title:'Low stock: '+item.name, message: catName(item.categoryId)+' — only '+item.quantity+' '+(item.unit||'')+' left (reorder at '+threshold+')' });
+        alerts.push({ key, itemId:item.id, title:'Low stock: '+item.name, message: catName(item.categoryId)+' — only '+item.quantity+' '+(item.unit||'')+' left (reorder at '+threshold+')' });
       }
     }
   });
@@ -1972,8 +1989,12 @@ function renderAlertsHtml(){
   const alerts = computeActiveAlerts();
   if(!alerts.length) return '';
   return '<div class="alert-stack">' + alerts.map(a=>
-    '<div class="alert-item"><span>⚠</span><span><strong>'+escapeHtml(a.title)+'</strong> — '+escapeHtml(a.message)+'</span><span class="spacer"></span>'
-    + (isAdmin() ? '<button class="btn btn-outline btn-sm" data-dismiss-alert="'+a.key+'">Dismiss</button>' : '')
+    '<div class="alert-item"><span class="alert-icon">'+iconAlertTriangle(16,'var(--color-danger)')+'</span>'
+    + '<span><strong>'+escapeHtml(a.title)+'</strong><span class="alert-msg">'+escapeHtml(a.message)+'</span></span><span class="spacer"></span>'
+    // Dismissing a low-stock alert is deliberately Admin-only — nobody else
+    // can silence it, so it stays visible to everyone until an Admin acts
+    // on it (or the stock itself changes, which clears it automatically).
+    + (isAdmin() ? '<button class="alert-item-close" data-dismiss-alert="'+a.key+'" title="Dismiss (Admin only)" aria-label="Dismiss">&times;</button>' : '')
     + '</div>'
   ).join('') + '</div>';
 }
@@ -2779,6 +2800,53 @@ function openDisposeAssetModal(itemId){
     toast('Disposed','success'); closeModal(); renderInventoryPage();
   });
 }
+// Relocating an installed asset to a different building/room — see
+// performAssetMove() for why this is modelled as its own installation
+// record rather than editing the existing one in place.
+function openMoveAssetModal(itemId, installationId){
+  const item = DB.inventoryItems.find(i=>i.id===itemId);
+  if(!item){ toast('Item not found','error'); return; }
+  const inst = (item.installations||[]).find(i=>i.id===installationId);
+  if(!inst){ toast('Installation record not found','error'); return; }
+  const remaining = (Number(inst.qty)||0)-(Number(inst.disposedQty)||0)-(Number(inst.movedOutQty)||0);
+  if(remaining<=0){ toast('Nothing left installed at that location to move','error'); return; }
+  const fromLabel = buildingName(inst.buildingId)+(inst.roomId?' → '+roomName(inst.roomId):'');
+  const buildings = DB.buildings.filter(b=>!b.deleted).sort((a,b)=>a.sortOrder-b.sortOrder);
+  const body = '<div class="field-hint" style="margin-bottom:10px;">Currently at <strong>'+escapeHtml(fromLabel)+'</strong> — '+remaining+' installed here.</div>'
+    + '<div class="field"><label>Quantity to Move</label><input type="number" id="ma-qty" min="1" max="'+remaining+'" value="'+remaining+'"></div>'
+    + '<div class="field-row"><div class="field"><label>New Building</label><select id="ma-building"><option value="">— Select —</option>'+buildings.map(b=>'<option value="'+b.id+'" '+(b.id===inst.buildingId?'selected':'')+'>'+escapeHtml(b.name)+'</option>').join('')+'</select></div>'
+    + '<div class="field"><label>New Room (optional)</label><select id="ma-room"><option value="">— None —</option></select></div></div>'
+    + '<div class="field"><label>Date</label><input type="date" id="ma-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
+    + '<div class="field"><label>Remarks (optional)</label><textarea id="ma-remarks" placeholder="e.g. Reassigned to a different classroom"></textarea></div>';
+  openModal('Update Location — '+escapeHtml(item.name), body,
+    '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-primary" id="ma-submit-btn">Update Location</button>', 'module-inventory', true);
+  document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+  const bSel = document.getElementById('ma-building');
+  function refreshRooms(){
+    const rs = DB.rooms.filter(x=>x.buildingId===bSel.value);
+    document.getElementById('ma-room').innerHTML = '<option value="">— None —</option>'+rs.map(x=>'<option value="'+x.id+'" '+(x.id===inst.roomId?'selected':'')+'>'+escapeHtml(x.name)+'</option>').join('');
+  }
+  bSel.addEventListener('change', refreshRooms); refreshRooms();
+  document.getElementById('ma-submit-btn').addEventListener('click', async function(){
+    const btn = this;
+    const liveItem = DB.inventoryItems.find(i=>i.id===itemId);
+    const liveInst = liveItem ? (liveItem.installations||[]).find(i=>i.id===installationId) : null;
+    const liveRemaining = liveInst ? (Number(liveInst.qty)||0)-(Number(liveInst.disposedQty)||0)-(Number(liveInst.movedOutQty)||0) : 0;
+    const qty = Number(document.getElementById('ma-qty').value)||0;
+    if(qty<=0 || qty>liveRemaining){ toast('Quantity must be between 1 and '+liveRemaining+' (currently installed here)','error'); return; }
+    const newBuildingId = bSel.value;
+    if(!newBuildingId){ toast('Choose a building','error'); return; }
+    const newRoomId = document.getElementById('ma-room').value;
+    const date = document.getElementById('ma-date').value;
+    const remarks = document.getElementById('ma-remarks').value.trim();
+    const ok = await runSaveAction(btn, 'Updating…', async ()=>{
+      performAssetMove(liveItem, installationId, qty, newBuildingId, newRoomId, date, remarks);
+      await saveDb();
+    });
+    if(!ok) return;
+    toast('Location updated','success'); closeModal(); renderInventoryItemDetailPage(itemId);
+  });
+}
 
 /* ============================================================
    Manage Service Categories (Admin) — mirrors Manage Categories & Items'
@@ -3225,6 +3293,9 @@ function renderInventoryItemDetailPage(itemId){
     card.addEventListener('click', ()=>{ location.hash = '#/service-procurement/item/'+card.getAttribute('data-open-service-history'); });
   });
   wireAdjustmentForm(item);
+  document.querySelectorAll('[data-move-install]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{ e.stopPropagation(); openMoveAssetModal(item.id, btn.getAttribute('data-move-install')); });
+  });
   const uploadBtn = document.getElementById('item-photo-upload-btn');
   if(uploadBtn) uploadBtn.addEventListener('click', async ()=>{
     const fileInput = document.getElementById('item-photo-input');
@@ -3249,14 +3320,22 @@ function renderInstallationHistoryHtml(item){
   return '<div class="section-heading">Installation History</div>'
     + '<div class="install-card-grid">'
     + list.slice().reverse().map(ins=>{
-        const remaining = (Number(ins.qty)||0)-(Number(ins.disposedQty)||0);
-        const fullyDisposed = remaining<=0;
-        return '<div class="install-card'+(fullyDisposed?' fully-disposed':'')+'">'
-          + '<div class="install-card-qty">Qty: '+(fullyDisposed?ins.qty+' <span class="badge badge-rejected">Fully Disposed</span>':remaining)+'</div>'
+        const disposedQty = Number(ins.disposedQty)||0, movedOutQty = Number(ins.movedOutQty)||0;
+        const remaining = (Number(ins.qty)||0)-disposedQty-movedOutQty;
+        const fullyGone = remaining<=0;
+        // A fully-moved installation is NOT a disposal — the asset is still
+        // installed, just at a different location's own (new) record — so
+        // it gets its own badge rather than being lumped in with "Disposed".
+        const badge = !fullyGone ? '' : (disposedQty>=movedOutQty
+          ? '<span class="badge badge-rejected">Fully Disposed</span>'
+          : '<span class="badge badge-medium">Relocated</span>');
+        return '<div class="install-card'+(fullyGone?' fully-disposed':'')+'" data-install-card="'+ins.id+'">'
+          + '<div class="install-card-qty">Qty: '+(fullyGone?ins.qty+' '+badge:remaining)+'</div>'
           + '<div class="install-card-row"><label>Location:</label><span>'+escapeHtml(buildingName(ins.buildingId)+(ins.roomId?' → '+roomName(ins.roomId):''))+'</span></div>'
           + '<div class="install-card-row"><label>Installed:</label><span>'+formatDateDMY(ins.installedDate)+' by '+escapeHtml(ins.installedByName||'—')+'</span></div>'
           + (ins.requestNumber ? '<div class="install-card-row"><label>Request:</label><span>'+escapeHtml(ins.requestNumber)+'</span></div>' : '')
           + (ins.remarks ? '<div class="install-card-row"><label>Remarks:</label><span>'+escapeHtml(ins.remarks)+'</span></div>' : '')
+          + (!fullyGone && canManageConsumption() ? '<div class="install-card-actions"><button class="btn btn-outline btn-sm" data-move-install="'+ins.id+'">Update Location</button></div>' : '')
           + '</div>';
       }).join('')
     + '</div>';
@@ -3923,13 +4002,13 @@ function itemPatternOf(item){
   return 'consumable';
 }
 function installedQtyForItem(item){
-  return (item.installations||[]).reduce((s,ins)=>s+(Number(ins.qty)||0)-(Number(ins.disposedQty)||0), 0);
+  return (item.installations||[]).reduce((s,ins)=>s+(Number(ins.qty)||0)-(Number(ins.disposedQty)||0)-(Number(ins.movedOutQty)||0), 0);
 }
 function disposedQtyForItem(item){
   return (item.disposals||[]).reduce((s,d)=>s+(Number(d.qty)||0), 0);
 }
 function activeInstallationsForItem(item){
-  return (item.installations||[]).filter(ins => (Number(ins.qty)||0)-(Number(ins.disposedQty)||0) > 0);
+  return (item.installations||[]).filter(ins => (Number(ins.qty)||0)-(Number(ins.disposedQty)||0)-(Number(ins.movedOutQty)||0) > 0);
 }
 function performAssetInstall(item, qty, buildingId, roomId, remarks, requestNumber){
   if(!Array.isArray(item.installations)) item.installations = [];
@@ -3955,7 +4034,7 @@ function performAssetInstall(item, qty, buildingId, roomId, remarks, requestNumb
 function performAssetDispose(item, installationId, qty, disposedByEmail, disposedByName, date, reason, remarks){
   const inst = (item.installations||[]).find(i=>i.id===installationId);
   if(!inst) throw new Error('Installation record not found');
-  const remaining = (Number(inst.qty)||0) - (Number(inst.disposedQty)||0);
+  const remaining = (Number(inst.qty)||0) - (Number(inst.disposedQty)||0) - (Number(inst.movedOutQty)||0);
   if(qty<=0 || qty>remaining) throw new Error('Quantity must be between 1 and '+remaining+' (currently installed at that location)');
   inst.disposedQty = (Number(inst.disposedQty)||0) + qty;
   const destLabel = buildingName(inst.buildingId)+(inst.roomId?' → '+roomName(inst.roomId):'');
@@ -3974,6 +4053,41 @@ function performAssetDispose(item, installationId, qty, disposedByEmail, dispose
   item.updatedAt = new Date().toISOString();
   if(installedQtyForItem(item)<=0) item.status = 'Disposed (fully)';
   itemHistoryPush(item, 'Disposed', remark);
+}
+// Relocating an installed asset — e.g. a fan moved from one classroom to
+// another. Modelled the same way disposal is: the SOURCE installation
+// record's remaining qty goes down (via its own movedOutQty, kept
+// deliberately separate from disposedQty so a moved asset is never
+// mislabelled "Disposed"), and a brand-new installation record is created
+// at the destination. Nothing here touches item.quantity/stock ledger
+// balance — the asset never leaves "installed" status, it's still the same
+// physical units, just at a new location — so this stays a location-only
+// event, consistent with "each install is its own immutable event".
+function performAssetMove(item, installationId, qty, newBuildingId, newRoomId, date, remarks){
+  const inst = (item.installations||[]).find(i=>i.id===installationId);
+  if(!inst) throw new Error('Installation record not found');
+  const remaining = (Number(inst.qty)||0) - (Number(inst.disposedQty)||0) - (Number(inst.movedOutQty)||0);
+  if(qty<=0 || qty>remaining) throw new Error('Quantity must be between 1 and '+remaining+' (currently installed at that location)');
+  const fromLabel = buildingName(inst.buildingId)+(inst.roomId?' → '+roomName(inst.roomId):'');
+  const toLabel = buildingName(newBuildingId)+(newRoomId?' → '+roomName(newRoomId):'');
+  if(inst.buildingId===newBuildingId && (inst.roomId||null)===(newRoomId||null)) throw new Error('That is already this installation\'s location');
+  const actorName = (myStaffRecord()||{}).name || currentUserEmail;
+  inst.movedOutQty = (Number(inst.movedOutQty)||0) + qty;
+  if(!Array.isArray(item.installations)) item.installations = [];
+  item.installations.push({
+    id: nextId('inst'), qty, disposedQty: 0, movedOutQty: 0, buildingId: newBuildingId, roomId: newRoomId||null,
+    installedDate: date || new Date().toISOString().slice(0,10), requestNumber: inst.requestNumber||'',
+    installedByEmail: currentUserEmail, installedByName: actorName,
+    remarks: 'Moved from '+fromLabel+(remarks?' — '+remarks:''),
+    movedFromInstallationId: installationId,
+    timestamp: new Date().toISOString()
+  });
+  const remark = 'Moved '+qty+' from '+fromLabel+' to '+toLabel+(remarks?' — '+remarks:'');
+  // Zero in/out — a move never changes the item's available/spare balance,
+  // it's recorded purely for audit visibility (same treatment as Dispose).
+  pushLedgerEntry(item.id, 'Move', '', 0, 0, remark);
+  item.updatedAt = new Date().toISOString();
+  itemHistoryPush(item, 'Moved', remark);
 }
 
 function myPurchaseQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.status==='purchase_pending' && canPurchaseAction()); }
@@ -5640,7 +5754,7 @@ function renderItemActionBox(r){
       + '<div class="field" id="pe-purchaser-wrap" style="display:none;"><label>Purchaser Name</label><select id="pe-purchaser">'+staffOptions+'</select></div>'
       + '<div class="field-row"><div class="field"><label>Supplier / Shop</label><input type="text" id="pe-supplier"></div><div class="field"><label>Invoice Number (optional)</label><input type="text" id="pe-invoice"></div></div>'
       + '<div class="field-row"><div class="field"><label>Purchase Date</label><input type="date" id="pe-purchase-date" value="'+new Date().toISOString().slice(0,10)+'"></div><div class="field"><label>Quantity Purchased</label><input type="number" id="pe-qty" value="'+r.quantityRequested+'" disabled><div class="field-hint">Locked to the approved quantity ('+r.quantityRequested+')</div></div></div>'
-      + '<div class="field-row"><div class="field"><label>Unit Price (₹)</label><input type="number" id="pe-unit-price" value="0"></div><div class="field"><label>Tax (₹, optional)</label><input type="number" id="pe-tax" value="0"></div></div>'
+      + '<div class="field-row"><div class="field" id="pe-unit-price-field"><label>Unit Price (₹)</label><input type="number" id="pe-unit-price" value=""><div class="field-error" id="pe-unit-price-error">Unit price must be greater than ₹0.</div></div><div class="field" id="pe-tax-field"><label>Tax (₹, optional)</label><input type="number" id="pe-tax" value="0"><div class="field-error" id="pe-tax-error">Tax cannot be negative.</div></div></div>'
       + '<div class="field"><label>Total Amount (₹, auto)</label><input type="number" id="pe-total" value="0" readonly></div>'
       + '<div class="field"><label>Bill / Receipt Photo or PDF (optional)</label><input type="file" id="pe-bill-file" accept="image/*,.pdf"></div>'
       + '<div class="field"><label>Remarks (optional)</label><textarea id="pe-remarks"></textarea></div>'
@@ -5649,10 +5763,28 @@ function renderItemActionBox(r){
     const purchaserWrap = document.getElementById('pe-purchaser-wrap');
     sameAsReqChk.addEventListener('change', ()=>{ purchaserWrap.style.display = sameAsReqChk.checked ? 'none' : ''; });
     const qtyEl = document.getElementById('pe-qty'), priceEl = document.getElementById('pe-unit-price'), totalEl = document.getElementById('pe-total'), taxEl = document.getElementById('pe-tax');
+    const priceField = document.getElementById('pe-unit-price-field'), taxField = document.getElementById('pe-tax-field');
     function recalc(){ totalEl.value = ((Number(qtyEl.value)||0)*(Number(priceEl.value)||0)+(Number(taxEl.value)||0)).toFixed(2); }
     qtyEl.addEventListener('input', recalc); priceEl.addEventListener('input', recalc); taxEl.addEventListener('input', recalc);
+    // Live-clear each field's error as soon as it becomes valid — full
+    // validation still runs again on submit either way.
+    priceEl.addEventListener('input', ()=>{ if((Number(priceEl.value)||0) > 0) priceField.classList.remove('has-error'); });
+    taxEl.addEventListener('input', ()=>{ if((Number(taxEl.value)||0) >= 0) taxField.classList.remove('has-error'); });
     document.getElementById('pe-submit-btn').addEventListener('click', async ()=>{
       const submitBtn = document.getElementById('pe-submit-btn');
+      // A purchase can never be recorded at ₹0 or negative — that's not a
+      // real purchase, and a negative amount defies the underlying logic
+      // entirely (see Item Detail's "Total Amount" turning negative).
+      const unitPrice = Number(priceEl.value);
+      const taxAmount = Number(taxEl.value)||0;
+      let firstInvalid = null;
+      const priceInvalid = !(unitPrice > 0);
+      priceField.classList.toggle('has-error', priceInvalid);
+      if(priceInvalid) firstInvalid = priceEl;
+      const taxInvalid = taxAmount < 0;
+      taxField.classList.toggle('has-error', taxInvalid);
+      if(taxInvalid && !firstInvalid) firstInvalid = taxEl;
+      if(firstInvalid){ firstInvalid.focus(); return; }
       const fileInput = document.getElementById('pe-bill-file');
       const file = fileInput.files && fileInput.files[0];
       let purchaserEmail, purchaserName;
