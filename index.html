@@ -820,7 +820,17 @@ const CONFIG = {
 
   // Third-stage, High-cost only, all departments (Principal / Chairman)
   // Empty for now -- fill in later, e.g. ["principal@gmail.com"]
-  FINAL_APPROVER_EMAILS: []
+  FINAL_APPROVER_EMAILS: [],
+
+  // Email alerts (approvals, decisions, daily expenditure digest) are sent
+  // by a small separate Google Apps Script Web App — this file has no
+  // server of its own to send mail from. Deploy alerts-gas/Code.gs as a Web
+  // App (Execute as: Me, Access: Anyone), then paste its /exec URL and the
+  // same secret you set in Code.gs's SHARED_SECRET below. Leave ALERTS_WEBAPP_URL
+  // blank to disable alerts entirely — every call site checks this first and
+  // silently no-ops, so the rest of the app behaves identically either way.
+  ALERTS_WEBAPP_URL: "",
+  ALERTS_SHARED_SECRET: ""
 };
 
 // Cost-tier thresholds (INR)
@@ -977,6 +987,36 @@ function formatDate(iso){ if(!iso) return '—'; const d=new Date(iso); if(isNaN
 function formatDateDMY(iso){ if(!iso) return '—'; const d=new Date(iso+(String(iso).length<=10?'T00:00:00':'')); if(isNaN(d.getTime())) return String(iso); const p=n=>String(n).padStart(2,'0'); return p(d.getDate())+'-'+p(d.getMonth()+1)+'-'+d.getFullYear(); }
 function formatDateTime(iso){ if(!iso) return '—'; const d=new Date(iso); if(isNaN(d.getTime())) return iso; return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})+', '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); }
 function formatMoney(n){ n = Number(n)||0; return '₹' + n.toLocaleString('en-IN'); }
+
+/* ============================================================
+   Email alerts — approvals / decisions / daily expenditure.
+   This app has no server of its own; a small separate Google Apps Script
+   Web App (see alerts-gas/Code.gs) does the actual sending. This function
+   is a thin, best-effort fire-and-forget client for it: if ALERTS_WEBAPP_URL
+   is unset, or the request fails for any reason (network, GAS cold start,
+   wrong secret), it silently no-ops rather than interrupting the save flow
+   that triggered it — a failed/missing alert should never block or corrupt
+   an approval, receipt, or any other real action.
+   ============================================================ */
+function sendEmailAlert(subject, bodyHtml, recipients){
+  if(!CONFIG.ALERTS_WEBAPP_URL) return; // alerts not configured — no-op
+  const to = Array.from(new Set((recipients||[]).filter(Boolean).map(e=>e.trim().toLowerCase())));
+  if(!to.length) return;
+  fetch(CONFIG.ALERTS_WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS preflight to Apps Script
+    body: JSON.stringify({ secret: CONFIG.ALERTS_SHARED_SECRET, subject, bodyHtml, recipients: to })
+  }).catch(()=>{ /* best-effort only — never surface this to the user */ });
+}
+// Everyone who has ever acted on this request (requester, approvers,
+// escalators, receivers...) plus every admin — this is the recipient rule
+// for BOTH "approval needed" and "approval decision" alerts, per policy.
+function collectRequestRecipients(record){
+  const emails = (record.history||[]).map(h=>h.actorEmail).filter(Boolean);
+  emails.push(record.requestedByEmail);
+  emails.push(...CONFIG.ADMIN_EMAILS);
+  return emails;
+}
 function nextId(prefix){ return prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); }
 /* ============================================================
    Soft delete / Archive — Admin only. Records are never truly
@@ -1228,6 +1268,13 @@ function initApproval(reqItem){
   } else {
     reqItem.approvalStatus = 'pending_coordinator';
     reqItem.status = 'pending_approval';
+    sendEmailAlert(
+      'Approval needed — '+reqItem.requestNumber+' ('+reqItem.itemName+')',
+      '<p>A new purchase request needs Coordinator approval.</p>'
+      +'<p><b>Request:</b> '+escapeHtml(reqItem.requestNumber)+'<br><b>Item:</b> '+escapeHtml(reqItem.itemName)+' (qty '+reqItem.quantityRequested+')'
+      +'<br><b>Requested by:</b> '+escapeHtml(reqItem.requestedByName||reqItem.requestedByEmail)+'</p>',
+      collectRequestRecipients(reqItem)
+    );
   }
 }
 function approvalStageLabel(approvalStatus){
@@ -1260,6 +1307,13 @@ async function applyApprovalAction(r, action, comment){
     r.history.push({ stage:'Escalated to Principal', action:'escalated', actorEmail:currentUserEmail, actorName, remark: comment, timestamp:new Date().toISOString() });
   }
   await saveDb();
+  const verb = action==='approve'?'Approved':action==='decline'?'Declined':'Escalated to Principal';
+  sendEmailAlert(
+    verb+' — '+r.requestNumber+' ('+r.itemName+')',
+    '<p>'+escapeHtml(actorName)+' '+verb.toLowerCase()+' this purchase request'+(comment?': "'+escapeHtml(comment)+'"':'.')+'</p>'
+    +'<p><b>Request:</b> '+escapeHtml(r.requestNumber)+'<br><b>Item:</b> '+escapeHtml(r.itemName)+'</p>',
+    collectRequestRecipients(r)
+  );
 }
 /* ============================================================
    Service Procurement — approval engine (v1). Deliberately a SEPARATE
@@ -1284,6 +1338,13 @@ function initServiceApproval(sr){
   } else {
     sr.approvalStatus = 'pending_coordinator';
     sr.status = 'pending_approval';
+    sendEmailAlert(
+      'Approval needed — '+sr.serviceRequestNumber+' ('+svcCategoryName(sr.categoryId)+')',
+      '<p>A new service request needs Coordinator approval.</p>'
+      +'<p><b>Request:</b> '+escapeHtml(sr.serviceRequestNumber)+'<br><b>Category:</b> '+escapeHtml(svcCategoryName(sr.categoryId))+' / '+escapeHtml(svcSubcategoryName(sr.categoryId, sr.subcategoryId))
+      +'<br><b>Requested by:</b> '+escapeHtml(sr.requestedByName||sr.requestedByEmail)+'</p>',
+      collectRequestRecipients(sr)
+    );
   }
 }
 function canActOnServiceApproval(sr){
@@ -1311,6 +1372,13 @@ async function applyServiceApprovalAction(sr, action, comment){
     sr.history.push({ stage:'Escalated to Principal', action:'escalated', actorEmail:currentUserEmail, actorName, remark: comment, timestamp:new Date().toISOString() });
   }
   await saveDb();
+  const verb = action==='approve'?'Approved':action==='decline'?'Declined':'Escalated to Principal';
+  sendEmailAlert(
+    verb+' — '+sr.serviceRequestNumber+' ('+svcCategoryName(sr.categoryId)+')',
+    '<p>'+escapeHtml(actorName)+' '+verb.toLowerCase()+' this service request'+(comment?': "'+escapeHtml(comment)+'"':'.')+'</p>'
+    +'<p><b>Request:</b> '+escapeHtml(sr.serviceRequestNumber)+'</p>',
+    collectRequestRecipients(sr)
+  );
 }
 /* Service Details & Receipts: approved services awaiting Confirm Service
    Receipt, plus anything sent back for follow-up (Not Satisfactory /
@@ -5078,6 +5146,12 @@ function openServiceReceiptModal(serviceRequestId){
       await saveDb();
     });
     if(!ok) return;
+    sendEmailAlert(
+      (f.serviceStatus==='Satisfactory'?'Service closed':'Service checked — not satisfactory')+' — '+sr.serviceRequestNumber,
+      '<p>'+escapeHtml(actorName)+' recorded this service as '+escapeHtml(f.serviceStatus)+' (Charges: ₹'+f.totalAmount+').'+(f.receiptRemarks?' Remarks: "'+escapeHtml(f.receiptRemarks)+'"':'')+'</p>'
+      +'<p><b>Request:</b> '+escapeHtml(sr.serviceRequestNumber)+'</p>',
+      collectRequestRecipients(sr)
+    );
     toast(f.serviceStatus==='Satisfactory' ? 'Service closed' : 'Recorded as not satisfactory — remains active for follow-up', f.serviceStatus==='Satisfactory'?'success':'error');
     closeModal();
     renderServiceProcurementPage();
@@ -5285,6 +5359,12 @@ function openConfirmReceiptModal(reqItemId){
       await saveDb();
     });
     if(!ok) return;
+    sendEmailAlert(
+      'Receipt confirmed — '+r.requestNumber+' ('+r.itemName+')',
+      '<p>'+escapeHtml(receivedByName)+' confirmed receipt of this request ('+escapeHtml(condition)+').'+(remarks?' Remarks: "'+escapeHtml(remarks)+'"':'')+'</p>'
+      +'<p><b>Request:</b> '+escapeHtml(r.requestNumber)+'<br><b>Item:</b> '+escapeHtml(r.itemName)+'</p>',
+      collectRequestRecipients(r)
+    );
     toast(pattern==='consumable' ? 'Receipt confirmed — stock added directly to Consumables' : 'Receipt confirmed','success');
     closeModal();
     if(pattern!=='consumable') flagTabAttention('issue');
