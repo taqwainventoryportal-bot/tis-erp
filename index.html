@@ -503,6 +503,14 @@ tbody tr:hover{ background:#F8FAFC; }
 }
 .field textarea{ resize:vertical; min-height:70px; }
 .field-hint{ font-size:11.5px; color:var(--color-ink-faint); margin-top:4px; }
+/* Multi-attachment picker chips */
+.attachment-chip-row{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+.attachment-chip-row:empty{ margin-bottom:0; }
+.attachment-chip{ display:inline-flex; align-items:center; gap:6px; background:var(--color-surface-2); border:1px solid var(--color-border); border-radius:7px; padding:5px 6px 5px 10px; font-size:12px; color:var(--color-ink); max-width:220px; }
+.attachment-chip-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.attachment-chip-icon-btn{ background:none; border:none; cursor:pointer; padding:2px 4px; border-radius:5px; font-size:12px; line-height:1; color:var(--color-ink-faint); flex:none; }
+.attachment-chip-icon-btn:hover{ background:rgba(0,0,0,0.06); color:var(--color-ink); }
+.attachment-chip-remove{ color:var(--color-danger); font-size:14px; }
 /* Inline field validation — red border + small message under the control,
    so the operator sees exactly which field is wrong instead of relying on
    a toast alone. Cleared automatically once the field becomes valid. */
@@ -588,7 +596,13 @@ tbody tr:hover{ background:#F8FAFC; }
 }
 .approval-card:hover{ box-shadow:0 3px 10px rgba(15,23,42,.07); transform:translateY(-1px); }
 .approval-card-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:6px; }
-.approval-card-name{ font-size:15px; font-weight:700; color:var(--color-ink); line-height:1.25; }
+.approval-card-select{ flex:none; margin-right:2px; cursor:pointer; }
+.approval-bulk-checkbox{ width:16px; height:16px; cursor:pointer; accent-color:var(--action-approve); }
+/* Bulk-approve bar — deliberately no bulk-decline/escalate equivalent
+   anywhere in this file; those always stay one-at-a-time since each needs
+   its own specific reason. */
+.approval-bulk-bar{ display:flex; align-items:center; gap:14px; background:var(--color-surface); border:1px solid var(--color-border); border-radius:10px; padding:10px 14px; margin-bottom:var(--space-3); box-shadow:var(--shadow-sm); }
+.approval-card-name{ font-size:15px; font-weight:700; color:var(--color-ink); line-height:1.25; flex:1; }
 .approval-card-tags{ display:flex; align-items:center; gap:5px; flex:none; padding-top:1px; }
 .approval-card-rows{ display:flex; flex-direction:column; gap:3px; margin-bottom:4px; }
 .approval-card-row{ display:flex; gap:6px; font-size:12px; line-height:1.4; }
@@ -846,8 +860,8 @@ const CONFIG = {
   // same secret you set in Code.gs's SHARED_SECRET below. Leave ALERTS_WEBAPP_URL
   // blank to disable alerts entirely — every call site checks this first and
   // silently no-ops, so the rest of the app behaves identically either way.
-  ALERTS_WEBAPP_URL: "",
-  ALERTS_SHARED_SECRET: ""
+  ALERTS_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbxFQGcdGqnd6DzRfOR1UwOF7y6eZizclSexBiQxCK3eIy3deWzIZVLEEwSySnLqUGK9fQ/exec",
+  ALERTS_SHARED_SECRET: "@Shahida16"
 };
 
 // Cost-tier thresholds (INR)
@@ -968,7 +982,8 @@ function emptyDb(){
     itemCatalog: seedItemCatalog(),
     purchaseOrders: [],
     serviceCategories: seedServiceCategories(),
-    serviceRequests: []
+    serviceRequests: [],
+    csvImportLog: [] // recent bulk-import fingerprints, used only to warn on likely-duplicate re-imports
   };
 }
 function seedServiceCategories(){
@@ -1652,7 +1667,7 @@ async function loadDb(allowRetry){
   const raw = await driveGetJson(CONFIG.DB_FILE_ID, allowRetry);
   const base = emptyDb();
   DB = Object.assign(base, raw);
-  ['departments','categories','inventoryItems','dismissedAlerts','buildings','rooms','itemTypes','staff','requests','requestItems','archiveLog','stockLedger','itemCatalog','purchaseOrders','serviceCategories','serviceRequests'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
+  ['departments','categories','inventoryItems','dismissedAlerts','buildings','rooms','itemTypes','staff','requests','requestItems','archiveLog','stockLedger','itemCatalog','purchaseOrders','serviceCategories','serviceRequests','csvImportLog'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
   DB.inventoryItems.forEach(i=>{
     if(!Array.isArray(i.history)) i.history = [];
     if(i.minStock===undefined) i.minStock = 0;
@@ -1868,6 +1883,18 @@ function renderSearchResults(q){
   DB.purchaseOrders.filter(po=>(po.poNumber||'').toLowerCase().includes(q)).slice(0,4).forEach(po=>{
     const r = DB.requestItems.find(x=>x.id===po.requestItemId);
     if(r) results.push({ href:'#/procurement/item/'+r.id, title:po.poNumber, subtitle:'Procurement · Purchase Order · '+r.itemName });
+  });
+
+  // Service Procurement requests — by request number, category/sub-category,
+  // or the requester's remark. Previously missing entirely: searching an SR
+  // number returned nothing even though it's a first-class record type.
+  DB.serviceRequests.filter(sr=> !sr.deleted && (
+    (sr.serviceRequestNumber||'').toLowerCase().includes(q)
+    || svcCategoryName(sr.categoryId).toLowerCase().includes(q)
+    || svcSubcategoryName(sr.categoryId, sr.subcategoryId).toLowerCase().includes(q)
+    || (sr.remarks||'').toLowerCase().includes(q)
+  )).slice(0,6).forEach(sr=>{
+    results.push({ href:'#/service-procurement/item/'+sr.id, title:sr.serviceRequestNumber+' — '+svcCategoryName(sr.categoryId), subtitle:'Service Procurement · '+svcSubcategoryName(sr.categoryId, sr.subcategoryId)+' · '+serviceStatusLabel(sr.status) });
   });
 
   if(!results.length){ slot.innerHTML = '<div class="search-results"><a>No matches found</a></div>'; return; }
@@ -2440,14 +2467,23 @@ function renderHomePage(){
 
   // Pending Work — one card per queue, each linking straight to the tab
   // that clears it, so "what needs attention" is answerable without
-  // opening every module to check.
+  // opening every module to check. Each card's count comes directly from
+  // the SAME queue function "Awaiting My Action" (pendingForMe) sums up —
+  // never a separate hand-rolled filter — so the six cards here can never
+  // drift out of sync with that total again (see myServiceReceiptQueue()).
   const pendingWork = [
     { label:'Pending Approvals', count: isApproverRole()?myApprovalQueue().length:0, href:'#/procurement/approvals', show:isApproverRole() },
     { label:'Purchase Assignment', count: canPurchaseAction()?myPurchaseQueue().length:0, href:'#/procurement/tasks', show:canPurchaseAction() },
     { label:'Item Receipt', count: canReceiveAction()?myReceiptQueue().length:0, href:'#/procurement/receipt', show:canReceiveAction() },
     { label:'Item Issue / Return', count: canReceiveAction()?myItemIssueQueue().length:0, href:'#/procurement/issue', show:canReceiveAction() },
     { label:'Pending Service Requests', count: isApproverRole()?myServiceApprovalQueue().length:0, href:'#/service-procurement/approvals', show:isApproverRole() },
-    { label:'Services Under Observation', count: DB.serviceRequests.filter(sr=>!sr.deleted && sr.status==='under_observation').length, href:'#/service-procurement/receipts', show:canManageServiceReceipts() }
+    // Covers Approved (awaiting receipt), Under Observation, AND Not
+    // Satisfactory — the exact three statuses myServiceReceiptQueue()
+    // itself covers. The old version of this card only counted Under
+    // Observation, so an Approved-but-not-yet-checked or a Not Satisfactory
+    // service silently counted toward "Awaiting My Action" with no card
+    // showing it at all.
+    { label:'Service Details & Receipts', count: canReceiveAction()?myServiceReceiptQueue().length:0, href:'#/service-procurement/receipts', show:canReceiveAction() }
   ].filter(p=>p.show);
 
   app.innerHTML =
@@ -2554,6 +2590,7 @@ function renderAdminSettingsPage(){
     { id:'buildings', icon:iconBuilding, title:'Manage Buildings', desc:'Buildings and rooms used for asset locations.', show:true },
     { id:'item-cats', icon:iconPackage, title:'Manage Categories & Items', desc:'Item Procurement catalog, policies and value tiers.', show:true },
     { id:'service-cats', icon:iconWrench, title:'Manage Service Categories', desc:'Service categories, sub-categories and approval policy.', show:true },
+    { id:'reorder-thresholds', icon:iconAlertTriangle, title:'Reorder Thresholds', desc:'Bulk view and edit every item\'s low-stock threshold in one place.', show:true },
     { id:'archive', icon:iconArchive, title:'Archive', desc:'Deleted records, restorable at any time.', show:isAdmin() }
   ].filter(c=>c.show);
   app.innerHTML = '<div class="content wrap module-admin">'
@@ -2574,6 +2611,7 @@ function renderAdminSettingsPage(){
       else if(id==='buildings') openManageBuildingsModal();
       else if(id==='item-cats') openManageDeptsModal();
       else if(id==='service-cats') openManageServiceCategoriesModal();
+      else if(id==='reorder-thresholds') openReorderThresholdsModal();
       else if(id==='archive') openArchiveModal();
     });
   });
@@ -3456,6 +3494,7 @@ function wireAdjustmentForm(item){
 function renderItemAttachmentsHtml(item, linkedRequest){
   const rows = [];
   if(item.photoFileId) rows.push({ name: item.photoFileName||'Item photo', fileId: item.photoFileId, kind:'Photo' });
+  (item.additionalPhotos||[]).forEach(p=>{ rows.push({ name: p.fileName||'Additional photo', fileId: p.fileId, kind:'Photo' }); });
   if(linkedRequest && linkedRequest.purchase && linkedRequest.purchase.billFileId) rows.push({ name: linkedRequest.purchase.billFileName||'Bill', fileId: linkedRequest.purchase.billFileId, kind:'Bill / Invoice' });
   if(linkedRequest && linkedRequest.disposal && linkedRequest.disposal.documentFileId) rows.push({ name: linkedRequest.disposal.documentFileName||'Disposal document', fileId: linkedRequest.disposal.documentFileId, kind:'Disposal Document' });
   if(!rows.length) return '<div class="empty-state" style="padding:20px;"><div class="icon">📎</div><h3>No attachments yet</h3></div>';
@@ -3504,8 +3543,8 @@ function openItemModal(catId, item){
       + '</div>'
       + '<div class="field-row"><div class="field"><label>Quantity</label><input type="number" id="it-qty" value="0"></div>'
       +   '<div class="field"><label>Unit</label><select id="it-unit">'+renderUnitOptions('')+'</select></div></div>'
-      + '<div class="field-row"><div class="field"><label>Cost / Value (₹)</label><input type="number" id="it-cost" value="0"></div>'
-      +   '<div class="field"><label>Reorder Threshold</label><input type="number" id="it-reorder" value="0"></div></div>'
+      + '<div class="field-row"><div class="field" id="it-cost-field"><label>Cost / Value (₹)</label><input type="number" id="it-cost" value="0"><div class="field-error" id="it-cost-error">Cost / Value cannot be negative.</div></div>'
+      +   '<div class="field" id="it-reorder-field"><label>Reorder Threshold</label><input type="number" id="it-reorder" value="0"><div class="field-error" id="it-reorder-error">Reorder Threshold cannot be negative.</div></div></div>'
       + '<div class="field-row"><div class="field"><label>Purchase Date</label><input type="date" id="it-date" value=""></div>'
       +   '<div class="field"><label>Condition / Status</label><select id="it-status"><option>Good</option><option>Low Stock</option><option>Damaged</option><option>Expired</option></select></div></div>'
       + '<div class="field"><label>Remarks</label><textarea id="it-remarks"></textarea></div>';
@@ -3515,8 +3554,8 @@ function openItemModal(catId, item){
       + '<div class="field"><label>Category</label><select id="it-cat">'+cats.map(c=>'<option value="'+c.id+'" '+(item.categoryId===c.id?'selected':'')+'>'+escapeHtml(c.name)+'</option>').join('')+'</select></div>'
       + '<div class="field-row"><div class="field"><label>Quantity</label><input type="number" id="it-qty" value="'+item.quantity+'"></div>'
       +   '<div class="field"><label>Unit</label><select id="it-unit">'+renderUnitOptions(item.unit||'')+'</select></div></div>'
-      + '<div class="field-row"><div class="field"><label>Cost / Value (₹)</label><input type="number" id="it-cost" value="'+item.cost+'"></div>'
-      +   '<div class="field"><label>Reorder Threshold</label><input type="number" id="it-reorder" value="'+(item.reorderThreshold||0)+'"></div></div>'
+      + '<div class="field-row"><div class="field" id="it-cost-field"><label>Cost / Value (₹)</label><input type="number" id="it-cost" value="'+item.cost+'"><div class="field-error" id="it-cost-error">Cost / Value cannot be negative.</div></div>'
+      +   '<div class="field" id="it-reorder-field"><label>Reorder Threshold</label><input type="number" id="it-reorder" value="'+(item.reorderThreshold||0)+'"><div class="field-error" id="it-reorder-error">Reorder Threshold cannot be negative.</div></div></div>'
       + '<div class="field-row"><div class="field"><label>Purchase Date</label><input type="date" id="it-date" value="'+(item.purchaseDate?item.purchaseDate:'')+'"></div>'
       +   '<div class="field"><label>Condition / Status</label><select id="it-status"><option '+(item.status==='Good'?'selected':'')+'>Good</option><option '+(item.status==='Low Stock'?'selected':'')+'>Low Stock</option><option '+(item.status==='Damaged'?'selected':'')+'>Damaged</option><option '+(item.status==='Expired'?'selected':'')+'>Expired</option></select></div></div>'
       + '<div class="field"><label>Remarks</label><textarea id="it-remarks">'+escapeHtml(item.remarks)+'</textarea></div>';
@@ -3525,6 +3564,9 @@ function openItemModal(catId, item){
   openModal(item?'Edit Item':'Add Item', body,
     '<button class="btn btn-outline" id="cancel-item-btn">Cancel</button><button class="btn btn-primary" id="save-item-btn">Save</button>', 'module-inventory', true);
   document.getElementById('cancel-item-btn').addEventListener('click', closeModal);
+  const itCostEl = document.getElementById('it-cost'), itReorderEl = document.getElementById('it-reorder');
+  itCostEl.addEventListener('input', ()=>{ if(Number(itCostEl.value)>=0) document.getElementById('it-cost-field').classList.remove('has-error'); });
+  itReorderEl.addEventListener('input', ()=>{ if(Number(itReorderEl.value)>=0) document.getElementById('it-reorder-field').classList.remove('has-error'); });
   if(!item){
     const catSel = document.getElementById('it-cat');
     catSel.addEventListener('change', ()=>{
@@ -3533,6 +3575,14 @@ function openItemModal(catId, item){
   }
   document.getElementById('save-item-btn').addEventListener('click', async function(){
     const btn = this;
+    const costEl = document.getElementById('it-cost'), reorderEl = document.getElementById('it-reorder');
+    const costField = document.getElementById('it-cost-field'), reorderField = document.getElementById('it-reorder-field');
+    const costInvalid = Number(costEl.value) < 0;
+    const reorderInvalid = Number(reorderEl.value) < 0;
+    costField.classList.toggle('has-error', costInvalid);
+    reorderField.classList.toggle('has-error', reorderInvalid);
+    if(costInvalid){ costEl.focus(); return; }
+    if(reorderInvalid){ reorderEl.focus(); return; }
     const selectedCatId = document.getElementById('it-cat').value;
     if(!item){
       const catalogItemId = document.getElementById('it-catalog-item').value;
@@ -3732,7 +3782,9 @@ function syncAssetToInventory(r, personEmail, personName){
    thing land in the SAME row, not two. Deliberately doesn't say "Auto-added
    from Procurement" anywhere, since it wasn't. Used by both the Consumables
    and Spare Assets "+ Add Existing" entry points. */
-function addExistingStock(catalogItem, categoryId, qty, refDate, reference, remarks, personEmail, personName, photoFileId, photoFileName){
+function addExistingStock(catalogItem, categoryId, qty, refDate, reference, remarks, personEmail, personName, photos){
+  photos = photos || [];
+  const photoFileId = photos[0] ? photos[0].fileId : null, photoFileName = photos[0] ? photos[0].fileName : null;
   let item = DB.inventoryItems.find(i=> !i.deleted && i.categoryId===categoryId
     && (i.name||'').toLowerCase()===(catalogItem.name||'').toLowerCase());
   const noteBits = ['Existing stock added by '+personName];
@@ -3741,7 +3793,13 @@ function addExistingStock(catalogItem, categoryId, qty, refDate, reference, rema
   const fullRemark = noteBits.join(' · ');
   if(item){
     item.updatedAt = new Date().toISOString();
+    // The item's single "representative photo" is first-wins and never
+    // overwritten by a later addition — but every photo attached to THIS
+    // addition is still kept, in additionalPhotos, so nothing uploaded is
+    // ever silently lost even after the first one is set.
     if(photoFileId && !item.photoFileId){ item.photoFileId = photoFileId; item.photoFileName = photoFileName; }
+    if(!Array.isArray(item.additionalPhotos)) item.additionalPhotos = [];
+    item.additionalPhotos.push(...photos);
     itemHistoryPush(item, 'Stock received', qty+' added as existing stock by '+personName+(reference?' · Ref: '+reference:''));
   } else {
     item = {
@@ -3749,7 +3807,7 @@ function addExistingStock(catalogItem, categoryId, qty, refDate, reference, rema
       catalogItemId: catalogItem.id, itemCode: catalogItem.code||'',
       quantity: 0, unit: itemPattern({itemTypeId:catalogItem.itemTypeId})==='asset' ? 'unit' : '', cost: 0, reorderThreshold: 0, minStock: 0,
       preferredSupplier: '', purchaseDate: refDate||'', status:'Good',
-      remarks: fullRemark, photoFileId: photoFileId||null, photoFileName: photoFileName||null,
+      remarks: fullRemark, photoFileId: photoFileId||null, photoFileName: photoFileName||null, additionalPhotos: photos.slice(1),
       linkedRequestItemId: null, installations: [], disposals: [], history: [], updatedAt: new Date().toISOString()
     };
     DB.inventoryItems.push(item);
@@ -3776,9 +3834,10 @@ function openAddExistingStockModal(pattern){
     + '<div class="field-row align-labels"><div class="field"><label>Purchase / Reference Date (optional)</label><input type="date" id="aes-date"></div>'
     + '<div class="field"><label>Reference (optional)</label><input type="text" id="aes-ref" placeholder="e.g. old invoice no., donor, etc."></div></div>'
     + '<div class="field"><label>Remarks (optional)</label><textarea id="aes-remarks"></textarea></div>'
-    + '<div class="field"><label>Photo (optional'+(pattern==='asset'?', recommended for identification':'')+')</label><input type="file" id="aes-photo" accept="image/*"></div>';
+    + renderAttachmentPickerHtml('aes-photo', 'Photo'+(pattern==='asset'?' (optional, recommended for identification)':' (optional)'));
   openModal(title, body, '<button class="btn btn-outline" id="modal-done-btn">Cancel</button><button class="btn btn-primary" id="aes-submit-btn">Add</button>', 'module-inventory', true);
   document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+  const aesAttachState = wireAttachmentPicker('aes-photo');
   document.getElementById('aes-submit-btn').addEventListener('click', async function(){
     const btn = this;
     const catalogItem = DB.itemCatalog.find(ci=>ci.id===document.getElementById('aes-item').value);
@@ -3788,17 +3847,21 @@ function openAddExistingStockModal(pattern){
     const refDate = document.getElementById('aes-date').value;
     const reference = document.getElementById('aes-ref').value.trim();
     const remarks = document.getElementById('aes-remarks').value.trim();
-    const fileInput = document.getElementById('aes-photo');
-    const file = fileInput.files && fileInput.files[0];
-    let photoFileId = null, photoFileName = null;
-    if(file){
-      btn.disabled = true; btn.textContent = 'Uploading photo…';
-      try{ photoFileId = await driveUploadBinary(file, CONFIG.UPLOADS_FOLDER_ID); photoFileName = file.name; }
-      catch(e){ toast('Photo upload failed: '+e.message, 'error'); btn.disabled = false; btn.textContent = 'Add'; return; }
+    const photos = [];
+    if(aesAttachState.files.length){
+      btn.disabled = true;
+      try{
+        for(let i=0; i<aesAttachState.files.length; i++){
+          btn.textContent = 'Uploading photo '+(i+1)+'/'+aesAttachState.files.length+'…';
+          const compressed = await compressImageFile(aesAttachState.files[i]);
+          const fileId = await driveUploadBinary(compressed, CONFIG.UPLOADS_FOLDER_ID);
+          photos.push({ fileId, fileName: compressed.name });
+        }
+      }catch(e){ toast('Photo upload failed: '+e.message, 'error'); btn.disabled = false; btn.textContent = 'Add'; return; }
     }
     const actorName = (myStaffRecord()||{}).name || currentUserEmail;
     const ok = await runSaveAction(btn, 'Adding…', async ()=>{
-      addExistingStock(catalogItem, catalogItem.categoryId, qty, refDate, reference, remarks, currentUserEmail, actorName, photoFileId, photoFileName);
+      addExistingStock(catalogItem, catalogItem.categoryId, qty, refDate, reference, remarks, currentUserEmail, actorName, photos);
       await saveDb();
     });
     if(!ok) return;
@@ -3915,6 +3978,15 @@ function buildImportStockRow(rawCells, headerMap, catalogItems, photoFilesByName
     errors
   };
 }
+/* Small, fast, non-cryptographic string hash (djb2) — good enough to
+   fingerprint a CSV's exact content for duplicate-import detection; not
+   trying to be collision-proof, just to catch the "accidentally re-selected
+   the same file" case. */
+function simpleContentHash(str){
+  let hash = 5381;
+  for(let i=0; i<str.length; i++){ hash = ((hash*33) ^ str.charCodeAt(i)) >>> 0; }
+  return hash.toString(36);
+}
 function openImportStockCSVModal(pattern){
   const title = pattern==='asset' ? 'Import Spare Assets from CSV' : 'Import Existing Stock from CSV';
   const catalogItems = DB.itemCatalog.filter(ci=>!ci.deleted && itemPattern({itemTypeId:ci.itemTypeId})===pattern);
@@ -3964,12 +4036,24 @@ function openImportStockCSVModal(pattern){
       return;
     }
     const dataRows = rows.slice(1).map(r => buildImportStockRow(r, headerMap, catalogItems, photoFilesByName));
-    openImportStockPreviewModal(pattern, dataRows);
+    openImportStockPreviewModal(pattern, dataRows, simpleContentHash(pattern+'|'+text));
   });
 }
-function openImportStockPreviewModal(pattern, dataRows){
+function openImportStockPreviewModal(pattern, dataRows, contentHash){
   const title = pattern==='asset' ? 'Import Spare Assets — Preview' : 'Import Existing Stock — Preview';
   const invalidCount = dataRows.filter(r=>r.errors.length).length;
+  // Warn (never block) if a CSV with this exact same content was already
+  // imported recently — most commonly caused by re-selecting the same file
+  // by mistake, or a colleague already having imported it. Only looks back
+  // 24 hours so an intentional re-import of a genuinely repeated file
+  // (e.g. correcting the same stock-take a week later) never gets flagged.
+  const cutoffMs = Date.now() - 24*60*60*1000;
+  const priorImport = (DB.csvImportLog||[]).slice().reverse().find(e=> e.hash===contentHash && new Date(e.importedAt).getTime()>=cutoffMs);
+  const duplicateWarningHtml = priorImport
+    ? '<div class="warn" style="background:var(--gold-soft,#FDF3DC); border:1px solid var(--color-gold); border-radius:8px; padding:10px 14px; font-size:13px; margin-bottom:10px;">'
+      + '⚠ This looks identical to a CSV already imported by '+escapeHtml(priorImport.importedByName||priorImport.importedByEmail||'someone')+' at '+formatDateTime(priorImport.importedAt)+' ('+priorImport.rowCount+' row'+(priorImport.rowCount===1?'':'s')+'). Importing again will add the stock a second time — only continue if that\'s genuinely intended.'
+      + '</div>'
+    : '';
   const summaryHtml = invalidCount
     ? '<div class="field-error" style="display:block; margin-bottom:10px;">'+invalidCount+' row'+(invalidCount===1?'':'s')+' require'+(invalidCount===1?'s':'')+' attention — fix the CSV and re-select it. No records have been imported yet.</div>'
     : '<div class="field-hint" style="margin-bottom:10px; color:var(--action-approve); font-weight:600;">All rows look good — ready to import.</div>';
@@ -3985,7 +4069,7 @@ function openImportStockPreviewModal(pattern, dataRows){
       + '<td>'+(ok ? '<span style="color:var(--action-approve); font-weight:600;">Ready</span>' : '<span style="color:var(--color-danger); font-weight:600;">'+escapeHtml(r.errors.join('; '))+'</span>')+'</td>'
       + '</tr>';
   }).join('');
-  const body = summaryHtml
+  const body = duplicateWarningHtml + summaryHtml
     + '<div class="table-wrap" style="max-height:360px;"><table><thead><tr><th>Item</th><th>Qty</th><th>Date</th><th>Reference</th><th>Remarks</th><th>Photo</th><th>Status</th></tr></thead><tbody>'
     + rowsHtml + '</tbody></table></div>';
   openModal(title, body,
@@ -4022,8 +4106,13 @@ function openImportStockPreviewModal(pattern, dataRows){
       const ok = await runSaveAction(btn, 'Importing…', async ()=>{
         dataRows.forEach((r, i)=>{
           const photo = uploaded[i];
-          addExistingStock(r.catalogItem, r.catalogItem.categoryId, r.qty, r.refDateISO, r.reference, r.remarks, currentUserEmail, actorName, photo?photo.photoFileId:null, photo?photo.photoFileName:null);
+          addExistingStock(r.catalogItem, r.catalogItem.categoryId, r.qty, r.refDateISO, r.reference, r.remarks, currentUserEmail, actorName, photo ? [{ fileId: photo.photoFileId, fileName: photo.photoFileName }] : []);
         });
+        if(!Array.isArray(DB.csvImportLog)) DB.csvImportLog = [];
+        DB.csvImportLog.push({ hash: contentHash, pattern, rowCount: dataRows.length, importedByEmail: currentUserEmail, importedByName: actorName, importedAt: new Date().toISOString() });
+        // Keep this log bounded — only recent fingerprints are ever useful
+        // for the 24h duplicate check, no reason to grow it forever.
+        if(DB.csvImportLog.length > 200) DB.csvImportLog = DB.csvImportLog.slice(-200);
         await saveDb();
       });
       if(!ok) return;
@@ -4574,11 +4663,63 @@ function renderNewRequestTab(){
 }
 
 /* ---------------- Approvals ---------------- */
+let approvalBulkSelection = new Set();
 function renderApprovalsTab(){
   const panel = document.getElementById('proc-panel');
   const items = myApprovalQueue();
+  approvalBulkSelection = new Set([...approvalBulkSelection].filter(id=>items.some(r=>r.id===id)));
   if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">✅</div><h3>Nothing awaiting your action</h3></div>'; return; }
-  panel.innerHTML = '<div class="approval-card-grid">' + items.map(r=>renderApprovalCard(r)).join('') + '</div>';
+  // Bulk Approve only — deliberately no bulk Decline/Escalate, since those
+  // both require an individual, specific reason per request; a single
+  // reason typed once should never silently apply to a batch of unrelated
+  // requests. Approve has no such requirement, so it's the one safe to
+  // batch.
+  panel.innerHTML = '<div class="approval-bulk-bar" id="approval-bulk-bar">'
+    +   '<label style="display:flex; align-items:center; gap:8px; font-size:13px;"><input type="checkbox" id="approval-select-all"> Select all ('+items.length+')</label>'
+    +   '<span class="spacer"></span>'
+    +   '<span class="field-hint" id="approval-bulk-count"></span>'
+    +   '<button class="btn btn-approve btn-sm" id="approval-bulk-approve-btn" disabled>Approve Selected</button>'
+    + '</div>'
+    + '<div class="approval-card-grid">' + items.map(r=>renderApprovalCard(r)).join('') + '</div>';
+
+  function updateBulkBar(){
+    const count = approvalBulkSelection.size;
+    document.getElementById('approval-bulk-count').textContent = count>0 ? count+' selected' : '';
+    document.getElementById('approval-bulk-approve-btn').disabled = count===0;
+    document.getElementById('approval-select-all').checked = count>0 && count===items.length;
+  }
+  panel.querySelectorAll('[data-approval-checkbox]').forEach(cb=>{
+    cb.addEventListener('change', function(){
+      const id = this.getAttribute('data-approval-checkbox');
+      if(this.checked) approvalBulkSelection.add(id); else approvalBulkSelection.delete(id);
+      updateBulkBar();
+    });
+  });
+  document.getElementById('approval-select-all').addEventListener('change', function(){
+    if(this.checked) items.forEach(r=>approvalBulkSelection.add(r.id));
+    else approvalBulkSelection.clear();
+    panel.querySelectorAll('[data-approval-checkbox]').forEach(cb=>{ cb.checked = approvalBulkSelection.has(cb.getAttribute('data-approval-checkbox')); });
+    updateBulkBar();
+  });
+  document.getElementById('approval-bulk-approve-btn').addEventListener('click', async function(){
+    const btn = this;
+    const ids = [...approvalBulkSelection];
+    if(!ids.length) return;
+    if(!confirm('Approve '+ids.length+' selected request'+(ids.length===1?'':'s')+'?')) return;
+    btn.disabled = true;
+    let succeeded = 0;
+    for(const id of ids){
+      const r = DB.requestItems.find(x=>x.id===id);
+      if(!r) continue;
+      btn.textContent = 'Approving… ('+(succeeded+1)+'/'+ids.length+')';
+      try{ await applyApprovalAction(r, 'approve', ''); succeeded++; }
+      catch(e){ /* keep going — one failure shouldn't stop the rest of the batch */ }
+    }
+    toast(succeeded+' request'+(succeeded===1?'':'s')+' approved', 'success');
+    approvalBulkSelection.clear();
+    renderApprovalsTab();
+  });
+  updateBulkBar();
 
   items.forEach(r=>{
     const card = panel.querySelector('[data-approval-card="'+r.id+'"]');
@@ -4621,7 +4762,7 @@ function renderApprovalCard(r){
   const currentStock = linkedInv ? linkedInv.quantity : null;
 
   return '<div class="approval-card" data-approval-card="'+r.id+'">'
-    + '<div class="approval-card-top"><span class="approval-card-name">'+escapeHtml(r.itemName)+'</span>'
+    + '<div class="approval-card-top"><label class="approval-card-select"><input type="checkbox" class="approval-bulk-checkbox" data-approval-checkbox="'+r.id+'"></label><span class="approval-card-name">'+escapeHtml(r.itemName)+'</span>'
     +   '<span class="approval-card-tags">'+valueClassBadge(r.valueClass)+priorityChip(r.priority)+'</span></div>'
     + '<div class="approval-card-rows">'
     +   '<div class="approval-card-row"><label>Request No:</label><span>'+escapeHtml(r.requestNumber)+'</span></div>'
@@ -4888,7 +5029,7 @@ function renderNewServiceRequestTab(){
     +   '<div class="field-row"><div class="field"><label>Priority</label><select id="svcr-priority">'+priorities.map(p=>'<option '+(L.priority===p?'selected':'')+'>'+p+'</option>').join('')+'</select></div>'
     +     '<div class="field"><label>Expected Completion Date</label><input type="date" id="svcr-expected-date"></div></div>'
     +   '<div class="field"><label>Remarks / Service Description (required)</label><textarea id="svcr-remarks" rows="3" placeholder="Explain exactly what service is required and why — e.g. \'Printer is showing paper jam repeatedly.\'"></textarea></div>'
-    +   '<div class="field"><label>Photo (optional)</label><div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;"><input type="file" id="svcr-photo" accept="image/*"><button type="button" class="btn btn-outline btn-sm" id="svcr-photo-preview-btn" style="display:none;">Preview</button></div><div class="field-hint" id="svcr-photo-hint"></div></div>'
+    +   renderAttachmentPickerHtml('svcr-photo', 'Attachments (optional)')
     +   '</div>'
     + '</div>'
     + '<div class="req-action-bar"><button class="btn btn-outline" id="svcr-cancel-btn">Cancel</button><button class="btn btn-primary" id="svcr-submit-btn">Submit Service Request</button></div>';
@@ -4903,8 +5044,7 @@ function renderNewServiceRequestTab(){
     document.getElementById('svcr-subcategory').innerHTML = svcCatSubOptions(L.categoryId, '');
   });
   wireServiceAssetPicker();
-  wirePhotoPreviewHint('svcr-photo', 'svcr-photo-hint');
-  wirePhotoPreviewButton('svcr-photo', 'svcr-photo-preview-btn');
+  const svcrAttachState = wireAttachmentPicker('svcr-photo');
 
   document.getElementById('svcr-cancel-btn').addEventListener('click', ()=>{ newServiceLines = null; renderServiceProcurementPage(); toast('Request cleared','success'); });
   document.getElementById('svcr-submit-btn').addEventListener('click', async function(){
@@ -4920,15 +5060,17 @@ function renderNewServiceRequestTab(){
     if(!remarks){ toast('Remarks / Service Description is required','error'); return; }
     const priority = document.getElementById('svcr-priority').value;
     const expectedCompletionDate = document.getElementById('svcr-expected-date').value || null;
-    const fileInput = document.getElementById('svcr-photo');
-    const file = fileInput.files && fileInput.files[0];
-    let photoFileId = null, photoFileName = null;
-    if(file){
-      btn.disabled = true; btn.textContent = 'Compressing photo…';
-      const compressed = await compressImageFile(file);
-      btn.textContent = 'Uploading photo…';
-      try{ photoFileId = await driveUploadBinary(compressed, CONFIG.UPLOADS_FOLDER_ID); photoFileName = compressed.name; }
-      catch(e){ toast('Photo upload failed: '+e.message, 'error'); btn.disabled = false; btn.textContent = 'Submit Service Request'; return; }
+    const photos = [];
+    if(svcrAttachState.files.length){
+      btn.disabled = true;
+      try{
+        for(let i=0; i<svcrAttachState.files.length; i++){
+          btn.textContent = 'Uploading attachment '+(i+1)+'/'+svcrAttachState.files.length+'…';
+          const compressed = await compressImageFile(svcrAttachState.files[i]);
+          const fileId = await driveUploadBinary(compressed, CONFIG.UPLOADS_FOLDER_ID);
+          photos.push({ fileId, fileName: compressed.name });
+        }
+      }catch(e){ toast('Attachment upload failed: '+e.message, 'error'); btn.disabled = false; btn.textContent = 'Submit Service Request'; return; }
     }
     const ok = await runSaveAction(btn, 'Submitting…', async ()=>{
       const sr = {
@@ -4936,12 +5078,16 @@ function renderNewServiceRequestTab(){
         requestedByStaffId: requestedByStaff.id, requestedByEmail: requestedByStaff.email, requestedByName: requestedByStaff.name,
         tiedTo: L.tiedTo, assetIds: L.tiedTo==='assets' ? L.assetIds.slice() : [],
         categoryId, subcategoryId, priority, expectedCompletionDate,
-        remarks, photoFileId, photoFileName,
+        // photos[] is the current, multi-attachment source of truth;
+        // photoFileId/photoFileName mirror the first photo for any older
+        // display code (PDF export, thumbnails) that still reads the
+        // single-photo fields directly — see getAttachments().
+        remarks, photos, photoFileId: photos[0]?photos[0].fileId:null, photoFileName: photos[0]?photos[0].fileName:null,
         approvalStatus: null, status: null,
         escalatedByEmail: null, escalatedByName: null, escalatedAt: null, escalationComment: null,
         checkedByEmail: null, checkedByName: null, serviceDate: null, serviceCharges: 0, taxes: 0, totalAmount: 0,
         serviceStatus: null, closedAt: null,
-        receiptRemarks: null, receiptPhotoFileId: null, receiptPhotoFileName: null, notes: [],
+        receiptRemarks: null, receiptPhotos: [], receiptPhotoFileId: null, receiptPhotoFileName: null, notes: [],
         history: [{ stage:'Requested', action:'created', actorEmail: currentUserEmail, actorName:(myStaffRecord()||{}).name||currentUserEmail, remark: remarks, timestamp:new Date().toISOString() }],
         createdAt: new Date().toISOString()
       };
@@ -4958,6 +5104,73 @@ function renderNewServiceRequestTab(){
 /* Small, reusable "here's roughly what will be uploaded" hint — shows
    original vs. compressed size as soon as a photo is picked, so the
    automatic compression never happens silently. */
+/* ============================================================
+   Multi-attachment picker — a reusable "existing single photo input"
+   replacement used everywhere a form previously allowed exactly one photo
+   (New Service Request, Confirm Service Receipt, Item Receipt, Add
+   Existing Stock). Shows already-picked files as removable chips with a
+   "+ Add Attachment" button that opens the native file browser again for
+   another one — never replaces what's already picked, only adds to it.
+   Compression/upload still only happens at actual form submission, same
+   as the single-photo inputs did; this only manages the in-memory
+   selection beforehand.
+   ============================================================ */
+function renderAttachmentPickerHtml(pickerId, label){
+  return '<div class="field"><label>'+escapeHtml(label||'Attachments (optional)')+'</label>'
+    + '<div class="attachment-chip-row" id="'+pickerId+'-chips"></div>'
+    + '<input type="file" id="'+pickerId+'-input" accept="image/*" multiple style="display:none;">'
+    + '<button type="button" class="btn btn-outline btn-sm" id="'+pickerId+'-add-btn">+ Add Attachment</button>'
+    + '<div class="field-hint" id="'+pickerId+'-hint"></div>'
+    + '</div>';
+}
+/* Returns a state object the caller keeps a reference to — state.files is
+   the live array of File objects to compress+upload at submit time. */
+function wireAttachmentPicker(pickerId){
+  const state = { files: [] };
+  const input = document.getElementById(pickerId+'-input');
+  const addBtn = document.getElementById(pickerId+'-add-btn');
+  const chipsEl = document.getElementById(pickerId+'-chips');
+  const hintEl = document.getElementById(pickerId+'-hint');
+  if(!input || !addBtn || !chipsEl) return state;
+  let objectUrls = [];
+  function renderChips(){
+    objectUrls.forEach(u=>URL.revokeObjectURL(u));
+    objectUrls = [];
+    chipsEl.innerHTML = state.files.map((f,i)=>
+      '<span class="attachment-chip"><span class="attachment-chip-name">'+escapeHtml(f.name)+'</span>'
+      + '<button type="button" class="attachment-chip-icon-btn" data-chip-preview="'+i+'" title="Preview">👁</button>'
+      + '<button type="button" class="attachment-chip-icon-btn attachment-chip-remove" data-chip-remove="'+i+'" title="Remove">&times;</button></span>'
+    ).join('');
+    chipsEl.querySelectorAll('[data-chip-preview]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const idx = Number(btn.getAttribute('data-chip-preview'));
+        const url = URL.createObjectURL(state.files[idx]);
+        objectUrls.push(url);
+        openImageLightbox(url);
+      });
+    });
+    chipsEl.querySelectorAll('[data-chip-remove]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const idx = Number(btn.getAttribute('data-chip-remove'));
+        state.files.splice(idx,1);
+        renderChips();
+        updateHint();
+      });
+    });
+  }
+  function updateHint(){
+    hintEl.textContent = state.files.length ? state.files.length+' attachment'+(state.files.length===1?'':'s')+' selected — each is compressed automatically on submit' : '';
+  }
+  addBtn.addEventListener('click', ()=> input.click());
+  input.addEventListener('change', ()=>{
+    const newFiles = Array.from(input.files||[]);
+    state.files.push(...newFiles);
+    input.value = ''; // reset so picking the same file again still fires change
+    renderChips();
+    updateHint();
+  });
+  return state;
+}
 function wirePhotoPreviewHint(inputId, hintId){
   const input = document.getElementById(inputId);
   const hint = document.getElementById(hintId);
@@ -5084,17 +5297,65 @@ function describeServiceAssetRef(ref){
 }
 
 /* ---------------- Service Approvals ---------------- */
+let svcApprovalBulkSelection = new Set();
 function renderServiceApprovalsTab(){
   const panel = document.getElementById('svc-panel');
   const items = myServiceApprovalQueue();
+  svcApprovalBulkSelection = new Set([...svcApprovalBulkSelection].filter(id=>items.some(sr=>sr.id===id)));
   if(!items.length){ panel.innerHTML = '<div class="empty-state"><div class="icon">✅</div><h3>Nothing awaiting your action</h3></div>'; return; }
-  panel.innerHTML = '<div class="approval-card-grid">' + items.map(sr=>renderServiceApprovalCard(sr)).join('') + '</div>';
+  panel.innerHTML = '<div class="approval-bulk-bar" id="svc-approval-bulk-bar">'
+    +   '<label style="display:flex; align-items:center; gap:8px; font-size:13px;"><input type="checkbox" id="svc-approval-select-all"> Select all ('+items.length+')</label>'
+    +   '<span class="spacer"></span>'
+    +   '<span class="field-hint" id="svc-approval-bulk-count"></span>'
+    +   '<button class="btn btn-approve btn-sm" id="svc-approval-bulk-approve-btn" disabled>Approve Selected</button>'
+    + '</div>'
+    + '<div class="approval-card-grid">' + items.map(sr=>renderServiceApprovalCard(sr)).join('') + '</div>';
+
+  function updateSvcBulkBar(){
+    const count = svcApprovalBulkSelection.size;
+    document.getElementById('svc-approval-bulk-count').textContent = count>0 ? count+' selected' : '';
+    document.getElementById('svc-approval-bulk-approve-btn').disabled = count===0;
+    document.getElementById('svc-approval-select-all').checked = count>0 && count===items.length;
+  }
+  panel.querySelectorAll('[data-svc-approval-checkbox]').forEach(cb=>{
+    cb.addEventListener('change', function(){
+      const id = this.getAttribute('data-svc-approval-checkbox');
+      if(this.checked) svcApprovalBulkSelection.add(id); else svcApprovalBulkSelection.delete(id);
+      updateSvcBulkBar();
+    });
+  });
+  document.getElementById('svc-approval-select-all').addEventListener('change', function(){
+    if(this.checked) items.forEach(sr=>svcApprovalBulkSelection.add(sr.id));
+    else svcApprovalBulkSelection.clear();
+    panel.querySelectorAll('[data-svc-approval-checkbox]').forEach(cb=>{ cb.checked = svcApprovalBulkSelection.has(cb.getAttribute('data-svc-approval-checkbox')); });
+    updateSvcBulkBar();
+  });
+  document.getElementById('svc-approval-bulk-approve-btn').addEventListener('click', async function(){
+    const btn = this;
+    const ids = [...svcApprovalBulkSelection];
+    if(!ids.length) return;
+    if(!confirm('Approve '+ids.length+' selected service request'+(ids.length===1?'':'s')+'?')) return;
+    btn.disabled = true;
+    let succeeded = 0;
+    for(const id of ids){
+      const sr = DB.serviceRequests.find(x=>x.id===id);
+      if(!sr) continue;
+      btn.textContent = 'Approving… ('+(succeeded+1)+'/'+ids.length+')';
+      try{ await applyServiceApprovalAction(sr, 'approve', ''); succeeded++; }
+      catch(e){ /* keep going — one failure shouldn't stop the rest of the batch */ }
+    }
+    toast(succeeded+' service request'+(succeeded===1?'':'s')+' approved', 'success');
+    svcApprovalBulkSelection.clear();
+    renderServiceApprovalsTab();
+  });
+  updateSvcBulkBar();
+
   items.forEach(sr=>{
     const card = panel.querySelector('[data-svc-approval-card="'+sr.id+'"]');
     const approveBtn = card.querySelector('[data-svc-approve-one]');
     if(approveBtn) approveBtn.addEventListener('click', ()=>submitServiceApprovalAction(sr, 'approve', approveBtn));
     const viewPhotoBtn = card.querySelector('[data-svc-view-photo]');
-    if(viewPhotoBtn) viewPhotoBtn.addEventListener('click', ()=>openImageLightbox(driveDownloadUrl(sr.photoFileId)));
+    if(viewPhotoBtn) viewPhotoBtn.addEventListener('click', ()=>openImageLightbox(getAttachments(sr,'photos','photoFileId','photoFileName').map(a=>driveDownloadUrl(a.fileId))));
     const canEscalate = sr.approvalStatus==='pending_coordinator' && hasRole('coordinator');
     card.querySelectorAll('[data-action-toggle]').forEach(toggleBtn=>{
       toggleBtn.addEventListener('click', ()=>{
@@ -5120,14 +5381,14 @@ function renderServiceApprovalCard(sr){
   const canEscalate = sr.approvalStatus === 'pending_coordinator' && hasRole('coordinator');
   const tiedToLabel = sr.tiedTo==='assets' ? (sr.assetIds||[]).map(describeServiceAssetRef).join(', ') : 'General';
   return '<div class="approval-card" data-svc-approval-card="'+sr.id+'">'
-    + '<div class="approval-card-top"><span class="approval-card-name">'+escapeHtml(svcCategoryName(sr.categoryId))+' — '+escapeHtml(svcSubcategoryName(sr.categoryId, sr.subcategoryId))+'</span>'
+    + '<div class="approval-card-top"><label class="approval-card-select"><input type="checkbox" class="approval-bulk-checkbox" data-svc-approval-checkbox="'+sr.id+'"></label><span class="approval-card-name">'+escapeHtml(svcCategoryName(sr.categoryId))+' — '+escapeHtml(svcSubcategoryName(sr.categoryId, sr.subcategoryId))+'</span>'
     +   '<span class="approval-card-tags">'+priorityChip(sr.priority)+'</span></div>'
     + '<div class="approval-card-rows">'
     +   '<div class="approval-card-row"><label>Request No:</label><span>'+escapeHtml(sr.serviceRequestNumber)+'</span></div>'
     +   '<div class="approval-card-row"><label>Service tied to:</label><span>'+escapeHtml(tiedToLabel)+'</span></div>'
     +   '<div class="approval-card-row"><label>Requisitioner:</label><span>'+escapeHtml(sr.requestedByName)+'</span></div>'
     +   (sr.remarks ? '<div class="approval-card-row"><label>Remark:</label><span>'+escapeHtml(sr.remarks)+'</span></div>' : '')
-    +   (sr.photoFileId ? '<div class="approval-card-row"><label>Attachment:</label><span><button type="button" class="btn btn-outline btn-sm" data-svc-view-photo="'+sr.id+'">View Photo</button></span></div>' : '')
+    +   (getAttachments(sr,'photos','photoFileId','photoFileName').length ? '<div class="approval-card-row"><label>Attachment:</label><span><button type="button" class="btn btn-outline btn-sm" data-svc-view-photo="'+sr.id+'">View Attachment'+(getAttachments(sr,'photos','photoFileId','photoFileName').length>1?'s ('+getAttachments(sr,'photos','photoFileId','photoFileName').length+')':'')+'</button></span></div>' : '')
     + '</div>'
     + (sr.approvalStatus==='pending_principal' ? '<div class="approval-card-hint">Escalated by '+escapeHtml(sr.escalatedByName||'—')+(sr.escalationComment?': "'+escapeHtml(sr.escalationComment)+'"':'')+'</div>' : '')
     + '<div class="approval-card-divider"></div>'
@@ -5188,7 +5449,7 @@ function openServiceReceiptModal(serviceRequestId){
     +   '<div class="spec-item"><label>Current Status</label><div class="val">'+serviceStatusLabel(sr.status)+'</div></div>'
     + '</div>'
     + (sr.remarks ? '<div class="field-hint" style="margin-bottom:10px;"><strong>Requested:</strong> '+escapeHtml(sr.remarks)+'</div>' : '')
-    + (sr.photoFileId ? '<div style="margin-bottom:14px;">'+renderPhotoThumbHtml(sr.photoFileId, 'Request photo')+'</div>' : '')
+    + renderAttachmentsThumbHtml(getAttachments(sr, 'photos', 'photoFileId', 'photoFileName'), 'Request attachment')
     + '<div class="plain-divider"></div>'
     + '<div class="field" id="svcrc-checkedby-field"><label>Checked By</label><select id="svcrc-checkedby">'+staffOptions+'</select><div class="field-error" id="svcrc-checkedby-error">Please select who checked this service.</div></div>'
     + '<div class="field"><label>Date</label><input type="date" id="svcrc-date" value="'+new Date().toISOString().slice(0,10)+'"></div>'
@@ -5201,7 +5462,7 @@ function openServiceReceiptModal(serviceRequestId){
     +     '<label><input type="radio" name="svcrc-status" value="Under Observation"> Under Observation</label></div>'
     + '</div>'
     + '<div class="field"><label>Remarks (required) — what was actually found/done</label><textarea id="svcrc-remarks" rows="3" placeholder="e.g. \'Printer roller replaced and paper-feed mechanism cleaned.\'">'+escapeHtml(sr.receiptRemarks||'')+'</textarea></div>'
-    + '<div class="field"><label>Photo (optional)</label><input type="file" id="svcrc-photo" accept="image/*"><div class="field-hint" id="svcrc-photo-hint"></div></div>';
+    + renderAttachmentPickerHtml('svcrc-photo', 'Attachments (optional)');
   openModal('Confirm Service Receipt — '+escapeHtml(sr.serviceRequestNumber), body,
     '<button class="btn btn-outline" id="svcrc-close-plain-btn">Close</button>'
     + '<button class="btn btn-outline" id="svcrc-print-btn">Print</button>'
@@ -5222,20 +5483,22 @@ function openServiceReceiptModal(serviceRequestId){
   function recalc(){ totalEl.value = ((Number(chargesEl.value)||0)+(Number(taxEl.value)||0)).toFixed(2); }
   chargesEl.addEventListener('input', recalc); taxEl.addEventListener('input', recalc); recalc();
   document.getElementById('svcrc-close-plain-btn').addEventListener('click', closeModal);
-  wirePhotoPreviewHint('svcrc-photo', 'svcrc-photo-hint');
+  const svcrcAttachState = wireAttachmentPicker('svcrc-photo');
 
   async function uploadReceiptPhotoIfAny(btn, busyLabel){
-    const fileInput = document.getElementById('svcrc-photo');
-    const file = fileInput.files && fileInput.files[0];
-    if(!file) return { photoFileId: sr.receiptPhotoFileId||null, photoFileName: sr.receiptPhotoFileName||null, ok:true };
-    btn.disabled = true; btn.textContent = 'Compressing photo…';
-    const compressed = await compressImageFile(file);
-    btn.textContent = 'Uploading photo…';
+    if(!svcrcAttachState.files.length) return { photos: (sr.receiptPhotos&&sr.receiptPhotos.length?sr.receiptPhotos:(sr.receiptPhotoFileId?[{fileId:sr.receiptPhotoFileId,fileName:sr.receiptPhotoFileName}]:[])), ok:true };
+    btn.disabled = true;
+    const photos = [];
     try{
-      const photoFileId = await driveUploadBinary(compressed, CONFIG.UPLOADS_FOLDER_ID);
-      return { photoFileId, photoFileName: compressed.name, ok:true };
+      for(let i=0; i<svcrcAttachState.files.length; i++){
+        btn.textContent = 'Uploading attachment '+(i+1)+'/'+svcrcAttachState.files.length+'…';
+        const compressed = await compressImageFile(svcrcAttachState.files[i]);
+        const fileId = await driveUploadBinary(compressed, CONFIG.UPLOADS_FOLDER_ID);
+        photos.push({ fileId, fileName: compressed.name });
+      }
+      return { photos, ok:true };
     }catch(e){
-      toast('Photo upload failed: '+e.message, 'error');
+      toast('Attachment upload failed: '+e.message, 'error');
       btn.disabled = false; btn.textContent = busyLabel;
       return { ok:false };
     }
@@ -5278,7 +5541,7 @@ function openServiceReceiptModal(serviceRequestId){
     const actorName = (myStaffRecord()||{}).name || currentUserEmail;
     const ok = await runSaveAction(btn, 'Saving…', async ()=>{
       Object.assign(sr, f);
-      sr.receiptPhotoFileId = photoResult.photoFileId; sr.receiptPhotoFileName = photoResult.photoFileName;
+      sr.receiptPhotos = photoResult.photos||[]; sr.receiptPhotoFileId = sr.receiptPhotos[0]?sr.receiptPhotos[0].fileId:null; sr.receiptPhotoFileName = sr.receiptPhotos[0]?sr.receiptPhotos[0].fileName:null;
       sr.status = 'under_observation';
       sr.history.push({ stage:'Under Observation', action:'marked for observation', actorEmail:currentUserEmail, actorName, remark:f.receiptRemarks+' (Charges: ₹'+f.totalAmount+')', timestamp:new Date().toISOString() });
       await saveDb();
@@ -5302,7 +5565,7 @@ function openServiceReceiptModal(serviceRequestId){
     const actorName = (myStaffRecord()||{}).name || currentUserEmail;
     const ok = await runSaveAction(btn, 'Saving…', async ()=>{
       Object.assign(sr, f);
-      sr.receiptPhotoFileId = photoResult.photoFileId; sr.receiptPhotoFileName = photoResult.photoFileName;
+      sr.receiptPhotos = photoResult.photos||[]; sr.receiptPhotoFileId = sr.receiptPhotos[0]?sr.receiptPhotos[0].fileId:null; sr.receiptPhotoFileName = sr.receiptPhotos[0]?sr.receiptPhotos[0].fileName:null;
       if(f.serviceStatus === 'Satisfactory'){
         sr.status = 'closed';
         sr.closedAt = new Date().toISOString();
@@ -5331,18 +5594,37 @@ function renderPhotoThumbHtml(fileId, label){
   if(!fileId) return '';
   return '<div><div class="field-hint" style="margin-bottom:4px;">'+escapeHtml(label||'Photo')+'</div><a href="'+drivePreviewUrl(fileId)+'" target="_blank" rel="noopener"><img src="'+driveDownloadUrl(fileId)+'" style="max-width:220px; max-height:160px; border-radius:8px; border:1px solid var(--color-border); object-fit:cover;" loading="lazy"></a></div>';
 }
+// Uniform read path for "one or more attachments" across records that were
+// originally single-photo (photoFileId/photoFileName) and later gained a
+// proper array (photos/receiptPhotos) — old records with only the single
+// fields still display exactly as before; new multi-attachment records
+// show everything they have. Never mutates the record.
+function getAttachments(record, arrayKey, singleIdKey, singleNameKey){
+  if(record && Array.isArray(record[arrayKey]) && record[arrayKey].length) return record[arrayKey];
+  if(record && record[singleIdKey]) return [{ fileId: record[singleIdKey], fileName: record[singleNameKey] }];
+  return [];
+}
+function renderAttachmentsThumbHtml(attachments, label){
+  if(!attachments || !attachments.length) return '';
+  return '<div style="margin-bottom:8px;"><div class="field-hint" style="margin-bottom:4px;">'+escapeHtml(label||'Attachments')+(attachments.length>1?' ('+attachments.length+')':'')+'</div>'
+    + '<div style="display:flex; flex-wrap:wrap; gap:8px;">' + attachments.map(a=>
+      '<a href="'+drivePreviewUrl(a.fileId)+'" target="_blank" rel="noopener"><img src="'+driveDownloadUrl(a.fileId)+'" style="width:100px; height:100px; border-radius:8px; border:1px solid var(--color-border); object-fit:cover;" loading="lazy"></a>'
+    ).join('') + '</div></div>';
+}
 /* Generic image lightbox — reuses the existing modal system in view-only
    mode (closeable by outside click / X / Close button) purely for viewing
    an image, never for data entry. `url` can be a blob: URL (unsaved local
    file) or a Drive download URL (already-uploaded photo). */
 /* Generic image lightbox — reuses the existing modal system in view-only
    mode (closeable by outside click / X / Close button) purely for viewing
-   an image, never for data entry. `url` can be a blob: URL (unsaved local
-   file) or a Drive download URL (already-uploaded photo). Always titled
-   "Attachment" — raw filenames are never surfaced in this UI. */
-function openImageLightbox(url){
-  const body = '<div style="text-align:center;"><img src="'+url+'" alt="Attachment" style="max-width:100%; max-height:70vh; border-radius:8px; border:1px solid var(--color-border);"></div>';
-  openModal('Attachment', body, '<button class="btn btn-outline" id="lightbox-close-btn">Close</button>', '', false);
+   an image, never for data entry. `urlOrUrls` can be a single blob:/Drive
+   URL, or an array of them (shown stacked, scrollable) for a multi-photo
+   attachment. Always titled "Attachment" — raw filenames are never
+   surfaced in this UI. */
+function openImageLightbox(urlOrUrls){
+  const urls = Array.isArray(urlOrUrls) ? urlOrUrls : [urlOrUrls];
+  const body = urls.map(url=>'<div style="text-align:center; margin-bottom:14px;"><img src="'+url+'" alt="Attachment" style="max-width:100%; max-height:70vh; border-radius:8px; border:1px solid var(--color-border);"></div>').join('');
+  openModal(urls.length>1?'Attachments':'Attachment', body, '<button class="btn btn-outline" id="lightbox-close-btn">Close</button>', '', false);
   const closeBtn = document.getElementById('lightbox-close-btn');
   if(closeBtn) closeBtn.addEventListener('click', closeModal);
 }
@@ -5399,7 +5681,7 @@ function openServiceRequestModal(serviceRequestId){
     +   '<div class="spec-item"><label>Expected Completion</label><div class="val">'+(sr.expectedCompletionDate?formatDateDMY(sr.expectedCompletionDate):'—')+'</div></div>'
     + '</div>'
     + (sr.remarks ? '<div class="field-hint" style="margin-bottom:8px;">'+escapeHtml(sr.remarks)+'</div>' : '')
-    + (sr.photoFileId ? renderPhotoThumbHtml(sr.photoFileId, 'Request photo') : '')
+    + renderAttachmentsThumbHtml(getAttachments(sr, 'photos', 'photoFileId', 'photoFileName'), 'Request attachment')
 
     // What actually happened — kept as its own section so nobody mistakes
     // the operator's findings for the original request, or vice versa.
@@ -5414,7 +5696,7 @@ function openServiceRequestModal(serviceRequestId){
         +   '<div class="spec-item"><label>Service Status</label><div class="val">'+escapeHtml(sr.serviceStatus||'—')+'</div></div>'
         + '</div>'
         + (sr.receiptRemarks ? '<div class="field-hint" style="margin-bottom:8px;">'+escapeHtml(sr.receiptRemarks)+'</div>' : '')
-        + (sr.receiptPhotoFileId ? renderPhotoThumbHtml(sr.receiptPhotoFileId, 'Service receipt photo') : '')
+        + renderAttachmentsThumbHtml(getAttachments(sr, 'receiptPhotos', 'receiptPhotoFileId', 'receiptPhotoFileName'), 'Service receipt attachment')
       ) : '')
 
     + '<div class="plain-divider"></div><div class="section-heading">Timeline</div>'
@@ -5468,7 +5750,7 @@ function openConfirmReceiptModal(reqItemId){
     +   '<div class="radio-row"><label><input type="radio" name="cr-condition" value="OK" checked> Item OK</label><label><input type="radio" name="cr-condition" value="Not OK"> Not OK</label></div>'
     + '</div>'
     + '<div class="field"><label id="cr-remarks-label">Remarks (optional)</label><textarea id="cr-remarks"></textarea></div>'
-    + '<div class="field"><label>Photo (optional)</label><input type="file" id="cr-photo" accept="image/*"><div class="field-hint" id="cr-photo-hint"></div></div>';
+    + renderAttachmentPickerHtml('cr-photo', 'Attachments (optional)');
   openModal(escapeHtml(r.itemName), body,
     '<button class="btn btn-outline" id="cr-close-btn">Close</button>'
     + '<button class="btn btn-outline" id="cr-print-btn">Print</button>'
@@ -5476,7 +5758,7 @@ function openConfirmReceiptModal(reqItemId){
     'module-procurement', true);
   const bySel = document.getElementById('cr-received-by');
   if(mine) bySel.value = mine.id;
-  wirePhotoPreviewHint('cr-photo', 'cr-photo-hint');
+  const crAttachState = wireAttachmentPicker('cr-photo');
   document.querySelectorAll('input[name="cr-condition"]').forEach(radio=>{
     radio.addEventListener('change', ()=>{
       const notOk = document.querySelector('input[name="cr-condition"]:checked').value === 'Not OK';
@@ -5496,18 +5778,20 @@ function openConfirmReceiptModal(reqItemId){
     const receivedByName = staffRec ? staffRec.name : currentUserEmail;
     const receivedByEmail = staffRec ? staffRec.email : currentUserEmail;
     const pattern = itemPattern(r);
-    const fileInput = document.getElementById('cr-photo');
-    const file = fileInput.files && fileInput.files[0];
-    let photoFileId = null, photoFileName = null;
-    if(file){
-      btn.disabled = true; btn.textContent = 'Compressing photo…';
-      const compressed = await compressImageFile(file);
-      btn.textContent = 'Uploading photo…';
-      try{ photoFileId = await driveUploadBinary(compressed, CONFIG.UPLOADS_FOLDER_ID); photoFileName = compressed.name; }
-      catch(e){ toast('Photo upload failed: '+e.message, 'error'); btn.disabled = false; btn.textContent = 'Confirm Receipt'; return; }
+    const photos = [];
+    if(crAttachState.files.length){
+      btn.disabled = true;
+      try{
+        for(let i=0; i<crAttachState.files.length; i++){
+          btn.textContent = 'Uploading attachment '+(i+1)+'/'+crAttachState.files.length+'…';
+          const compressed = await compressImageFile(crAttachState.files[i]);
+          const fileId = await driveUploadBinary(compressed, CONFIG.UPLOADS_FOLDER_ID);
+          photos.push({ fileId, fileName: compressed.name });
+        }
+      }catch(e){ toast('Attachment upload failed: '+e.message, 'error'); btn.disabled = false; btn.textContent = 'Confirm Receipt'; return; }
     }
     const ok = await runSaveAction(btn, 'Saving…', async ()=>{
-      r.receipt = { receivedDate, receivedByEmail, receivedByName, condition, remarks, photoFileId, photoFileName, recordedAt: new Date().toISOString() };
+      r.receipt = { receivedDate, receivedByEmail, receivedByName, condition, remarks, photos, photoFileId: photos[0]?photos[0].fileId:null, photoFileName: photos[0]?photos[0].fileName:null, recordedAt: new Date().toISOString() };
       r.history.push({ stage:'Item Received', action:'received ('+condition+')', actorEmail: currentUserEmail, actorName: receivedByName, remark: remarks, timestamp:new Date().toISOString() });
       if(pattern==='consumable'){
         // Consumables have no separate "issue" decision to make — the stock
@@ -6282,18 +6566,22 @@ async function buildServiceRequestReportPdf(sr){
   section('Expected Completion Date:', sr.expectedCompletionDate ? formatDateDMY(sr.expectedCompletionDate) : '—');
   if(sr.remarks) section('Request Remarks:', sr.remarks);
 
-  // Attachment — the actual uploaded photo for THIS service request (never
-  // a placeholder or filename stand-in). Fetched fresh from Drive; silently
-  // omitted (no empty box) if there's no photo or the fetch fails.
-  const requestPhoto = await fetchImageForPdf(sr.photoFileId);
-  if(requestPhoto){
-    const maxImgW = pageW-margin*2, maxImgH = 260;
-    const scale = Math.min(maxImgW/requestPhoto.width, maxImgH/requestPhoto.height, 1);
-    const imgW = requestPhoto.width*scale, imgH = requestPhoto.height*scale;
-    heading('Attachment');
-    ensureSpace(imgH + 14);
-    doc.addImage(requestPhoto.dataUrl, requestPhoto.format, margin, y, imgW, imgH);
-    y += imgH + 14;
+  // Attachments — every actual uploaded photo for THIS service request
+  // (never a placeholder or filename stand-in), each fetched fresh from
+  // Drive; any that fail to fetch are silently omitted (no empty box) —
+  // and if there simply aren't any, the whole heading is skipped too.
+  const requestAttachments = getAttachments(sr, 'photos', 'photoFileId', 'photoFileName');
+  const requestPhotos = (await Promise.all(requestAttachments.map(a=>fetchImageForPdf(a.fileId)))).filter(Boolean);
+  if(requestPhotos.length){
+    heading('Attachment'+(requestPhotos.length>1?'s':''));
+    requestPhotos.forEach(photo=>{
+      const maxImgW = pageW-margin*2, maxImgH = 260;
+      const scale = Math.min(maxImgW/photo.width, maxImgH/photo.height, 1);
+      const imgW = photo.width*scale, imgH = photo.height*scale;
+      ensureSpace(imgH + 14);
+      doc.addImage(photo.dataUrl, photo.format, margin, y, imgW, imgH);
+      y += imgH + 14;
+    });
   }
 
   section('Current Status:', serviceStatusLabel(sr.status));
@@ -6307,6 +6595,19 @@ async function buildServiceRequestReportPdf(sr){
     section('Total Amount:', formatMoney(sr.totalAmount));
     section('Service Status:', sr.serviceStatus || '—');
     if(sr.receiptRemarks) section('Receipt Remarks:', sr.receiptRemarks);
+    const receiptAttachments = getAttachments(sr, 'receiptPhotos', 'receiptPhotoFileId', 'receiptPhotoFileName');
+    const receiptPhotos = (await Promise.all(receiptAttachments.map(a=>fetchImageForPdf(a.fileId)))).filter(Boolean);
+    if(receiptPhotos.length){
+      heading('Receipt Attachment'+(receiptPhotos.length>1?'s':''));
+      receiptPhotos.forEach(photo=>{
+        const maxImgW = pageW-margin*2, maxImgH = 260;
+        const scale = Math.min(maxImgW/photo.width, maxImgH/photo.height, 1);
+        const imgW = photo.width*scale, imgH = photo.height*scale;
+        ensureSpace(imgH + 14);
+        doc.addImage(photo.dataUrl, photo.format, margin, y, imgW, imgH);
+        y += imgH + 14;
+      });
+    }
   }
 
   heading('Permanent Timeline');
@@ -6365,6 +6666,100 @@ async function openServiceRequestReportModal(sr){
   render();
 }
 
+/* ============================================================
+   Reorder Thresholds — bulk view/edit, Admin only. Lets an Admin scan
+   every item's low-stock threshold at once (previously only visible one
+   item at a time via each item's own Edit modal) and see, at a glance,
+   which items are currently at/below their threshold, which have no
+   threshold set at all, and which are healthy — with inline editing so
+   fixing coverage gaps doesn't mean opening 40 separate modals.
+   ============================================================ */
+let reorderThresholdsFilter = { search:'', lowOnly:false };
+function openReorderThresholdsModal(){
+  reorderThresholdsFilter = { search:'', lowOnly:false };
+  renderReorderThresholdsModalBody();
+}
+function reorderThresholdsRowStatus(item){
+  const threshold = Number(item.reorderThreshold)||0;
+  const qty = Number(item.quantity)||0;
+  if(threshold<=0) return { key:'none', label:'No Threshold Set', cls:'badge-status' };
+  if(qty<=threshold) return { key:'low', label:'Below Threshold', cls:'badge-rejected' };
+  return { key:'ok', label:'OK', cls:'badge-approved' };
+}
+function renderReorderThresholdsModalBody(){
+  const search = reorderThresholdsFilter.search.trim().toLowerCase();
+  let items = DB.inventoryItems.filter(i=>!i.deleted);
+  if(search) items = items.filter(i=> (i.name||'').toLowerCase().includes(search) || (i.itemCode||'').toLowerCase().includes(search) || catName(i.categoryId).toLowerCase().includes(search));
+  items = items.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const rowsAll = items.map(i=>({ item:i, status:reorderThresholdsRowStatus(i) }));
+  const rows = reorderThresholdsFilter.lowOnly ? rowsAll.filter(r=>r.status.key==='low') : rowsAll;
+  const lowCount = rowsAll.filter(r=>r.status.key==='low').length;
+  const noneCount = rowsAll.filter(r=>r.status.key==='none').length;
+
+  const body = '<div class="field-hint" style="margin-bottom:12px;">Every inventory item\'s low-stock alert threshold in one place — change any value below and it saves immediately, same as editing it on the item itself.</div>'
+    + '<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">'
+    +   '<input type="text" id="rt-search" placeholder="Search item, code, or category…" value="'+escapeHtml(reorderThresholdsFilter.search)+'" style="flex:1; min-width:180px; padding:8px 12px; border:1.5px solid var(--color-border); border-radius:8px; font-size:13px;">'
+    +   '<label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--color-ink-soft); white-space:nowrap;"><input type="checkbox" id="rt-low-only" '+(reorderThresholdsFilter.lowOnly?'checked':'')+'> Below threshold only ('+lowCount+')</label>'
+    + '</div>'
+    + (noneCount ? '<div class="field-hint" style="margin-bottom:10px; color:var(--color-gold);">'+noneCount+' item'+(noneCount===1?'':'s')+' still '+(noneCount===1?'has':'have')+' no threshold set — the low-stock banner can never fire for '+(noneCount===1?'it':'them')+' until one is.</div>' : '')
+    + '<div class="table-wrap" style="max-height:440px;"><table><thead><tr><th>Item</th><th>Category</th><th>Current Stock</th><th>Threshold</th><th>Status</th></tr></thead><tbody>'
+    + (rows.length ? rows.map(r=>{
+        const i = r.item;
+        return '<tr>'
+          + '<td>'+escapeHtml(i.name)+(i.itemCode?' <span class="field-hint">('+escapeHtml(i.itemCode)+')</span>':'')+'</td>'
+          + '<td>'+escapeHtml(catName(i.categoryId))+'</td>'
+          + '<td>'+i.quantity+(i.unit?' '+escapeHtml(i.unit):'')+'</td>'
+          + '<td><input type="number" min="0" class="rt-threshold-input" data-rt-item="'+i.id+'" value="'+(Number(i.reorderThreshold)||0)+'" style="width:80px; padding:5px 8px; border:1.5px solid var(--color-border); border-radius:6px; font-size:13px;"></td>'
+          + '<td><span class="badge '+r.status.cls+'">'+r.status.label+'</span></td>'
+          + '</tr>';
+      }).join('') : '<tr><td colspan="5"><div class="empty-state" style="padding:20px;"><h3>No items match</h3></div></td></tr>')
+    + '</tbody></table></div>';
+
+  openModal('Reorder Thresholds', body, '<button class="btn btn-outline" id="modal-done-btn">Close</button>', 'module-admin', true);
+  const modalEl = document.querySelector('#modal-overlay .modal');
+  if(modalEl) modalEl.style.maxWidth = '820px';
+  document.getElementById('modal-done-btn').addEventListener('click', closeModal);
+
+  const searchEl = document.getElementById('rt-search');
+  let searchTimer = null;
+  searchEl.addEventListener('input', ()=>{
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(()=>{ reorderThresholdsFilter.search = searchEl.value; renderReorderThresholdsModalBody(); }, 250);
+  });
+  document.getElementById('rt-low-only').addEventListener('change', function(){
+    reorderThresholdsFilter.lowOnly = this.checked;
+    renderReorderThresholdsModalBody();
+  });
+  document.querySelectorAll('.rt-threshold-input').forEach(input=>{
+    input.addEventListener('change', async ()=>{
+      const item = DB.inventoryItems.find(i=>i.id===input.getAttribute('data-rt-item'));
+      if(!item) return;
+      const newVal = Number(input.value);
+      if(newVal < 0){ toast('Threshold cannot be negative','error'); input.value = Number(item.reorderThreshold)||0; return; }
+      const prevVal = item.reorderThreshold;
+      item.reorderThreshold = newVal;
+      input.disabled = true;
+      try{
+        await saveDb();
+        toast(item.name+' threshold set to '+newVal,'success');
+      }catch(e){
+        item.reorderThreshold = prevVal;
+        toast('Could not save — please try again','error');
+      } finally {
+        input.disabled = false;
+        // Refresh in place so the Status column and the "below threshold
+        // only" count reflect the new value immediately, without losing
+        // scroll position on every keystroke of a *different* row.
+        const row = input.closest('tr');
+        const status = reorderThresholdsRowStatus(item);
+        if(row){
+          const statusCell = row.querySelector('td:last-child .badge');
+          if(statusCell){ statusCell.className = 'badge '+status.cls; statusCell.textContent = status.label; }
+        }
+      }
+    });
+  });
+}
 function openArchiveModal(){ renderArchiveModalBody(); }
 function renderArchiveModalBody(){
   const entries = DB.archiveLog.slice().filter(e=>!e.restored).sort((a,b)=>(b.deletedAt||'').localeCompare(a.deletedAt||''));
