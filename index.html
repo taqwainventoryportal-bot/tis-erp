@@ -837,6 +837,9 @@ const CONFIG = {
   // Sign-in gate + full control over everything
   ADMIN_EMAILS: ["Taqwainventoryportal@gmail.com","ahharis1710@gmail.com","aiman12ali@gmail.com"],
 
+  // Hardcoded staff (bypasses DB.staff — always allowed, never affected by in-app staff management)
+  STAFF_EMAILS: ["support.taqwaschools@gmail.com","taqwagroupofschools@gmail.com"],
+
   // First-stage reviewer on Medium & High notesheets.
   // Map each email to the department id(s) they can act on, or "*" for all departments.
   // Department ids are visible in Admin > Manage Departments once seeded.
@@ -1260,9 +1263,18 @@ function isAdmin(){
   const s = DB.staff.find(x=> x.active!==false && !x.deleted && x.email && x.email.toLowerCase()===emailLower() );
   return Boolean(s && s.role==='admin');
 }
+// Hardcoded fallback: guarantees these accounts stay "Staff cum Portal User"
+// even if their DB.staff record is ever lost/overwritten. Only used when no
+// matching DB.staff record exists — a real DB.staff record always wins.
+const HARDWIRED_STAFF = [
+  { id:"hardwired_1", name:"Nashra Afzal", email:"support.taqwaschools@gmail.com", role:"staff_portal", active:true },
+  { id:"hardwired_2", name:"Umme Hani", email:"taqwagroupofschools@gmail.com", role:"staff_portal", active:true }
+];
 function myStaffRecord(){
   if(!isSignedIn() || !DB || !DB.staff) return null;
-  return DB.staff.find(s=> s.active!==false && !s.deleted && s.email && s.email.toLowerCase()===emailLower() ) || null;
+  const s = DB.staff.find(s=> s.active!==false && !s.deleted && s.email && s.email.toLowerCase()===emailLower() );
+  if(s) return s;
+  return HARDWIRED_STAFF.find(h=>h.email.toLowerCase()===emailLower()) || null;
 }
 function staffById(id){ return DB.staff.find(s=>s.id===id) || null; }
 function staffLabel(s){ if(!s) return '—'; return s.name + (s.email?' ('+s.email+')':' (email not set)'); }
@@ -1709,6 +1721,7 @@ async function saveDb(){
 function allStaffEmails(){
   const set = new Set();
   CONFIG.ADMIN_EMAILS.forEach(e=>set.add(e.toLowerCase()));
+  (CONFIG.STAFF_EMAILS||[]).forEach(e=>set.add(e.toLowerCase()));
   if(DB && Array.isArray(DB.staff)){
     DB.staff.forEach(s=>{ if(s.active!==false && s.email) set.add(s.email.toLowerCase()); });
   }
