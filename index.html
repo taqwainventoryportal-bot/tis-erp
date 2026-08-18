@@ -2473,8 +2473,6 @@ function renderHomePage(){
   const byStatus = computeRequestsByStatus();
   const curMonth = currentMonthExpenditure();
   const allTime = totalExpenditureAllTime();
-  const consumptionThisMonth = currentMonthConsumptionQty();
-  const consumptionAllTime = totalConsumptionQtyAllTime();
   const hasAnyRequests = DB.requestItems.some(r=>!r.deleted);
   const dm = dashboardMetrics();
 
@@ -2534,11 +2532,6 @@ function renderHomePage(){
     +   '<div class="dash-card"><div class="dash-card-header">This Month\'s Expenditure</div><div class="dash-card-body"><div class="dash-card-num">'+formatMoney(curMonth)+'</div></div></div>'
     +   '<div class="dash-card"><div class="dash-card-header">Total Expenditure (All Time)</div><div class="dash-card-body"><div class="dash-card-num gold">'+formatMoney(allTime)+'</div></div></div>'
     +   '<div class="dash-card"><div class="dash-card-header">Requests Awaiting Approval</div><div class="dash-card-body"><div class="dash-card-num">'+pendingAll+'</div></div></div>'
-    + '</div>'
-    + '<div class="dash-section-title">Consumption (Stock Actually Used — Separate from Expenditure)</div>'
-    + '<div class="dash-grid">'
-    +   '<div class="dash-card"><div class="dash-card-header">Consumed This Month</div><div class="dash-card-body"><div class="dash-card-num">'+consumptionThisMonth+'<span style="font-size:14px; font-weight:600;"> units</span></div></div></div>'
-    +   '<div class="dash-card"><div class="dash-card-header">Consumed (All Time)</div><div class="dash-card-body"><div class="dash-card-num gold">'+consumptionAllTime+'<span style="font-size:14px; font-weight:600;"> units</span></div></div></div>'
     + '</div>'
     + (hasAnyRequests ?
       ('<div class="analytics-grid">'
