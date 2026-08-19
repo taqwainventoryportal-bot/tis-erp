@@ -1502,8 +1502,21 @@ async function driveFetchAuthed(url, options){
     }
   }
   if(res.status === 401){
+    // Try one silent, invisible re-auth before giving up — if the
+    // person's underlying Google session is still valid (the normal case;
+    // Google sessions in a browser last far longer than this app's ~55min
+    // access token), this recovers automatically with no visible
+    // interruption at all, instead of forcing a manual sign-in.
+    const refreshed = await requestTokenSilently();
+    if(refreshed){
+      options.headers = Object.assign({}, options.headers, { Authorization: 'Bearer '+accessToken });
+      try{
+        const retryRes = await fetch(url, options);
+        if(retryRes.status !== 401) return retryRes.ok ? retryRes : (()=>{ throw new Error('Drive request failed ('+retryRes.status+')'); })();
+      }catch(e){ /* fall through to the hard failure below */ }
+    }
     accessToken = null; currentUserEmail = null;
-    try{ sessionStorage.removeItem('taqwa_session'); }catch(e){}
+    try{ localStorage.removeItem('taqwa_session'); }catch(e){}
     renderTopbar();
     throw new Error('Your session has expired. Please sign in again.');
   }
@@ -1513,13 +1526,13 @@ async function driveFetchAuthed(url, options){
     // obtained before Drive access was fully set up for this account, or
     // before a scope was added). restoreSession() only checks expiry, not
     // actual granted scope, so a degraded token can otherwise sit in
-    // sessionStorage and keep failing for up to an hour even after the
+    // localStorage and keep failing for up to an hour even after the
     // underlying account access is fixed. Clearing it forces a fresh
     // prompt:'consent' login next time, which re-requests the full scope.
     const bodyText = await res.text().catch(()=> '');
     if(/insufficient.*(scope|permission)/i.test(bodyText)){
       accessToken = null; currentUserEmail = null;
-      try{ sessionStorage.removeItem('taqwa_session'); }catch(e){}
+      try{ localStorage.removeItem('taqwa_session'); }catch(e){}
       renderTopbar();
       throw new Error('Your Google sign-in needs to be refreshed to pick up current permissions. Please sign in again.');
     }
@@ -1749,7 +1762,18 @@ function setupTokenClient(){
     client_id: CONFIG.OAUTH_CLIENT_ID,
     scope: 'https://www.googleapis.com/auth/drive email profile openid',
     callback: async (resp)=>{
-      if(resp.error){ toast('Sign-in failed', 'error'); return; }
+      const silent = isSilentAttempt;
+      isSilentAttempt = false;
+      if(resp.error){
+        // A failed SILENT attempt is normal and expected sometimes (e.g. no
+        // active Google session, or the browser blocked it) — the person's
+        // current token may still be valid for a few more minutes, so this
+        // stays quiet rather than alarming them. An explicit Sign In click
+        // failing is different and does need to be visible.
+        if(!silent) toast('Sign-in failed', 'error');
+        resolvePendingSilent(false);
+        return;
+      }
       accessToken = resp.access_token;
       const expiresInSec = Number(resp.expires_in) || 3300;
       const tryVerify = async (attempt)=>{
@@ -1762,46 +1786,153 @@ function setupTokenClient(){
           const allowed = allStaffEmails();
           if(allowed.size && !allowed.has((currentUserEmail||'').toLowerCase())){
             accessToken = null; currentUserEmail = null;
-            toast('This Google account is not authorised for staff access.', 'error');
-            renderTopbar(); return;
+            if(!silent) toast('This Google account is not authorised for staff access.', 'error');
+            renderTopbar();
+            resolvePendingSilent(false);
+            return;
           }
           saveSession(expiresInSec);
-          toast('Signed in as '+currentUserEmail, 'success');
+          scheduleSilentRefresh(expiresInSec);
+          // Re-arms the 30s background poll on every successful sign-in —
+          // startAutoRefresh() itself is a no-op if already running, so
+          // this is safe to call on silent refreshes too, but it matters
+          // for the case logout() introduced: signing back in later in the
+          // same page session, after logout() explicitly stopped the poll.
+          startAutoRefresh();
+          if(!silent){ toast('Signed in as '+currentUserEmail, 'success'); }
           renderTopbar(); renderRoute();
+          resolvePendingSilent(true);
         }catch(e){
           if(attempt < 2){ setTimeout(()=>tryVerify(attempt+1), 500); return; }
           accessToken = null; currentUserEmail = null;
-          toast('Could not verify account — please try Staff Sign In again', 'error');
+          if(!silent) toast('Could not verify account — please try Staff Sign In again', 'error');
           renderTopbar();
+          resolvePendingSilent(false);
         }
       };
       tryVerify(0);
     }
   });
 }
-/* Session persistence: keeps you signed in across a page refresh within the
-   same browser tab (sessionStorage clears when the tab/browser fully closes). */
+/* ---------------------------------------------------------------
+   Staying signed in, within what Google actually allows:
+   Google's client-side token flow (no backend, no client secret — the
+   only option available to a static single-file app like this one) never
+   issues a refresh token, and caps the access token itself at under an
+   hour. That ceiling is a hard Google limit, not something this app can
+   configure around. What IS achievable: silently re-requesting a new
+   token (prompt:'') shortly before the current one expires. As long as
+   the person's underlying Google account session is still active in that
+   browser — which normally lasts for weeks — this renews invisibly, with
+   no consent screen and no interruption, well past the ~55 minute mark.
+   That's what actually makes "staying signed in" work here.
+   --------------------------------------------------------------- */
+let silentRefreshTimer = null;
+let isSilentAttempt = false;
+let silentRequestInFlight = false;
+let pendingSilentResolvers = [];
+function resolvePendingSilent(ok){
+  silentRequestInFlight = false;
+  const list = pendingSilentResolvers.splice(0);
+  list.forEach(r=>r(ok));
+}
+function scheduleSilentRefresh(expiresInSec){
+  if(silentRefreshTimer) clearTimeout(silentRefreshTimer);
+  // Refresh 5 minutes before actual expiry, with a sane floor so a
+  // near-already-expired token (e.g. right after restoring an old session)
+  // still gets a refresh attempt soon rather than waiting a negative delay.
+  const refreshInMs = Math.max((expiresInSec - 300) * 1000, 10000);
+  silentRefreshTimer = setTimeout(()=>{ requestTokenSilently(); }, refreshInMs);
+}
+function requestTokenSilently(){
+  return new Promise((resolve)=>{
+    // De-duplication: if several Drive calls 401 around the same moment
+    // (plausible right when a token expires, since more than one part of
+    // the UI can be fetching at once), each one used to fire its own
+    // concurrent requestAccessToken({prompt:''}) call — which GIS doesn't
+    // cleanly support on a single client and could produce an
+    // intermittent, hard-to-reproduce auth glitch. Later callers now just
+    // piggyback on whichever attempt is already in flight and share its
+    // outcome, instead of starting a second one.
+    if(silentRequestInFlight){
+      pendingSilentResolvers.push(resolve);
+      return;
+    }
+    // Guards against the one real timing gap: boot() calls restoreSession()
+    // — which can trigger this for an already-expired stored token —
+    // before initAuth()/setupTokenClient() has necessarily finished
+    // setting up tokenClient. Poll briefly for it rather than silently
+    // giving up, mirroring the same readiness wait initAuth() itself uses.
+    let tries = 0;
+    const tryNow = ()=>{
+      if(tokenClient && window.google){
+        pendingSilentResolvers.push(resolve);
+        isSilentAttempt = true;
+        silentRequestInFlight = true;
+        try{ tokenClient.requestAccessToken({ prompt:'' }); }
+        catch(e){ isSilentAttempt = false; silentRequestInFlight = false; pendingSilentResolvers = pendingSilentResolvers.filter(r=>r!==resolve); resolve(false); }
+      } else if(tries++ < 50){
+        setTimeout(tryNow, 200);
+      } else {
+        resolve(false);
+      }
+    };
+    tryNow();
+  });
+}
+/* Session persistence: localStorage (not sessionStorage) so staying
+   signed in survives closing the tab or the whole browser, not just a
+   same-tab refresh — the person only has to sign in again once the
+   underlying Google account session itself ends, not on every restart. */
 function saveSession(expiresInSec){
   try{
-    sessionStorage.setItem('taqwa_session', JSON.stringify({
+    localStorage.setItem('taqwa_session', JSON.stringify({
       accessToken, currentUserEmail, expiresAt: Date.now() + (expiresInSec*1000)
     }));
   }catch(e){}
 }
 function restoreSession(){
   try{
-    const raw = sessionStorage.getItem('taqwa_session');
+    const raw = localStorage.getItem('taqwa_session');
     if(!raw) return false;
     const s = JSON.parse(raw);
-    if(!s || !s.accessToken || !s.currentUserEmail || Date.now() > s.expiresAt) return false;
+    if(!s || !s.accessToken || !s.currentUserEmail) return false;
+    if(Date.now() > s.expiresAt){
+      // The stored access token itself has expired, but the person's
+      // Google account session very likely hasn't — arm a silent refresh
+      // attempt right away instead of just discarding everything and
+      // forcing a manual sign-in.
+      accessToken = s.accessToken; currentUserEmail = s.currentUserEmail;
+      requestTokenSilently();
+      return true;
+    }
     accessToken = s.accessToken; currentUserEmail = s.currentUserEmail;
+    scheduleSilentRefresh(Math.max((s.expiresAt - Date.now())/1000, 60));
     return true;
   }catch(e){ return false; }
 }
-function login(){ if(!tokenClient){ toast('Sign-in is not configured yet.', 'error'); return; } tokenClient.requestAccessToken({ prompt:'consent' }); }
+function login(){
+  if(!tokenClient){ toast('Sign-in is not configured yet.', 'error'); return; }
+  isSilentAttempt = false;
+  // GIS opens a popup for the consent screen — if the browser (or an
+  // extension) silently blocks it, nothing ever calls back and the person
+  // is just left staring at a button that appears to do nothing, with no
+  // error at all. This gives them an actual explanation if that happens.
+  const popupBlockedTimer = setTimeout(()=>{
+    if(!accessToken) toast('Sign-in window didn\'t open — check if your browser blocked a popup for this site.', 'error');
+  }, 12000);
+  const clearPopupTimer = ()=>clearTimeout(popupBlockedTimer);
+  pendingSilentResolvers.push(clearPopupTimer);
+  tokenClient.requestAccessToken({ prompt:'consent' });
+}
 function logout(){
+  if(silentRefreshTimer){ clearTimeout(silentRefreshTimer); silentRefreshTimer = null; }
+  // The 30s background Drive poll exists to keep a SIGNED-IN person's view
+  // current — it has no reason to keep running once nobody's signed in to
+  // see the results, so stop it here rather than letting it poll forever.
+  if(autoRefreshTimer){ clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
   accessToken = null; currentUserEmail = null;
-  try{ sessionStorage.removeItem('taqwa_session'); }catch(e){}
+  try{ localStorage.removeItem('taqwa_session'); }catch(e){}
   toast('Signed out');
   location.hash = '#/';
   renderTopbar(); renderRoute();
@@ -6921,7 +7052,7 @@ async function boot(){
       const allowed = allStaffEmails();
       if(allowed.size && !allowed.has(currentUserEmail.toLowerCase())){
         accessToken = null; currentUserEmail = null;
-        try{ sessionStorage.removeItem('taqwa_session'); }catch(e){}
+        try{ localStorage.removeItem('taqwa_session'); }catch(e){}
       }
     }
     renderTopbar();
@@ -6953,20 +7084,23 @@ function isSafeToAutoRefresh(){
   return true;
 }
 async function autoRefreshTick(){
+  // No point polling Drive for someone who isn't signed in yet (or no
+  // longer is) — there's nobody to show the results to, and it was
+  // previously firing every 30s regardless, from the moment the page
+  // loaded, even on the plain sign-in screen.
+  if(!isSignedIn()) return;
   if(!isSafeToAutoRefresh()) return;
   try{
     const before = JSON.stringify(DB);
-    const beforeCounts = isSignedIn() ? { approvals:myApprovalQueue().length, tasks:myPurchaseQueue().length, receipt:myReceiptQueue().length, issue:myItemIssueQueue().length } : null;
+    const beforeCounts = { approvals:myApprovalQueue().length, tasks:myPurchaseQueue().length, receipt:myReceiptQueue().length, issue:myItemIssueQueue().length };
     await loadDb(false); // no internal retry here — the next tick in 30s IS the retry; tripling requests on every failed tick is what helped trip the throttling in the first place
     const after = JSON.stringify(DB);
     if(before !== after){
-      if(beforeCounts){
-        const afterCounts = { approvals:myApprovalQueue().length, tasks:myPurchaseQueue().length, receipt:myReceiptQueue().length, issue:myItemIssueQueue().length };
-        // Same real-state-change principle as the same-user case — just
-        // discovered on the next poll instead of instantly, since there's
-        // no push/websocket layer to notify across users immediately.
-        Object.keys(afterCounts).forEach(k=>{ if(afterCounts[k] > beforeCounts[k]) flagTabAttention(k); });
-      }
+      const afterCounts = { approvals:myApprovalQueue().length, tasks:myPurchaseQueue().length, receipt:myReceiptQueue().length, issue:myItemIssueQueue().length };
+      // Same real-state-change principle as the same-user case — just
+      // discovered on the next poll instead of instantly, since there's
+      // no push/websocket layer to notify across users immediately.
+      Object.keys(afterCounts).forEach(k=>{ if(afterCounts[k] > beforeCounts[k]) flagTabAttention(k); });
       renderTopbar(); renderRoute();
     }
   }catch(e){ /* silent — keep showing existing data, try again next tick */ }
