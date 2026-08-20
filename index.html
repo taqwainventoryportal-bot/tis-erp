@@ -1549,7 +1549,10 @@ async function driveGetJson(fileId, allowRetry){
 // shared by every write (this save, uploads, folder/file creation) instead
 // of being special-cased just for the main DB save.
 async function driveSaveJson(fileId, data){
-  const res = await driveFetchAuthed(DRIVE_UPLOAD_URL+'/'+fileId+'?uploadType=media', {
+  // fields=modifiedTime — asks Drive to hand back the file's new
+  // modifiedTime in the same response, so saveDb() can record exactly
+  // which version it just wrote without a second round-trip.
+  const res = await driveFetchAuthed(DRIVE_UPLOAD_URL+'/'+fileId+'?uploadType=media&fields=modifiedTime', {
     method:'PATCH',
     headers:{ 'Content-Type':'application/json' },
     body: JSON.stringify(data)
@@ -1688,7 +1691,24 @@ function drivePreviewUrl(fileId){ return 'https://drive.google.com/file/d/'+file
 /* ============================================================
    DB load / save
    ============================================================ */
+// Optimistic concurrency guard — this app has no real backend, so there's
+// no server to serialize concurrent writes from different people on
+// different machines. Without this, saveDb() would silently overwrite
+// whatever anyone else saved in between this client's last load and its
+// next write — not just the field being edited, the ENTIRE document. This
+// tracks the Drive file's own modifiedTime so saveDb() can detect that
+// case and refuse to blindly clobber it.
+let lastKnownDbModifiedTime = null;
 async function loadDb(allowRetry){
+  // A separate lightweight metadata call (not the full content fetch) —
+  // Drive's alt=media response is raw bytes only and can't also carry
+  // modifiedTime, so this costs one extra small request per load in
+  // exchange for always knowing exactly which version we're holding.
+  try{
+    const metaRes = await driveFetchPublic('/'+CONFIG.DB_FILE_ID, { fields:'modifiedTime' }, allowRetry);
+    const meta = await metaRes.json();
+    if(meta && meta.modifiedTime) lastKnownDbModifiedTime = meta.modifiedTime;
+  }catch(e){ /* non-fatal — worst case, the next save's conflict check is skipped once */ }
   const raw = await driveGetJson(CONFIG.DB_FILE_ID, allowRetry);
   const base = emptyDb();
   DB = Object.assign(base, raw);
@@ -1721,9 +1741,30 @@ async function loadDb(allowRetry){
 }
 async function saveDb(){
   try{
-    await driveSaveJson(CONFIG.DB_FILE_ID, DB);
+    // The actual safety check: has anyone else's save landed on Drive
+    // since we last loaded? If so, DO NOT write — our in-memory copy
+    // doesn't have their change in it, and a normal write here would
+    // silently erase it. This only costs one small metadata request, right
+    // before the real (much larger) write.
+    if(lastKnownDbModifiedTime){
+      const metaRes = await driveFetchPublic('/'+CONFIG.DB_FILE_ID, { fields:'modifiedTime' }, true);
+      const meta = await metaRes.json();
+      if(meta && meta.modifiedTime && meta.modifiedTime !== lastKnownDbModifiedTime){
+        // Pull in whatever changed and re-render immediately, so the rest
+        // of the app reflects reality right away — the one thing NOT
+        // recovered automatically is the specific action the person just
+        // took (e.g. the approval they clicked), since safely replaying it
+        // against fresh data isn't something this can do on its own. They
+        // see exactly that in the message and can simply repeat the action.
+        await loadDb(false);
+        renderTopbar(); renderRoute();
+        throw new Error('Someone else just updated this data on another device. Your change was not saved — the screen now shows the latest information, so please review and try again.');
+      }
+    }
+    const result = await driveSaveJson(CONFIG.DB_FILE_ID, DB);
+    if(result && result.modifiedTime) lastKnownDbModifiedTime = result.modifiedTime;
   }catch(e){
-    toast('Save failed: '+e.message, 'error');
+    toast(/^Someone else just updated/.test(e.message) ? e.message : 'Save failed: '+e.message, 'error');
     throw e;
   }
 }
@@ -2147,9 +2188,23 @@ function renderRoute(){
   if(parts[0]==='inventory' && parts[1]==='category' && parts[2]) return renderCategoryPage(parts[2]);
   if(parts[0]==='inventory' && !parts[1]) return renderInventoryPage();
   if(parts[0]==='procurement' && parts[1]==='item' && parts[2]) { renderProcurementPage(); openItemDetailModal(parts[2]); return; }
-  if(parts[0]==='procurement') return renderProcurementPage(parts[1]);
+  if(parts[0]==='procurement'){
+    renderProcurementPage(parts[1]);
+    // Same reasoning as the Home nudge — Item Procurement's tabs (New
+    // Request, Approvals, Purchase Assignment, Item Receipt, Item Issue)
+    // are exactly where a stale view is most likely to cause a real
+    // conflict (approving/receiving something someone else just touched
+    // on another device), so pull fresh data right when landing here
+    // rather than waiting for the next scheduled 30s tick.
+    autoRefreshTick();
+    return;
+  }
   if(parts[0]==='service-procurement' && parts[1]==='item' && parts[2]) { renderServiceProcurementPage(); openServiceRequestModal(parts[2]); return; }
-  if(parts[0]==='service-procurement') return renderServiceProcurementPage(parts[1]);
+  if(parts[0]==='service-procurement'){
+    renderServiceProcurementPage(parts[1]);
+    autoRefreshTick();
+    return;
+  }
   if(parts[0]==='admin') return renderAdminSettingsPage();
   return renderHomePage();
 }
@@ -7083,6 +7138,7 @@ function isSafeToAutoRefresh(){
   if(active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName)) return false; // actively typing somewhere
   return true;
 }
+let autoRefreshTickInFlight = false;
 async function autoRefreshTick(){
   // No point polling Drive for someone who isn't signed in yet (or no
   // longer is) — there's nobody to show the results to, and it was
@@ -7090,6 +7146,14 @@ async function autoRefreshTick(){
   // loaded, even on the plain sign-in screen.
   if(!isSignedIn()) return;
   if(!isSafeToAutoRefresh()) return;
+  // Re-entrancy guard: this now also gets triggered by renderRoute() on
+  // Home/Procurement/Service Procurement navigation, and its OWN
+  // renderRoute() call (when it finds changed data) lands back on that
+  // same code — without this, that could chain into a second immediate
+  // tick. Not an infinite loop (the second tick would find nothing new
+  // and stop there regardless), just an avoidable extra request.
+  if(autoRefreshTickInFlight) return;
+  autoRefreshTickInFlight = true;
   try{
     const before = JSON.stringify(DB);
     const beforeCounts = { approvals:myApprovalQueue().length, tasks:myPurchaseQueue().length, receipt:myReceiptQueue().length, issue:myItemIssueQueue().length };
@@ -7104,6 +7168,7 @@ async function autoRefreshTick(){
       renderTopbar(); renderRoute();
     }
   }catch(e){ /* silent — keep showing existing data, try again next tick */ }
+  finally{ autoRefreshTickInFlight = false; }
 }
 function startAutoRefresh(){
   if(autoRefreshTimer) return;
