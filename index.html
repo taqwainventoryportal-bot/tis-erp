@@ -2741,7 +2741,11 @@ function renderHomePage(){
    Inventory — department list
    ============================================================ */
 function canManageConsumption(){
-  if(isAdmin() || isCoordinator()) return true;
+  // Staff cum Portal User is the role meant to handle day-to-day
+  // inventory (adding existing stock/assets, installing, consuming) — this
+  // used to require an Admin to individually flag each such person with
+  // canConsume, rather than being granted by the role itself.
+  if(isAdmin() || isCoordinator() || isStaffPortalUser()) return true;
   const s = myStaffRecord();
   return Boolean(s && s.canConsume);
 }
