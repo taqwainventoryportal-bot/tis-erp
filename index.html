@@ -1289,6 +1289,12 @@ function isCoordinator(){ return hasRole('coordinator'); }
 function isStaffPortalUser(){ return hasRole('staff_portal'); }
 function isApproverRole(){ return isChairman() || isPrincipal() || isCoordinator(); }
 function canManageStaff(){ return isAdmin() || isApproverRole(); }
+// Wider than canManageStaff() — Staff cum Portal User gets operational
+// access to Admin Settings (Buildings, Categories & Items, Service
+// Categories, Reorder Thresholds) so they can run day-to-day setup
+// without needing an Admin/Approver for every small catalog change.
+// Manage Staff and Archive stay restricted to canManageStaff() specifically.
+function canAccessAdminSettings(){ return canManageStaff() || isStaffPortalUser(); }
 function canManageTopRoles(){ return isAdmin(); } // only Admin edits Chairman/Principal/Coordinator/Staff cum Portal User themselves
 function roleKeyLabel(key){
   return { admin:'Admin', chairman:'Chairman', principal:'Principal', coordinator:'Coordinator', staff_portal:'Staff cum Portal User', staff:'Staff' }[key] || key;
@@ -1998,7 +2004,7 @@ function renderTopbar(){
   const route = location.hash || '#/';
   const navItem = (href, label, module)=>'<a href="'+href+'" data-module="'+(module||'')+'" class="'+(route.startsWith(href) && href!=='#/' || route===href ? 'active':'')+'">'+label+'</a>';
   const navLinks = isSignedIn()
-    ? navItem('#/', 'Home', 'dashboard') + navItem('#/inventory','Inventory','inventory') + navItem('#/procurement','Item Procurement','procurement') + navItem('#/service-procurement','Service Procurement','service-procurement') + (canManageStaff() ? navItem('#/admin','Admin Settings','admin') : '')
+    ? navItem('#/', 'Home', 'dashboard') + navItem('#/inventory','Inventory','inventory') + navItem('#/procurement','Item Procurement','procurement') + navItem('#/service-procurement','Service Procurement','service-procurement') + (canAccessAdminSettings() ? navItem('#/admin','Admin Settings','admin') : '')
     : navItem('#/', 'Home', 'dashboard') + navItem('#/about','About Portal','') + navItem('#/help','Help','') + navItem('#/contact','Contact','');
   slot.innerHTML =
     '<div class="brand-band"><div class="wrap brand-band-inner">'
@@ -2780,9 +2786,9 @@ function renderInventoryPage(){
    ============================================================ */
 function renderAdminSettingsPage(){
   const app = document.getElementById('app');
-  if(!canManageStaff()){ app.innerHTML = '<div class="content wrap"><div class="empty-state"><h3>Not available</h3></div></div>'; return; }
+  if(!canAccessAdminSettings()){ app.innerHTML = '<div class="content wrap"><div class="empty-state"><h3>Not available</h3></div></div>'; return; }
   const cards = [
-    { id:'staff', icon:iconUsers, title:'Manage Staff', desc:'Roles, permissions, active/inactive status.', show:true },
+    { id:'staff', icon:iconUsers, title:'Manage Staff', desc:'Roles, permissions, active/inactive status.', show:canManageStaff() },
     { id:'buildings', icon:iconBuilding, title:'Manage Buildings', desc:'Buildings and rooms used for asset locations.', show:true },
     { id:'item-cats', icon:iconPackage, title:'Manage Categories & Items', desc:'Item Procurement catalog, policies and value tiers.', show:true },
     { id:'service-cats', icon:iconWrench, title:'Manage Service Categories', desc:'Service categories, sub-categories and approval policy.', show:true },
