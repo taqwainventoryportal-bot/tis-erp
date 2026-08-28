@@ -2221,6 +2221,7 @@ function renderRoute(){
 function computeActiveAlerts(){
   const alerts = [];
   DB.inventoryItems.forEach(item=>{
+    if(item.deleted) return;
     const threshold = Number(item.reorderThreshold);
     if(threshold>0 && Number(item.quantity) <= threshold){
       // Keyed to the CURRENT quantity, not just the item — dismissing only
@@ -2654,7 +2655,7 @@ function renderHomePage(){
     if(landingBtn) landingBtn.addEventListener('click', login);
     return;
   }
-  const totalItems = DB.inventoryItems.length;
+  const totalItems = DB.inventoryItems.filter(i=>!i.deleted).length;
   const lowStock = computeActiveAlerts().length;
   const pendingAll = DB.requestItems.filter(r=>!r.deleted && r.status==='pending_approval').length;
   const myPending = pendingForMe().length;
