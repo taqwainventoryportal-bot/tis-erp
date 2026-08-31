@@ -5994,6 +5994,17 @@ function openConfirmReceiptModal(reqItemId){
       }catch(e){ toast('Attachment upload failed: '+e.message, 'error'); btn.disabled = false; btn.textContent = 'Confirm Receipt'; return; }
     }
     const ok = await runSaveAction(btn, 'Saving…', async ()=>{
+      // Guard against a duplicate submission — e.g. clicking Confirm
+      // Receipt again after an earlier attempt's save failed (network
+      // hiccup, or another device saving in between) re-running this whole
+      // block a second time. syncConsumableStock()/syncAssetToInventory()
+      // are NOT idempotent — a repeat call pushes another Goods Receipt
+      // ledger entry and double-counts the quantity, even though nothing
+      // was actually received twice. Only proceed if this request is
+      // still sitting in its expected pre-receipt state.
+      if(r.status !== 'purchased'){
+        throw new Error('This request\'s receipt has already been recorded. If it doesn\'t look right, refresh the page and check the Stock Ledger before making any further changes.');
+      }
       r.receipt = { receivedDate, receivedByEmail, receivedByName, condition, remarks, photos, photoFileId: photos[0]?photos[0].fileId:null, photoFileName: photos[0]?photos[0].fileName:null, recordedAt: new Date().toISOString() };
       r.history.push({ stage:'Item Received', action:'received ('+condition+')', actorEmail: currentUserEmail, actorName: receivedByName, remark: remarks, timestamp:new Date().toISOString() });
       if(pattern==='consumable'){
