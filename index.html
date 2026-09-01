@@ -1054,6 +1054,44 @@ function collectRequestRecipients(record){
 }
 function nextId(prefix){ return prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); }
 /* ============================================================
+   Sequential number assignment (PR-/PO-/SR- numbers)
+   ------------------------------------------------------------
+   Previously these were computed locally as DB.requests.length+1
+   (etc.) against whichever copy of DB a tab happened to be holding —
+   two people submitting around the same time could compute the SAME
+   number, and saveDb()'s optimistic-lock check does not catch this
+   (it only catches overlapping writes, not overlapping reads that
+   independently land on the same computed value). Numbers are now
+   minted one-at-a-time by Code.gs under a script lock, so a collision
+   is no longer physically possible.
+   Falls back to the old local count ONLY if ALERTS_WEBAPP_URL isn't
+   configured yet (same "degrade gracefully" pattern as sendEmailAlert) —
+   in that case the race described above still applies, same as before.
+   ============================================================ */
+async function assignSequentialNumber(prefix){
+  const year = new Date().getFullYear();
+  if(!CONFIG.ALERTS_WEBAPP_URL) return localSequentialNumberFallback(prefix, year);
+  try{
+    const res = await fetch(CONFIG.ALERTS_WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS preflight to Apps Script
+      body: JSON.stringify({ secret: CONFIG.ALERTS_SHARED_SECRET, action: 'nextNumber', prefix, year })
+    });
+    const j = await res.json();
+    if(!j || !j.ok || !j.number) throw new Error((j && j.error) || 'empty response');
+    return j.number;
+  }catch(e){
+    throw new Error('Could not assign a '+prefix+' number ('+e.message+'). Please check your connection and try again.');
+  }
+}
+function localSequentialNumberFallback(prefix, year){
+  let n;
+  if(prefix==='PR') n = DB.requests.length + 1;
+  else if(prefix==='SR') n = DB.serviceRequests.length + 1;
+  else n = DB.purchaseOrders.filter(p=>p.poNumber && p.poNumber.includes(String(year))).length + 1;
+  return prefix+'-'+year+'-'+String(n).padStart(4,'0');
+}
+/* ============================================================
    Soft delete / Archive — Admin only. Records are never truly
    removed; they're flagged .deleted and logged in DB.archiveLog,
    and can be restored at any time.
@@ -1375,11 +1413,6 @@ async function applyApprovalAction(r, action, comment){
    under_observation/not_satisfactory/closed) — no shared code surface
    with Item Procurement, so nothing here can regress it.
    ============================================================ */
-function nextServiceRequestNumber(){
-  const n = DB.serviceRequests.length + 1;
-  const y = new Date().getFullYear();
-  return 'SR-'+y+'-'+String(n).padStart(4,'0');
-}
 function initServiceApproval(sr){
   const cat = DB.serviceCategories.find(c=>c.id===sr.categoryId);
   if(cat && cat.requiresApproval===false){
@@ -3843,11 +3876,6 @@ function openItemModal(catId, item){
    PROCUREMENT — Purchase Request lifecycle
    ============================================================ */
 let procTab = null;
-function requestNumberNext(){
-  const n = DB.requests.length + 1;
-  const y = new Date().getFullYear();
-  return 'PR-'+y+'-'+String(n).padStart(4,'0');
-}
 function itemPattern(reqItem){ const t = itemTypeById(reqItem.itemTypeId); return t ? t.pattern : 'consumable'; }
 function isTerminal(reqItem){
   const pattern = itemPattern(reqItem);
@@ -3857,14 +3885,9 @@ function isTerminal(reqItem){
 /* ============================================================
    Purchase Orders — auto-generated when an item clears approval
    ============================================================ */
-function nextPoNumber(){
-  const y = new Date().getFullYear();
-  const n = DB.purchaseOrders.filter(p=>p.poNumber && p.poNumber.includes(String(y))).length + 1;
-  return 'PO-'+y+'-'+String(n).padStart(4,'0');
-}
-function generatePurchaseOrder(r){
+async function generatePurchaseOrder(r){
   const po = {
-    id: nextId('po'), poNumber: nextPoNumber(), requestItemId: r.id, requestNumber: r.requestNumber,
+    id: nextId('po'), poNumber: await assignSequentialNumber('PO'), requestItemId: r.id, requestNumber: r.requestNumber,
     itemName: r.itemName, itemCode: r.itemCode||'', quantity: r.quantityRequested,
     supplier: '', unitRate: 0, totalAmount: 0, taxAmount: 0,
     purchaseOfficerEmail: r.assignedPurchaserEmail, purchaseOfficerName: r.assignedPurchaserName,
@@ -4810,9 +4833,12 @@ function renderNewRequestTab(){
       lineData.forEach(l=>{ (groups[l.valueClass] = groups[l.valueClass] || []).push(l); });
       const groupKeys = Object.keys(groups);
       const newItemRecords = [], newRequestRecords = [];
-      groupKeys.forEach(tierKey=>{
+      // Sequential — not Promise.all — so a multi-tier submission (auto-split
+      // across value classes) can't send overlapping nextNumber requests and
+      // doesn't depend on the server processing them in send order.
+      for(const tierKey of groupKeys){
         const items = groups[tierKey];
-        const requestNumber = requestNumberNext();
+        const requestNumber = await assignSequentialNumber('PR');
         const requestId = nextId('req');
         const itemIds = [];
         items.forEach(l=>{
@@ -4838,7 +4864,7 @@ function renderNewRequestTab(){
         });
         newRequestRecords.push({ id: requestId, requestNumber, requestDate, requestedByEmail, createdAt: new Date().toISOString(), itemIds });
         createdNumbers.push(requestNumber);
-      });
+      }
       DB.requestItems.push(...newItemRecords);
       DB.requests.push(...newRequestRecords);
       try{
@@ -5277,7 +5303,7 @@ function renderNewServiceRequestTab(){
     }
     const ok = await runSaveAction(btn, 'Submitting…', async ()=>{
       const sr = {
-        id: nextId('svcreq'), serviceRequestNumber: nextServiceRequestNumber(), requestDate,
+        id: nextId('svcreq'), serviceRequestNumber: await assignSequentialNumber('SR'), requestDate,
         requestedByStaffId: requestedByStaff.id, requestedByEmail: requestedByStaff.email, requestedByName: requestedByStaff.name,
         tiedTo: L.tiedTo, assetIds: L.tiedTo==='assets' ? L.assetIds.slice() : [],
         categoryId, subcategoryId, priority, expectedCompletionDate,
@@ -6374,7 +6400,7 @@ function renderItemActionBox(r){
         // PO only comes into existence once a purchase is actually recorded —
         // never generated at approval time, so Print PO has nothing to show
         // (and nothing to enforce via the UI alone) until this point.
-        if(!poForRequestItem(r.id)) generatePurchaseOrder(r);
+        if(!poForRequestItem(r.id)) await generatePurchaseOrder(r);
         updatePurchaseOrderFromPurchase(r);
         await saveDb();
       });
