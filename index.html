@@ -1380,6 +1380,21 @@ function myApprovalQueue(){ return DB.requestItems.filter(r=> !r.deleted && r.st
 async function applyApprovalAction(r, action, comment){
   const actorName = (myStaffRecord()||{}).name || currentUserEmail;
   const stage = approvalStageLabel(r.approvalStatus);
+  // Snapshot every field this function can touch, and the current history
+  // length, BEFORE mutating anything. If saveDb() below fails (conflict or
+  // network), we restore exactly this snapshot — same rollback-on-failure
+  // pattern as pushAndSave() — so a failed save leaves the record byte-for-
+  // byte as it was, and a retry behaves like a clean first attempt instead
+  // of compounding (e.g. a second history entry for the same approval).
+  const snapshot = {
+    approvalStatus: r.approvalStatus,
+    status: r.status,
+    escalatedByEmail: r.escalatedByEmail,
+    escalatedByName: r.escalatedByName,
+    escalatedAt: r.escalatedAt,
+    escalationComment: r.escalationComment,
+    historyLength: r.history.length
+  };
   if(action === 'approve'){
     r.approvalStatus = 'approved';
     r.status = 'purchase_pending';
@@ -1394,7 +1409,21 @@ async function applyApprovalAction(r, action, comment){
     r.escalatedAt = new Date().toISOString(); r.escalationComment = comment;
     r.history.push({ stage:'Escalated to Principal', action:'escalated', actorEmail:currentUserEmail, actorName, remark: comment, timestamp:new Date().toISOString() });
   }
-  await saveDb();
+  try{
+    await saveDb();
+  }catch(e){
+    // Roll back — undo the mutations above so the record is exactly as it
+    // was before this call, whether saveDb() failed on the conflict check,
+    // the network write, or anything else.
+    r.approvalStatus = snapshot.approvalStatus;
+    r.status = snapshot.status;
+    r.escalatedByEmail = snapshot.escalatedByEmail;
+    r.escalatedByName = snapshot.escalatedByName;
+    r.escalatedAt = snapshot.escalatedAt;
+    r.escalationComment = snapshot.escalationComment;
+    r.history.length = snapshot.historyLength;
+    throw e;
+  }
   const verb = action==='approve'?'Approved':action==='decline'?'Declined':'Escalated to Principal';
   sendEmailAlert(
     verb+' — '+r.requestNumber+' ('+r.itemName+')',
