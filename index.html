@@ -1767,7 +1767,16 @@ function drivePreviewUrl(fileId){ return 'https://drive.google.com/file/d/'+file
 // tracks the Drive file's own modifiedTime so saveDb() can detect that
 // case and refuse to blindly clobber it.
 let lastKnownDbModifiedTime = null;
+// Bumped every time THIS client successfully writes a local change to
+// Drive. loadDb() captures the generation it started at and, if that
+// generation has moved on by the time its own (slower) read comes back,
+// throws the read away instead of overwriting DB — this is what actually
+// closes the background-refresh-clobbers-a-just-saved-change race: two
+// in-flight reads/writes can now never "cross over" and undo each other,
+// regardless of which one happens to resolve last.
+let dbGeneration = 0;
 async function loadDb(allowRetry){
+  const genAtStart = dbGeneration;
   // A separate lightweight metadata call (not the full content fetch) —
   // Drive's alt=media response is raw bytes only and can't also carry
   // modifiedTime, so this costs one extra small request per load in
@@ -1775,9 +1784,11 @@ async function loadDb(allowRetry){
   try{
     const metaRes = await driveFetchPublic('/'+CONFIG.DB_FILE_ID, { fields:'modifiedTime' }, allowRetry);
     const meta = await metaRes.json();
+    if(dbGeneration !== genAtStart) return; // a local save landed while this was in flight — stale, discard
     if(meta && meta.modifiedTime) lastKnownDbModifiedTime = meta.modifiedTime;
   }catch(e){ /* non-fatal — worst case, the next save's conflict check is skipped once */ }
   const raw = await driveGetJson(CONFIG.DB_FILE_ID, allowRetry);
+  if(dbGeneration !== genAtStart) return; // same guard, after the (slower) content fetch
   const base = emptyDb();
   DB = Object.assign(base, raw);
   ['departments','categories','inventoryItems','dismissedAlerts','buildings','rooms','itemTypes','staff','requests','requestItems','archiveLog','stockLedger','itemCatalog','purchaseOrders','serviceCategories','serviceRequests','csvImportLog'].forEach(k=>{ if(!Array.isArray(DB[k])) DB[k] = base[k]; });
@@ -1831,6 +1842,7 @@ async function saveDb(){
     }
     const result = await driveSaveJson(CONFIG.DB_FILE_ID, DB);
     if(result && result.modifiedTime) lastKnownDbModifiedTime = result.modifiedTime;
+    dbGeneration++; // marks DB as newer than any read that was already in flight when this write landed
   }catch(e){
     toast(/^Someone else just updated/.test(e.message) ? e.message : 'Save failed: '+e.message, 'error');
     throw e;
